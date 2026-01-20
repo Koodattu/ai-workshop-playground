@@ -670,16 +670,51 @@ export const TEMPLATES: Template[] = [
     const gridSize = 20;
     const tileCount = canvas.width / gridSize;
 
+    // Safe storage wrapper for sandboxed environments with in-memory fallback
+    const memoryStorage = {};
+    const safeStorage = {
+      getItem: (key) => {
+        try {
+          return localStorage.getItem(key);
+        } catch (e) {
+          try {
+            return sessionStorage.getItem(key);
+          } catch (err) {
+            return memoryStorage[key] || null;
+          }
+        }
+      },
+      setItem: (key, value) => {
+        try {
+          localStorage.setItem(key, value);
+        } catch (e) {
+          try {
+            sessionStorage.setItem(key, value);
+          } catch (err) {
+            memoryStorage[key] = value;
+          }
+        }
+      }
+    };
+
+    // Initialize all game variables first
     let snake = [{ x: 10, y: 10 }];
     let velocity = { x: 0, y: 0 };
     let food = { x: 15, y: 15 };
     let score = 0;
-    let highScore = parseInt(localStorage.getItem('snakeHighScore')) || 0;
     let gameRunning = false;
     let gamePaused = false;
     let gameStarted = false;
     let gameSpeed = 100;
     let gameLoop;
+    let highScore = 0;
+
+    // Load high score after variables are declared
+    try {
+      highScore = parseInt(safeStorage.getItem('snakeHighScore')) || 0;
+    } catch (e) {
+      highScore = 0;
+    }
 
     highScoreElement.textContent = highScore;
 
@@ -705,7 +740,7 @@ export const TEMPLATES: Template[] = [
         if (score > highScore) {
           highScore = score;
           highScoreElement.textContent = highScore;
-          localStorage.setItem('snakeHighScore', highScore);
+          safeStorage.setItem('snakeHighScore', highScore);
         }
       } else {
         snake.pop();
@@ -1147,12 +1182,38 @@ export const TEMPLATES: Template[] = [
       draw: "{{templateContent.tictactoe.draw}}"
     };
 
+    // Safe storage wrapper for sandboxed environments
+    const safeStorage = {
+      getItem: (key) => {
+        try {
+          return localStorage.getItem(key);
+        } catch (e) {
+          try {
+            return sessionStorage.getItem(key);
+          } catch (err) {
+            return null;
+          }
+        }
+      },
+      setItem: (key, value) => {
+        try {
+          localStorage.setItem(key, value);
+        } catch (e) {
+          try {
+            sessionStorage.setItem(key, value);
+          } catch (err) {
+            // Silently fail if both are unavailable
+          }
+        }
+      }
+    };
+
     let currentPlayer = 'X';
     let gameBoard = ['', '', '', '', '', '', '', '', ''];
     let gameActive = true;
 
-    // Load stats from localStorage
-    let stats = JSON.parse(localStorage.getItem('tictactoeStats')) || { xWins: 0, oWins: 0, draws: 0 };
+    // Load stats from safe storage
+    let stats = JSON.parse(safeStorage.getItem('tictactoeStats')) || { xWins: 0, oWins: 0, draws: 0 };
     updateStatsDisplay();
     updateStatus();
 
@@ -1252,7 +1313,7 @@ export const TEMPLATES: Template[] = [
     }
 
     function saveStats() {
-      localStorage.setItem('tictactoeStats', JSON.stringify(stats));
+      safeStorage.setItem('tictactoeStats', JSON.stringify(stats));
       updateStatsDisplay();
     }
 
