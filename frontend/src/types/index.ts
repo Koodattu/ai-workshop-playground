@@ -11,6 +11,7 @@ export interface GenerateRequest {
   visitorId: string;
   prompt: string;
   existingCode?: string;
+  messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export interface GenerateResponse {

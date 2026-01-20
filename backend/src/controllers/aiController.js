@@ -60,7 +60,7 @@ const CODE_GENERATION_SCHEMA = {
  * Generate code using Gemini API with structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
-  const { prompt, existingCode } = req.body;
+  const { prompt, existingCode, messageHistory } = req.body;
 
   if (!prompt) {
     throw new AppError("Prompt is required", 400);
@@ -82,16 +82,35 @@ const generateCode = asyncHandler(async (req, res) => {
     });
 
     // Build the user prompt with context
-    let userPrompt = prompt;
+    let userPrompt = "";
+
+    // Add message history if provided
+    if (messageHistory && Array.isArray(messageHistory) && messageHistory.length > 0) {
+      userPrompt += "CONVERSATION HISTORY:\n";
+      messageHistory.forEach((msg, index) => {
+        const roleLabel = msg.role === "user" ? "USER" : "ASSISTANT";
+        userPrompt += `${roleLabel}: ${msg.content}\n\n`;
+      });
+      userPrompt += "---\n\n";
+    }
+
+    // Add existing code if provided
     if (existingCode && existingCode.trim()) {
-      userPrompt = `EXISTING CODE:
+      userPrompt += `EXISTING CODE:
 \`\`\`html
 ${existingCode}
 \`\`\`
 
-USER REQUEST: ${prompt}
+`;
+    }
+
+    // Add current prompt
+    if (existingCode && existingCode.trim()) {
+      userPrompt += `USER REQUEST: ${prompt}
 
 Modify or extend the existing code based on the user's request.`;
+    } else {
+      userPrompt += prompt;
     }
 
     // Generate content with structured output

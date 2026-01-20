@@ -31,6 +31,7 @@ export default function WorkspacePage() {
     return defaultTemplate?.code || "";
   });
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -100,11 +101,18 @@ export default function WorkspacePage() {
       setIsGenerating(true);
 
       try {
+        // Build message history from last 10 contextMessages
+        const messageHistory = contextMessages.slice(-10).map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
         const { response, remainingUses: remaining } = await api.generateCode({
           password,
           visitorId,
           prompt,
           existingCode: code,
+          messageHistory,
         });
 
         setCode(response.code);
@@ -121,6 +129,10 @@ export default function WorkspacePage() {
           timestamp: new Date(),
         };
         setChatHistory((prev) => [...prev, assistantMessage]);
+
+        // Update context messages with both user and assistant messages
+        setContextMessages((prev) => [...prev, userMessage, assistantMessage]);
+
         showToast(t("chat.codeGenerated"), "success");
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : t("api.generateError");
@@ -140,7 +152,7 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code, t],
+    [visitorId, password, showToast, code, t, contextMessages],
   );
 
   const handleTemplateChange = useCallback(
@@ -163,6 +175,8 @@ export default function WorkspacePage() {
           const localizedCode = getLocalizedTemplate(templateId, language, messages);
           setCode(localizedCode || template.code);
           setCurrentTemplateId(templateId);
+          // Clear context messages when switching templates
+          setContextMessages([]);
         }
       }
     },
@@ -214,6 +228,7 @@ export default function WorkspacePage() {
                 setIsAuthenticated(false);
                 setPassword("");
                 setChatHistory([]);
+                setContextMessages([]);
               }}
               className="text-xs font-mono text-gray-400 hover:text-white transition-colors"
             >

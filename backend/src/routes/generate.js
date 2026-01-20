@@ -19,6 +19,7 @@ const router = express.Router();
  * - password: Workshop access password
  * - visitorId: Unique identifier for the visitor/machine
  * - prompt: The code generation prompt
+ * - messageHistory: (optional) Array of previous messages for context
  *
  * Response:
  * - code: Generated HTML/CSS/JS code
@@ -37,6 +38,14 @@ router.post(
       .withMessage("Prompt must be at least 10 characters")
       .isLength({ max: 10000 })
       .withMessage("Prompt must not exceed 10000 characters"),
+    body("messageHistory").optional().isArray().withMessage("Message history must be an array"),
+    body("messageHistory.*.role").optional().isIn(["user", "assistant"]).withMessage("Message role must be either 'user' or 'assistant'"),
+    body("messageHistory.*.content")
+      .optional()
+      .isString()
+      .withMessage("Message content must be a string")
+      .isLength({ max: 5000 })
+      .withMessage("Message content must not exceed 5000 characters"),
     validateRequest,
   ],
   workshopGuard,
