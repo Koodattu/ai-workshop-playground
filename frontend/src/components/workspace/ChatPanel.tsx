@@ -7,7 +7,7 @@ import type { ChatMessage } from "@/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
-  onSendMessage: (prompt: string) => void;
+  onSendMessage: (prompt: string) => Promise<void>;
   isLoading: boolean;
   remainingUses?: number;
 }
@@ -31,11 +31,18 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
     }
   }, [prompt]);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (prompt.trim() && !isLoading) {
-      onSendMessage(prompt.trim());
-      setPrompt("");
+      const trimmedPrompt = prompt.trim();
+      try {
+        await onSendMessage(trimmedPrompt);
+        // Only clear prompt if the message was sent successfully
+        setPrompt("");
+      } catch (err) {
+        // Keep the prompt on error so user can retry
+        // Error handling is done in the parent component
+      }
     }
   };
 

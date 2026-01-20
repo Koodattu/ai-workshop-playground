@@ -126,6 +126,7 @@ export default function WorkspacePage() {
           password,
           visitorId,
           prompt,
+          existingCode: code,
         });
 
         setCode(response.code);
@@ -143,20 +144,23 @@ export default function WorkspacePage() {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Failed to generate code";
 
-        // Add error message to chat
+        // Add simple error message to chat
         const errorChatMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `Error: ${errorMessage}`,
+          content: "Error occurred, please try again",
           timestamp: new Date(),
         };
         setChatHistory((prev) => [...prev, errorChatMessage]);
+        // Keep detailed error in toast
         showToast(errorMessage, "error");
+        // Re-throw to let ChatPanel know not to clear the prompt
+        throw err;
       } finally {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast],
+    [visitorId, password, showToast, code],
   );
 
   // Show password modal if not authenticated

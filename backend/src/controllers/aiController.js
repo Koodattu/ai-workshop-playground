@@ -11,17 +11,33 @@ const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
 
 // System instruction for clean code output
-const SYSTEM_INSTRUCTION = `You are an expert web developer assistant. Your task is to generate clean, production-ready HTML, CSS, and JavaScript code.
+const SYSTEM_INSTRUCTION = `You are an expert web developer assistant. Your task is to generate or modify clean, production-ready HTML, CSS, and JavaScript code.
 
-IMPORTANT RULES:
-1. Return ONLY code - no explanations, no markdown formatting, no comments about what the code does
-2. If generating a complete webpage, include all HTML, CSS, and JavaScript in a single HTML file
-3. Use inline <style> tags for CSS and inline <script> tags for JavaScript
-4. Ensure the code is complete and ready to run in a browser
-5. Use modern, semantic HTML5
-6. Make the design visually appealing with good default styling
-7. Include responsive design principles
-8. Do not include any markdown code fences or language identifiers`;
+CRITICAL OUTPUT RULES - FOLLOW EXACTLY:
+1. Return ONLY code - absolutely NO explanations, NO commentary, NO markdown
+2. NO markdown code fences (no \`\`\`html, no \`\`\`, nothing)
+3. NO phrases like "Here's the code", "I've created", "This will", etc.
+4. NO comments explaining what you did or why
+5. Start directly with <!DOCTYPE html> or the first line of code
+6. End with the closing tag - nothing after
+
+CODE MODIFICATION RULES:
+- If existing code is provided, modify/extend it based on the user's request
+- Maintain the existing structure and style unless explicitly asked to change it
+- If user says "add", "modify", "change", or "update" - work with the existing code
+- If user wants something completely new, you can start fresh
+- Preserve working functionality unless asked to remove it
+
+CODE GENERATION RULES:
+1. Generate complete, self-contained HTML files
+2. Use inline <style> tags for CSS and inline <script> tags for JavaScript
+3. Ensure code is production-ready and runs in any modern browser
+4. Use modern, semantic HTML5
+5. Create visually appealing designs with good styling
+6. Include responsive design principles
+7. Make interactive elements functional with proper JavaScript
+
+REMEMBER: Your response should be ONLY the code itself. No wrapping, no explanation, no markdown.`;
 
 /**
  * Extract code from potential markdown blocks
@@ -64,7 +80,7 @@ const extractCode = (text) => {
  * Generate code using Gemini API
  */
 const generateCode = asyncHandler(async (req, res) => {
-  const { prompt } = req.body;
+  const { prompt, existingCode } = req.body;
 
   if (!prompt) {
     throw new AppError("Prompt is required", 400);
@@ -81,8 +97,21 @@ const generateCode = asyncHandler(async (req, res) => {
       systemInstruction: SYSTEM_INSTRUCTION,
     });
 
+    // Build the user prompt with context
+    let userPrompt = prompt;
+    if (existingCode && existingCode.trim()) {
+      userPrompt = `EXISTING CODE:
+\`\`\`html
+${existingCode}
+\`\`\`
+
+USER REQUEST: ${prompt}
+
+Modify or extend the existing code based on the user's request. Return ONLY the complete updated code with no explanations.`;
+    }
+
     // Generate content
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent(userPrompt);
     const response = await result.response;
     const text = response.text();
 

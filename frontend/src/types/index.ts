@@ -9,6 +9,7 @@ export interface GenerateRequest {
   password: string;
   visitorId: string;
   prompt: string;
+  existingCode?: string;
 }
 
 export interface GenerateResponse {
