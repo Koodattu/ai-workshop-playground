@@ -57,7 +57,7 @@ const CODE_GENERATION_SCHEMA = {
 };
 
 /**
- * Generate code using Gemini API with structured outputs
+ * Generate code using Gemini API with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
   const { prompt, existingCode, messageHistory } = req.body;
@@ -69,6 +69,17 @@ const generateCode = asyncHandler(async (req, res) => {
   if (!config.geminiApiKey) {
     throw new AppError("Gemini API key not configured", 500);
   }
+
+  // Set up SSE headers
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  let accumulatedText = "";
+  let previousMessage = "";
+  let previousCode = "";
 
   try {
     // Initialize the model with system instruction
@@ -113,15 +124,70 @@ Modify or extend the existing code based on the user's request.`;
       userPrompt += prompt;
     }
 
-    // Generate content with structured output
-    const result = await model.generateContent(userPrompt);
-    const response = await result.response;
-    const text = response.text();
+    // Generate content with streaming
+    const result = await model.generateContentStream(userPrompt);
 
-    // Parse the structured JSON response
+    // Process the stream
+    for await (const chunk of result.stream) {
+      try {
+        // Extract text from the chunk
+        const chunkText = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (chunkText) {
+          // Accumulate the text
+          accumulatedText += chunkText;
+
+          // Send the raw chunk event (fallback)
+          const eventData = {
+            type: "chunk",
+            text: chunkText,
+            accumulated: accumulatedText,
+          };
+
+          res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+
+          // Try to parse the accumulated JSON
+          try {
+            const parsed = JSON.parse(accumulatedText);
+
+            // Extract message and code fields
+            const currentMessage = parsed.message || "";
+            const currentCode = parsed.code || "";
+
+            // Send message-update event if message changed
+            if (currentMessage && currentMessage !== previousMessage) {
+              const messageEvent = {
+                type: "message-update",
+                message: currentMessage,
+              };
+              res.write(`data: ${JSON.stringify(messageEvent)}\n\n`);
+              previousMessage = currentMessage;
+            }
+
+            // Send code-update event if code changed
+            if (currentCode && currentCode !== previousCode) {
+              const codeEvent = {
+                type: "code-update",
+                code: currentCode,
+              };
+              res.write(`data: ${JSON.stringify(codeEvent)}\n\n`);
+              previousCode = currentCode;
+            }
+          } catch (parseError) {
+            // JSON not complete yet, continue accumulating
+            // This is expected during streaming
+          }
+        }
+      } catch (chunkError) {
+        console.error("Error processing chunk:", chunkError);
+        // Continue processing other chunks
+      }
+    }
+
+    // Parse the final accumulated JSON response
     let structuredResponse;
     try {
-      structuredResponse = JSON.parse(text);
+      structuredResponse = JSON.parse(accumulatedText);
     } catch (parseError) {
       throw new AppError("Failed to parse AI response", 500);
     }
@@ -131,26 +197,45 @@ Modify or extend the existing code based on the user's request.`;
       throw new AppError("Invalid AI response structure", 500);
     }
 
-    res.json({
+    // Send the final complete response
+    const finalData = {
+      type: "done",
       message: structuredResponse.message,
       code: structuredResponse.code,
       remaining: req.workshop?.remaining,
-    });
+    };
+
+    res.write(`data: ${JSON.stringify(finalData)}\n\n`);
+    res.end();
   } catch (error) {
     // Handle specific Gemini API errors
+    let errorMessage = "AI generation failed";
+    let statusCode = 500;
+
     if (error.message?.includes("API key")) {
-      throw new AppError("Invalid API configuration", 500);
+      errorMessage = "Invalid API configuration";
+    } else if (error.message?.includes("quota")) {
+      errorMessage = "API quota exceeded. Please try again later.";
+      statusCode = 503;
+    } else if (error.message?.includes("safety")) {
+      errorMessage = "Request blocked due to safety filters";
+      statusCode = 400;
+    } else if (error instanceof AppError) {
+      errorMessage = error.message;
+      statusCode = error.statusCode;
+    } else {
+      errorMessage = `AI generation failed: ${error.message}`;
     }
 
-    if (error.message?.includes("quota")) {
-      throw new AppError("API quota exceeded. Please try again later.", 503);
-    }
+    // Send error event
+    const errorData = {
+      type: "error",
+      error: errorMessage,
+      statusCode: statusCode,
+    };
 
-    if (error.message?.includes("safety")) {
-      throw new AppError("Request blocked due to safety filters", 400);
-    }
-
-    throw new AppError(`AI generation failed: ${error.message}`, 500);
+    res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+    res.end();
   }
 });
 

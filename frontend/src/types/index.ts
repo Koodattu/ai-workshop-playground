@@ -46,3 +46,43 @@ export interface CreatePasswordRequest {
   expiresAt: string;
   maxUsesPerUser: number;
 }
+
+// Streaming types
+export interface StreamChunk {
+  type: "chunk";
+  chunk: string;
+  accumulated: string;
+}
+
+export interface StreamDoneEvent {
+  type: "done";
+  message: string;
+  code: string;
+  remaining: number;
+}
+
+export interface StreamErrorEvent {
+  type: "error";
+  error: string;
+  remainingUses?: number;
+}
+
+export interface StreamMessageUpdate {
+  type: "message-update";
+  message: string;
+}
+
+export interface StreamCodeUpdate {
+  type: "code-update";
+  code: string;
+}
+
+export type StreamEvent = StreamChunk | StreamDoneEvent | StreamErrorEvent | StreamMessageUpdate | StreamCodeUpdate;
+
+export interface StreamCallbacks {
+  onChunk?: (chunk: string, accumulated: string) => void;
+  onMessageUpdate?: (message: string) => void;
+  onCodeUpdate?: (code: string) => void;
+  onDone?: (data: { message: string; code: string; remaining: number }) => void;
+  onError?: (error: string, remainingUses?: number) => void;
+}

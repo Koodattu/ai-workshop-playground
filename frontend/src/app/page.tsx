@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
@@ -38,6 +38,16 @@ export default function WorkspacePage() {
   const [authError, setAuthError] = useState<string | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
+
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [streamingCode, setStreamingCode] = useState<string>("");
+  const abortStreamRef = useRef<(() => void) | null>(null);
+
+  // Throttling refs for editor updates
+  const editorUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingCodeUpdateRef = useRef<string | null>(null);
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
@@ -87,6 +97,178 @@ export default function WorkspacePage() {
   );
 
   const handleSendMessage = useCallback(
+    async (prompt: string) => {
+      if (!visitorId || !password) return;
+
+      // Add user message to chat
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: prompt,
+        timestamp: new Date(),
+      };
+      setChatHistory((prev) => [...prev, userMessage]);
+      setIsGenerating(true);
+      setIsStreaming(true);
+      setStreamingMessage("");
+      setStreamingCode("");
+
+      // Clear the editor when starting a new generation
+      setCode("");
+
+      try {
+        // Build message history from last 10 contextMessages
+        const messageHistory = contextMessages.slice(-10).map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+        // Use streaming API with new event handlers
+        const abort = await api.generateCodeStream(
+          {
+            password,
+            visitorId,
+            prompt,
+            existingCode: code,
+            messageHistory,
+          },
+          {
+            // Handle message updates (no throttling needed, text is cheap)
+            onMessageUpdate: (message: string) => {
+              setStreamingMessage(message);
+            },
+
+            // Handle code updates with throttling to prevent editor freezing
+            onCodeUpdate: (code: string) => {
+              // Store the pending code update
+              pendingCodeUpdateRef.current = code;
+              setStreamingCode(code);
+
+              // Clear any existing timer
+              if (editorUpdateTimerRef.current) {
+                clearTimeout(editorUpdateTimerRef.current);
+              }
+
+              // Throttle editor updates to every 150ms
+              editorUpdateTimerRef.current = setTimeout(() => {
+                if (pendingCodeUpdateRef.current !== null) {
+                  setCode(pendingCodeUpdateRef.current);
+                  pendingCodeUpdateRef.current = null;
+                }
+              }, 150);
+            },
+
+            // Fallback chunk handler for backwards compatibility
+            onChunk: (chunk: string, accumulated: string) => {
+              // This is now only a fallback if message-update/code-update events aren't sent
+              // The backend now sends parsed events, so this is rarely used
+            },
+            onDone: (data) => {
+              // Clear any pending editor update timer
+              if (editorUpdateTimerRef.current) {
+                clearTimeout(editorUpdateTimerRef.current);
+                editorUpdateTimerRef.current = null;
+              }
+
+              // Apply any pending code update immediately
+              if (pendingCodeUpdateRef.current !== null) {
+                setCode(pendingCodeUpdateRef.current);
+                pendingCodeUpdateRef.current = null;
+              }
+
+              // Parse the final JSON
+              const finalMessage = data.message || t("chat.codeGenerated");
+              const finalCode = data.code;
+
+              // Update final states with the complete code
+              setCode(finalCode);
+              setRemainingUses(data.remaining);
+              setHasGeneratedWithLLM(true);
+              setCurrentTemplateId("custom");
+              setCustomCode(finalCode);
+
+              // Add assistant message to chat history
+              const assistantMessage: ChatMessage = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: finalMessage,
+                timestamp: new Date(),
+              };
+              setChatHistory((prev) => [...prev, assistantMessage]);
+
+              // Update context messages with both user and assistant messages
+              setContextMessages((prev) => [...prev, userMessage, assistantMessage]);
+
+              // Clear streaming states
+              setStreamingMessage("");
+              setStreamingCode("");
+              setIsStreaming(false);
+
+              showToast(t("chat.codeGenerated"), "success");
+            },
+            onError: (error, remainingUsesOnError) => {
+              // Clear any pending editor update timer
+              if (editorUpdateTimerRef.current) {
+                clearTimeout(editorUpdateTimerRef.current);
+                editorUpdateTimerRef.current = null;
+              }
+              pendingCodeUpdateRef.current = null;
+
+              const errorMessage = error || t("api.generateError");
+
+              // Update remaining uses if provided
+              if (remainingUsesOnError !== undefined) {
+                setRemainingUses(remainingUsesOnError);
+              }
+
+              // Add error message to chat
+              const errorChatMessage: ChatMessage = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: t("api.generateError"),
+                timestamp: new Date(),
+                errorDetails: errorMessage,
+              };
+              setChatHistory((prev) => [...prev, errorChatMessage]);
+
+              // Clear streaming states
+              setStreamingMessage("");
+              setStreamingCode("");
+              setIsStreaming(false);
+
+              // Re-throw to let ChatPanel know not to clear the prompt
+              throw new Error(errorMessage);
+            },
+          },
+        );
+
+        // Store the abort function
+        abortStreamRef.current = abort;
+      } catch (err) {
+        // Error already handled in onError callback
+        throw err;
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [visitorId, password, showToast, code, t, contextMessages],
+  );
+
+  // Cleanup abort on unmount
+  useEffect(() => {
+    return () => {
+      if (abortStreamRef.current) {
+        abortStreamRef.current();
+      }
+      // Clean up any pending editor update timers
+      if (editorUpdateTimerRef.current) {
+        clearTimeout(editorUpdateTimerRef.current);
+      }
+    };
+  }, []);
+
+  /* FALLBACK: Old non-streaming implementation (kept as backup)
+  const handleSendMessageNonStreaming = useCallback(
     async (prompt: string) => {
       if (!visitorId || !password) return;
 
@@ -154,6 +336,7 @@ export default function WorkspacePage() {
     },
     [visitorId, password, showToast, code, t, contextMessages],
   );
+  */
 
   const handleTemplateChange = useCallback(
     (templateId: string) => {
@@ -242,7 +425,14 @@ export default function WorkspacePage() {
           <Group orientation="horizontal" className="flex-1">
             {/* Chat Panel */}
             <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
-              <ChatPanel messages={chatHistory} onSendMessage={handleSendMessage} isLoading={isGenerating} remainingUses={remainingUses} showToast={showToast} />
+              <ChatPanel
+                messages={chatHistory}
+                onSendMessage={handleSendMessage}
+                isLoading={isGenerating}
+                remainingUses={remainingUses}
+                showToast={showToast}
+                streamingMessage={streamingMessage}
+              />
             </Panel>
 
             <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />

@@ -1,5 +1,5 @@
 import { config } from "./config";
-import type { GenerateRequest, GenerateResponse, PasswordEntry, CreatePasswordRequest, UsageStats } from "@/types";
+import type { GenerateRequest, GenerateResponse, PasswordEntry, CreatePasswordRequest, UsageStats, StreamCallbacks } from "@/types";
 
 class ApiClient {
   private baseUrl: string;
@@ -71,6 +71,111 @@ class ApiClient {
       response: data,
       remainingUses: remainingUses ? parseInt(remainingUses, 10) : undefined,
     };
+  }
+
+  // Generate code with streaming
+  async generateCodeStream(request: GenerateRequest, callbacks: StreamCallbacks): Promise<() => void> {
+    const url = `${this.baseUrl}/api/generate`;
+    const abortController = new AbortController();
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }));
+        const errorMessage = error.error || this.getHttpErrorMessage(response.status);
+        callbacks.onError?.(errorMessage);
+        return () => abortController.abort();
+      }
+
+      // Read the response as a stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        callbacks.onError?.("No response body");
+        return () => abortController.abort();
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      // Start reading the stream
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) {
+              break;
+            }
+
+            // Decode the chunk and add to buffer
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete lines from the buffer
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || ""; // Keep the last incomplete line in the buffer
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+
+              // Parse SSE format (lines starting with "data: ")
+              if (line.startsWith("data: ")) {
+                try {
+                  const jsonData = line.slice(6); // Remove "data: " prefix
+                  const event = JSON.parse(jsonData);
+
+                  // Handle different event types
+                  switch (event.type) {
+                    case "chunk":
+                      callbacks.onChunk?.(event.chunk, event.accumulated);
+                      break;
+                    case "message-update":
+                      callbacks.onMessageUpdate?.(event.message);
+                      break;
+                    case "code-update":
+                      callbacks.onCodeUpdate?.(event.code);
+                      break;
+                    case "done":
+                      callbacks.onDone?.({
+                        message: event.message,
+                        code: event.code,
+                        remaining: event.remaining,
+                      });
+                      break;
+                    case "error":
+                      callbacks.onError?.(event.error, event.remainingUses);
+                      break;
+                  }
+                } catch (parseError) {
+                  console.error("Failed to parse SSE data:", parseError);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          if (error instanceof Error && error.name !== "AbortError") {
+            callbacks.onError?.(error.message || "NETWORK_ERROR");
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      })();
+
+      // Return cleanup function
+      return () => abortController.abort();
+    } catch (error) {
+      if (error instanceof Error && error.name !== "AbortError") {
+        callbacks.onError?.(error.message || "NETWORK_ERROR");
+      }
+      return () => abortController.abort();
+    }
   }
 
   // Validate password
