@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { useToast } from "@/components/ui/Toast";
 import type { ChatMessage } from "@/types";
 
 interface ChatPanelProps {
@@ -16,6 +17,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { showToast, ToastContainer } = useToast();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -53,10 +55,14 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
     }
   };
 
+  const handleShowErrorDetails = (errorDetails: string) => {
+    showToast(errorDetails, "error");
+  };
+
   return (
     <div className="flex flex-col h-full bg-obsidian">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-steel/50">
+      <div className="flex items-center justify-between px-4 py-4 border-b border-steel/50">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-electric animate-pulse" />
           <h2 className="font-display text-sm font-semibold text-white tracking-wide">PROMPT</h2>
@@ -97,7 +103,18 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
                   ${message.role === "user" ? "bg-electric/20 border border-electric/30 text-white" : "bg-carbon border border-steel/50 text-gray-300"}
                 `}
               >
-                <p className="text-sm font-body whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-body whitespace-pre-wrap leading-relaxed flex-1">{message.content}</p>
+                  {message.errorDetails && (
+                    <button
+                      onClick={() => handleShowErrorDetails(message.errorDetails!)}
+                      className="shrink-0 px-2 py-1 rounded bg-carbon border border-steel/50 text-xs font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
+                      title="Show error details"
+                    >
+                      why?
+                    </button>
+                  )}
+                </div>
                 <span className="block mt-2 text-[10px] font-mono text-gray-500 uppercase">
                   {message.role === "user" ? "You" : "AI"} •{" "}
                   {new Date(message.timestamp).toLocaleTimeString([], {
@@ -157,6 +174,8 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
           </div>
         </form>
       </div>
+
+      <ToastContainer />
     </div>
   );
 }

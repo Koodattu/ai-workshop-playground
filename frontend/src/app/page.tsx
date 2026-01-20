@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
@@ -132,11 +133,11 @@ export default function WorkspacePage() {
         setCode(response.code);
         setRemainingUses(remaining);
 
-        // Add assistant message
+        // Add assistant message with AI's response
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: "Code generated successfully! Check the editor and preview panels.",
+          content: response.message || "Code generated successfully!",
           timestamp: new Date(),
         };
         setChatHistory((prev) => [...prev, assistantMessage]);
@@ -144,16 +145,15 @@ export default function WorkspacePage() {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Failed to generate code";
 
-        // Add simple error message to chat
+        // Add error message to chat with details
         const errorChatMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
           content: "Error occurred, please try again",
           timestamp: new Date(),
+          errorDetails: errorMessage,
         };
         setChatHistory((prev) => [...prev, errorChatMessage]);
-        // Keep detailed error in toast
-        showToast(errorMessage, "error");
         // Re-throw to let ChatPanel know not to clear the prompt
         throw err;
       } finally {
@@ -215,20 +215,26 @@ export default function WorkspacePage() {
 
         {/* Main content - 3 column layout */}
         <main className="flex-1 flex overflow-hidden">
-          {/* Chat Panel */}
-          <div className="w-80 shrink-0 border-r border-steel/30 panel-animate">
-            <ChatPanel messages={chatHistory} onSendMessage={handleSendMessage} isLoading={isGenerating} remainingUses={remainingUses} />
-          </div>
+          <Group orientation="horizontal" className="flex-1">
+            {/* Chat Panel */}
+            <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
+              <ChatPanel messages={chatHistory} onSendMessage={handleSendMessage} isLoading={isGenerating} remainingUses={remainingUses} />
+            </Panel>
 
-          {/* Editor Panel */}
-          <div className="flex-1 min-w-0 border-r border-steel/30 panel-animate" style={{ animationDelay: "0.1s" }}>
-            <EditorPanel code={code} onChange={setCode} />
-          </div>
+            <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />
 
-          {/* Preview Panel */}
-          <div className="w-[40%] shrink-0 panel-animate" style={{ animationDelay: "0.2s" }}>
-            <PreviewPanel code={code} />
-          </div>
+            {/* Editor Panel */}
+            <Panel defaultSize={500} minSize={200} className="border-r border-steel/30 panel-animate" style={{ animationDelay: "0.1s" }}>
+              <EditorPanel code={code} onChange={setCode} />
+            </Panel>
+
+            <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />
+
+            {/* Preview Panel */}
+            <Panel defaultSize={500} minSize={200} className="panel-animate" style={{ animationDelay: "0.2s" }}>
+              <PreviewPanel code={code} />
+            </Panel>
+          </Group>
         </main>
       </div>
 

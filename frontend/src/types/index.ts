@@ -3,6 +3,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  errorDetails?: string;
 }
 
 export interface GenerateRequest {
@@ -13,6 +14,7 @@ export interface GenerateRequest {
 }
 
 export interface GenerateResponse {
+  message: string;
   code: string;
 }
 
