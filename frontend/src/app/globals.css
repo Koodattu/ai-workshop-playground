@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+@theme {
+  /* Core dark palette colors */
+  --color-void: #0a0a0f;
+  --color-obsidian: #12121a;
+  --color-carbon: #1a1a24;
+  --color-graphite: #252530;
+  --color-steel: #3a3a48;
+
+  /* Accent colors */
+  --color-electric: #00d4ff;
+  --color-electric-dim: #00a8cc;
+  --color-electric-glow: #00d4ff40;
+  --color-ember: #ff6b35;
+  --color-ember-dim: #cc5529;
+  --color-ember-glow: #ff6b3540;
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-danger: #ef4444;
+
+  /* Font families */
+  --font-family-display: "JetBrains Mono", "Fira Code", monospace;
+  --font-family-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-family-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* Box shadows */
+  --shadow-glow-electric: 0 0 20px rgba(0, 212, 255, 0.3);
+  --shadow-glow-ember: 0 0 20px rgba(255, 107, 53, 0.3);
+  --shadow-inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* Animation */
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-slide-up: slideUp 0.4s ease-out;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+}
+
+/* Keyframes */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 5px currentColor;
+  }
+  100% {
+    box-shadow: 0 0 20px currentColor;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  background-color: var(--color-void);
+  color: white;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-steel) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--color-steel);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-electric);
+}
+
+/* Selection styles */
+::selection {
+  background-color: rgba(0, 212, 255, 0.3);
+  color: white;
+}
+
+/* Focus visible styles */
+:focus-visible {
+  outline: 2px solid var(--color-electric);
+  outline-offset: 2px;
+}
+
+/* Monaco editor customizations */
+.monaco-editor {
+  border-radius: 0;
+}
+
+.monaco-editor .margin {
+  background-color: var(--color-void) !important;
+}
+
+/* Subtle grain overlay for texture */
+.grain-overlay {
+  position: relative;
+}
+
+.grain-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.02;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* Panel resize handle */
+.resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: linear-gradient(to bottom, transparent, var(--color-steel), transparent);
+  transition: background-color 0.2s;
+}
+
+.resize-handle:hover {
+  background: var(--color-electric);
+}
+
+/* Glow text effect */
+@utility glow-text {
+  text-shadow:
+    0 0 10px currentColor,
+    0 0 20px currentColor;
+}
+
+/* Panel animations */
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel-animate {
+  animation: panel-enter 0.4s ease-out;
+}
