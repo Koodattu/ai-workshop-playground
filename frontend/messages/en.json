@@ -56,6 +56,8 @@
     "copy": "Copy Code",
     "copyTitle": "Copy Code",
     "formatTitle": "Format Code",
+    "undoTitle": "Undo",
+    "redoTitle": "Redo",
     "copied": "Copied!",
     "download": "Download File",
     "language": "Language",

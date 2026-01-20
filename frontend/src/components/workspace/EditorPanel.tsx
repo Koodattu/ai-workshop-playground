@@ -57,6 +57,14 @@ export function EditorPanel({ code, onChange }: EditorPanelProps) {
     }
   }, [code]);
 
+  const handleUndo = useCallback(() => {
+    editorRef.current?.trigger("keyboard", "undo", null);
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    editorRef.current?.trigger("keyboard", "redo", null);
+  }, []);
+
   return (
     <div className="flex flex-col h-full bg-void">
       {/* Header */}
@@ -76,6 +84,17 @@ export function EditorPanel({ code, onChange }: EditorPanelProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button onClick={handleUndo} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.undoTitle")}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+          </button>
+          <button onClick={handleRedo} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.redoTitle")}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
+            </svg>
+          </button>
+          <div className="w-px h-4 bg-steel/50" />
           <button onClick={handleFormat} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.formatTitle")}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />

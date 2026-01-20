@@ -56,6 +56,8 @@
     "copy": "Kopioi koodi",
     "copyTitle": "Kopioi koodi",
     "formatTitle": "Muotoile koodi",
+    "undoTitle": "Kumoa",
+    "redoTitle": "Tee uudelleen",
     "copied": "Kopioitu!",
     "download": "Lataa tiedosto",
     "language": "Kieli",
