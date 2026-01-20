@@ -15,6 +15,288 @@ type Messages = {
 
 export const TEMPLATES: Template[] = [
   {
+    id: "simple-welcome",
+    nameKey: "templates.simpleWelcome",
+    code: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Welcome</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 50px;
+      background: #f0f0f0;
+    }
+    h1 {
+      color: #333;
+    }
+    p {
+      color: #666;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>{{templateContent.simpleWelcome.title}}</h1>
+  <p>{{templateContent.simpleWelcome.description}}</p>
+</body>
+</html>`,
+  },
+  {
+    id: "simple-tailwind",
+    nameKey: "templates.simpleTailwind",
+    code: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Tailwind</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="max-w-2xl mx-auto p-8">
+    <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">
+      {{templateContent.simpleTailwind.title}}
+    </h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h2 class="text-xl font-semibold mb-2 text-blue-600">{{templateContent.simpleTailwind.card1Title}}</h2>
+        <p class="text-gray-600">{{templateContent.simpleTailwind.card1Desc}}</p>
+      </div>
+
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h2 class="text-xl font-semibold mb-2 text-purple-600">{{templateContent.simpleTailwind.card2Title}}</h2>
+        <p class="text-gray-600">{{templateContent.simpleTailwind.card2Desc}}</p>
+      </div>
+    </div>
+
+    <div class="text-center">
+      <button class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg">
+        {{templateContent.simpleTailwind.button}}
+      </button>
+    </div>
+  </div>
+</body>
+</html>`,
+  },
+  {
+    id: "simple-counter",
+    nameKey: "templates.simpleCounter",
+    code: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Counter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #f0f0f0;
+      margin: 0;
+    }
+    .container {
+      text-align: center;
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    #counter {
+      font-size: 48px;
+      color: #2196F3;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+    button {
+      font-size: 18px;
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .increment {
+      background: #4CAF50;
+      color: white;
+    }
+    .increment:hover {
+      background: #45a049;
+    }
+    .decrement {
+      background: #f44336;
+      color: white;
+    }
+    .decrement:hover {
+      background: #da190b;
+    }
+    .reset {
+      background: #2196F3;
+      color: white;
+    }
+    .reset:hover {
+      background: #0b7dda;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>{{templateContent.simpleCounter.title}}</h1>
+    <div id="counter">0</div>
+    <div>
+      <button class="decrement" onclick="decrement()">{{templateContent.simpleCounter.decrease}}</button>
+      <button class="reset" onclick="reset()">{{templateContent.simpleCounter.reset}}</button>
+      <button class="increment" onclick="increment()">{{templateContent.simpleCounter.increase}}</button>
+    </div>
+  </div>
+
+  <script>
+    let count = 0;
+    const counterElement = document.getElementById('counter');
+
+    function increment() {
+      count++;
+      updateDisplay();
+    }
+
+    function decrement() {
+      count--;
+      updateDisplay();
+    }
+
+    function reset() {
+      count = 0;
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      counterElement.textContent = count;
+    }
+  </script>
+</body>
+</html>`,
+  },
+  {
+    id: "simple-todo",
+    nameKey: "templates.simpleTodo",
+    code: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Todo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f0f0f0;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #0b7dda;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      padding: 12px;
+      background: #f9f9f9;
+      margin-bottom: 8px;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .delete-btn {
+      background: #f44336;
+      padding: 5px 10px;
+      font-size: 14px;
+    }
+    .delete-btn:hover {
+      background: #da190b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>{{templateContent.simpleTodo.title}}</h1>
+    <div class="input-group">
+      <input type="text" id="todoInput" placeholder="{{templateContent.simpleTodo.placeholder}}">
+      <button onclick="addTodo()">{{templateContent.simpleTodo.add}}</button>
+    </div>
+    <ul id="todoList"></ul>
+  </div>
+
+  <script>
+    const input = document.getElementById('todoInput');
+    const list = document.getElementById('todoList');
+
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addTodo();
+    });
+
+    function addTodo() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      const li = document.createElement('li');
+      li.innerHTML = \`
+        <span>\${text}</span>
+        <button class="delete-btn" onclick="this.parentElement.remove()">{{templateContent.simpleTodo.delete}}</button>
+      \`;
+      list.appendChild(li);
+      input.value = '';
+    }
+  </script>
+</body>
+</html>`,
+  },
+  {
     id: "welcome",
     nameKey: "templates.welcome",
     code: `<!DOCTYPE html>
@@ -85,12 +367,12 @@ export const TEMPLATES: Template[] = [
     }
   </style>
 </head>
-<body class="bg-linear-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
   <div class="container mx-auto px-4 py-12">
     <!-- Header -->
     <header class="text-center mb-16">
       <h1 class="text-5xl font-bold text-white mb-4">
-        <span class="bg-linear-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+        <span class="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
           {{templateContent.tailwind.title}}
         </span>
       </h1>
@@ -101,7 +383,7 @@ export const TEMPLATES: Template[] = [
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
       <!-- Card 1 -->
       <div class="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700 hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/20">
-        <div class="w-12 h-12 bg-linear-to-br from-cyan-400 to-blue-500 rounded-lg mb-4 flex items-center justify-center">
+        <div class="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-lg mb-4 flex items-center justify-center">
           <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
           </svg>
@@ -112,7 +394,7 @@ export const TEMPLATES: Template[] = [
 
       <!-- Card 2 -->
       <div class="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700 hover:border-purple-500 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/20">
-        <div class="w-12 h-12 bg-linear-to-br from-purple-400 to-pink-500 rounded-lg mb-4 flex items-center justify-center">
+        <div class="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg mb-4 flex items-center justify-center">
           <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
           </svg>
@@ -123,7 +405,7 @@ export const TEMPLATES: Template[] = [
 
       <!-- Card 3 -->
       <div class="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700 hover:border-green-500 transition-all duration-300 hover:shadow-xl hover:shadow-green-500/20">
-        <div class="w-12 h-12 bg-linear-to-br from-green-400 to-emerald-500 rounded-lg mb-4 flex items-center justify-center">
+        <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg mb-4 flex items-center justify-center">
           <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
           </svg>
@@ -134,7 +416,7 @@ export const TEMPLATES: Template[] = [
     </div>
 
     <!-- Features Section -->
-    <div class="bg-linear-to-r from-slate-800/50 to-slate-800/30 backdrop-blur-sm rounded-2xl p-8 border border-slate-700">
+    <div class="bg-gradient-to-r from-slate-800/50 to-slate-800/30 backdrop-blur-sm rounded-2xl p-8 border border-slate-700">
       <h2 class="text-3xl font-bold text-white mb-6">{{templateContent.tailwind.keyFeatures}}</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="flex items-start gap-3">
@@ -186,7 +468,7 @@ export const TEMPLATES: Template[] = [
 
     <!-- CTA Button -->
     <div class="text-center mt-12">
-      <button class="px-8 py-3 bg-linear-to-r from-cyan-500 to-purple-500 text-white font-semibold rounded-lg hover:shadow-2xl hover:shadow-cyan-500/50 transition-all duration-300 transform hover:scale-105">
+      <button class="px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-semibold rounded-lg hover:shadow-2xl hover:shadow-cyan-500/50 transition-all duration-300 transform hover:scale-105">
         {{templateContent.tailwind.getStarted}}
       </button>
     </div>
@@ -985,7 +1267,7 @@ export const TEMPLATES: Template[] = [
   },
 ];
 
-export const DEFAULT_TEMPLATE_ID = "welcome";
+export const DEFAULT_TEMPLATE_ID = "simple-welcome";
 
 export function getTemplateById(id: string): Template | undefined {
   return TEMPLATES.find((template) => template.id === id);

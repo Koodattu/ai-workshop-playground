@@ -65,14 +65,46 @@
     "selectTemplate": "Select Template"
   },
   "templates": {
-    "welcome": "Welcome Template",
-    "tailwind": "Tailwind CSS",
+    "welcome": "Advanced Welcome",
+    "tailwind": "Advanced Tailwind",
     "snake": "Snake Game",
     "tictactoe": "Tic-Tac-Toe",
     "customCode": "Custom Code",
-    "custom": "Custom Code"
+    "custom": "Custom Code",
+    "simpleTodo": "Todo List",
+    "simpleCounter": "Counter",
+    "simpleWelcome": "Welcome",
+    "simpleTailwind": "Tailwind",
+    "simple-todo": "Todo",
+    "simple-counter": "Counter",
+    "simple-welcome": "Welcome",
+    "simple-tailwind": "Tailwind"
   },
   "templateContent": {
+    "simpleWelcome": {
+      "title": "Hello World!",
+      "description": "This is a simple HTML page."
+    },
+    "simpleTailwind": {
+      "title": "Tailwind CSS Basics",
+      "card1Title": "Easy to Use",
+      "card1Desc": "Simple utility classes for quick styling",
+      "card2Title": "Responsive",
+      "card2Desc": "Works great on all screen sizes",
+      "button": "Click Me"
+    },
+    "simpleCounter": {
+      "title": "Counter App",
+      "increase": "+",
+      "decrease": "-",
+      "reset": "Reset"
+    },
+    "simpleTodo": {
+      "title": "Todo List",
+      "placeholder": "Add a new task...",
+      "add": "Add",
+      "delete": "Delete"
+    },
     "welcome": {
       "title": "Welcome to AI Workshop",
       "description": "Describe what you want to create in the chat panel"

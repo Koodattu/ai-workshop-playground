@@ -65,14 +65,46 @@
     "selectTemplate": "Valitse Pohja"
   },
   "templates": {
-    "welcome": "Tervetulopohja",
-    "tailwind": "Tailwind CSS",
-    "snake": "Käärmepeli",
+    "welcome": "Laaja Tervetuloa",
+    "tailwind": "Laaja Tailwind",
+    "snake": "Matopeli",
     "tictactoe": "Ristinolla",
     "customCode": "Oma Koodi",
-    "custom": "Oma Koodi"
+    "custom": "Oma Koodi",
+    "simpleTodo": "Tehtävälista",
+    "simpleCounter": "Laskuri",
+    "simpleWelcome": "Tervetuloa",
+    "simpleTailwind": "Tailwind",
+    "simple-todo": "Tehtävälista",
+    "simple-counter": "Laskuri",
+    "simple-welcome": "Tervetuloa",
+    "simple-tailwind": "Tailwind"
   },
   "templateContent": {
+    "simpleWelcome": {
+      "title": "Hei Maailma!",
+      "description": "Tämä on yksinkertainen HTML-sivu."
+    },
+    "simpleTailwind": {
+      "title": "Tailwind CSS Perusteet",
+      "card1Title": "Helppokäyttöinen",
+      "card1Desc": "Yksinkertaiset utility-luokat nopeaan tyylittelyyn",
+      "card2Title": "Responsiivinen",
+      "card2Desc": "Toimii loistavasti kaikilla näyttöko'oilla",
+      "button": "Paina Tästä"
+    },
+    "simpleCounter": {
+      "title": "Laskurisovellus",
+      "increase": "+",
+      "decrease": "-",
+      "reset": "Nollaa"
+    },
+    "simpleTodo": {
+      "title": "Tehtävälista",
+      "placeholder": "Lisää uusi tehtävä...",
+      "add": "Lisää",
+      "delete": "Poista"
+    },
     "welcome": {
       "title": "Tervetuloa AI Workshopiin",
       "description": "Kuvaile mitä haluat luoda chat-paneelissa"
