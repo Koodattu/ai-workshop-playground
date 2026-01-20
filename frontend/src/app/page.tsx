@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
@@ -12,61 +12,24 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
+import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import type { ChatMessage } from "@/types";
+import enMessages from "@messages/en.json";
+import fiMessages from "@messages/fi.json";
 
-const DEFAULT_CODE = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Workshop</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
-      font-family: system-ui, sans-serif;
-      color: white;
-    }
-
-    .container {
-      text-align: center;
-      padding: 2rem;
-    }
-
-    h1 {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-      background: linear-gradient(90deg, #00d4ff, #ff6b35);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    p {
-      color: #888;
-      font-size: 1.1rem;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Welcome to AI Workshop</h1>
-    <p>Describe what you want to create in the chat panel</p>
-  </div>
-</body>
-</html>`;
+// Get messages based on language
+const getMessages = (lang: string) => {
+  return lang === "fi" ? fiMessages : enMessages;
+};
 
 export default function WorkspacePage() {
-  const [code, setCode] = useState(DEFAULT_CODE);
+  const [currentTemplateId, setCurrentTemplateId] = useState(DEFAULT_TEMPLATE_ID);
+  const [customCode, setCustomCode] = useState<string | null>(null);
+  const [hasGeneratedWithLLM, setHasGeneratedWithLLM] = useState(false);
+  const [code, setCode] = useState(() => {
+    const defaultTemplate = getTemplateById(DEFAULT_TEMPLATE_ID);
+    return defaultTemplate?.code || "";
+  });
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -77,7 +40,18 @@ export default function WorkspacePage() {
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+
+  // Update template code when language changes (for built-in templates only)
+  useEffect(() => {
+    if (currentTemplateId !== "custom" && !hasGeneratedWithLLM) {
+      const messages = getMessages(language);
+      const localizedCode = getLocalizedTemplate(currentTemplateId, language, messages);
+      if (localizedCode) {
+        setCode(localizedCode);
+      }
+    }
+  }, [language, currentTemplateId, hasGeneratedWithLLM]);
 
   // Check if already authenticated on mount
   const handleAuthenticate = useCallback(
@@ -108,7 +82,7 @@ export default function WorkspacePage() {
         setIsValidating(false);
       }
     },
-    [visitorId, setPassword, showToast],
+    [visitorId, setPassword, showToast, t],
   );
 
   const handleSendMessage = useCallback(
@@ -135,6 +109,9 @@ export default function WorkspacePage() {
 
         setCode(response.code);
         setRemainingUses(remaining);
+        setHasGeneratedWithLLM(true);
+        setCurrentTemplateId("custom");
+        setCustomCode(response.code);
 
         // Add assistant message with AI's response
         const assistantMessage: ChatMessage = {
@@ -163,7 +140,33 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code],
+    [visitorId, password, showToast, code, t],
+  );
+
+  const handleTemplateChange = useCallback(
+    (templateId: string) => {
+      // Save current code as custom if switching away after LLM generation
+      if (hasGeneratedWithLLM && currentTemplateId === "custom" && templateId !== "custom") {
+        setCustomCode(code);
+      }
+
+      if (templateId === "custom" && customCode) {
+        // Switch to saved custom code
+        setCode(customCode);
+        setCurrentTemplateId("custom");
+      } else if (templateId !== "custom") {
+        // Switch to a built-in template
+        const template = getTemplateById(templateId);
+        if (template) {
+          // Use localized template based on current language
+          const messages = getMessages(language);
+          const localizedCode = getLocalizedTemplate(templateId, language, messages);
+          setCode(localizedCode || template.code);
+          setCurrentTemplateId(templateId);
+        }
+      }
+    },
+    [hasGeneratedWithLLM, currentTemplateId, code, customCode, language],
   );
 
   // Show password modal if not authenticated
@@ -231,7 +234,13 @@ export default function WorkspacePage() {
 
             {/* Editor Panel */}
             <Panel defaultSize={500} minSize={200} className="border-r border-steel/30 panel-animate" style={{ animationDelay: "0.1s" }}>
-              <EditorPanel code={code} onChange={setCode} />
+              <EditorPanel
+                code={code}
+                onChange={setCode}
+                currentTemplateId={currentTemplateId}
+                onTemplateChange={handleTemplateChange}
+                hasCustomCode={hasGeneratedWithLLM && customCode !== null}
+              />
             </Panel>
 
             <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />

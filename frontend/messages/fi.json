@@ -61,7 +61,64 @@
     "copied": "Kopioitu!",
     "download": "Lataa tiedosto",
     "language": "Kieli",
-    "loadingEditor": "Ladataan editoria..."
+    "loadingEditor": "Ladataan editoria...",
+    "selectTemplate": "Valitse Pohja"
+  },
+  "templates": {
+    "welcome": "Tervetulopohja",
+    "tailwind": "Tailwind CSS",
+    "snake": "Käärmepeli",
+    "tictactoe": "Ristinolla",
+    "customCode": "Oma Koodi",
+    "custom": "Oma Koodi"
+  },
+  "templateContent": {
+    "welcome": {
+      "title": "Tervetuloa AI Workshopiin",
+      "description": "Kuvaile mitä haluat luoda chat-paneelissa"
+    },
+    "tailwind": {
+      "title": "Tailwind CSS",
+      "subtitle": "Moderni utility-first CSS-kehys",
+      "fastDev": "Nopea Kehitys",
+      "fastDevDesc": "Rakenna moderneja verkkosivuja nopeammin utility-luokilla",
+      "customizable": "Muokattava",
+      "customizableDesc": "Mukauta jokainen yksityiskohta design-systeemisi mukaan",
+      "responsive": "Responsiivinen",
+      "responsiveDesc": "Mobiili-ensin responsiivinen suunnittelu yksinkertaiseksi",
+      "keyFeatures": "Tärkeimmät Ominaisuudet",
+      "utilityFirst": "Utility-First",
+      "utilityFirstDesc": "Koostele ulkoasuja suoraan merkinnässäsi",
+      "componentFriendly": "Komponenttiystävällinen",
+      "componentFriendlyDesc": "Toimii loistavasti komponenttikehysten kanssa",
+      "performance": "Suorituskyky",
+      "performanceDesc": "Pienet tiedostokoot automaattisella karsinnalla",
+      "darkMode": "Tumma Tila",
+      "darkModeDesc": "Sisäänrakennettu tumman tilan tuki",
+      "getStarted": "Aloita"
+    },
+    "snake": {
+      "title": "Käärmepeli",
+      "score": "Pisteet",
+      "highScore": "Ennätys",
+      "controls": "Käytä WASD tai nuolinäppäimiä liikkumiseen",
+      "start": "Aloita",
+      "pause": "Tauko",
+      "resume": "Jatka",
+      "gameOver": "Peli Ohi!",
+      "yourScore": "Pisteesi:",
+      "playAgain": "Pelaa Uudelleen"
+    },
+    "tictactoe": {
+      "title": "Ristinolla",
+      "playerTurn": "Pelaaja {player} vuorossa",
+      "playerWins": "Pelaaja {player} voitti!",
+      "draw": "Tasapeli!",
+      "newGame": "Uusi Peli",
+      "xWins": "X Voitot",
+      "oWins": "O Voitot",
+      "draws": "Tasapelit"
+    }
   },
   "preview": {
     "header": "ESIKATSELU",

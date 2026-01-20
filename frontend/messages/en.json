@@ -61,7 +61,64 @@
     "copied": "Copied!",
     "download": "Download File",
     "language": "Language",
-    "loadingEditor": "Loading Editor..."
+    "loadingEditor": "Loading Editor...",
+    "selectTemplate": "Select Template"
+  },
+  "templates": {
+    "welcome": "Welcome Template",
+    "tailwind": "Tailwind CSS",
+    "snake": "Snake Game",
+    "tictactoe": "Tic-Tac-Toe",
+    "customCode": "Custom Code",
+    "custom": "Custom Code"
+  },
+  "templateContent": {
+    "welcome": {
+      "title": "Welcome to AI Workshop",
+      "description": "Describe what you want to create in the chat panel"
+    },
+    "tailwind": {
+      "title": "Tailwind CSS",
+      "subtitle": "A modern utility-first CSS framework",
+      "fastDev": "Fast Development",
+      "fastDevDesc": "Build modern websites faster with utility classes",
+      "customizable": "Customizable",
+      "customizableDesc": "Tailor every aspect to match your design system",
+      "responsive": "Responsive",
+      "responsiveDesc": "Mobile-first responsive design made simple",
+      "keyFeatures": "Key Features",
+      "utilityFirst": "Utility-First",
+      "utilityFirstDesc": "Compose designs directly in your markup",
+      "componentFriendly": "Component Friendly",
+      "componentFriendlyDesc": "Works great with component frameworks",
+      "performance": "Performance",
+      "performanceDesc": "Small file sizes with automatic purging",
+      "darkMode": "Dark Mode",
+      "darkModeDesc": "Built-in dark mode support",
+      "getStarted": "Get Started"
+    },
+    "snake": {
+      "title": "Snake Game",
+      "score": "Score",
+      "highScore": "High Score",
+      "controls": "Use WASD or Arrow Keys to move",
+      "start": "Start",
+      "pause": "Pause",
+      "resume": "Resume",
+      "gameOver": "Game Over!",
+      "yourScore": "Your score:",
+      "playAgain": "Play Again"
+    },
+    "tictactoe": {
+      "title": "Tic-Tac-Toe",
+      "playerTurn": "Player {player}'s turn",
+      "playerWins": "Player {player} wins!",
+      "draw": "It's a draw!",
+      "newGame": "New Game",
+      "xWins": "X Wins",
+      "oWins": "O Wins",
+      "draws": "Draws"
+    }
   },
   "preview": {
     "header": "PREVIEW",

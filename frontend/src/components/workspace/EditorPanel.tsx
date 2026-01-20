@@ -1,18 +1,23 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import Editor, { OnMount, OnChange } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { TEMPLATES, type Template } from "@/lib/templates";
 
 interface EditorPanelProps {
   code: string;
   onChange: (code: string) => void;
+  currentTemplateId: string;
+  onTemplateChange: (templateId: string) => void;
+  hasCustomCode: boolean;
 }
 
-export function EditorPanel({ code, onChange }: EditorPanelProps) {
+export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChange, hasCustomCode }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { t } = useLanguage();
 
   const handleEditorMount: OnMount = useCallback((editor) => {
@@ -65,10 +70,18 @@ export function EditorPanel({ code, onChange }: EditorPanelProps) {
     editorRef.current?.trigger("keyboard", "redo", null);
   }, []);
 
+  const handleTemplateSelect = useCallback(
+    (templateId: string) => {
+      onTemplateChange(templateId);
+      setIsDropdownOpen(false);
+    },
+    [onTemplateChange],
+  );
+
   return (
     <div className="flex flex-col h-full bg-void">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-steel/50 bg-obsidian">
+      <div className="flex items-center justify-between px-4 py-2.25 border-b border-steel/50 bg-obsidian">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full bg-danger/80" />
@@ -84,6 +97,76 @@ export function EditorPanel({ code, onChange }: EditorPanelProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Template Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-graphite transition-all border border-steel/30 hover:border-steel/50"
+              title={t("editor.selectTemplate")}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
+                />
+              </svg>
+              <span className="hidden sm:inline">{t(`templates.${currentTemplateId}`) || t("templates.customCode")}</span>
+              <svg className={`w-3 h-3 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {isDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
+                <div className="absolute top-full right-0 mt-2 w-56 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-20 overflow-hidden">
+                  <div className="py-1">
+                    {/* Built-in Templates */}
+                    {TEMPLATES.map((template: Template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => handleTemplateSelect(template.id)}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                          currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                        }`}
+                      >
+                        {currentTemplateId === template.id && (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                        <span>{t(template.nameKey)}</span>
+                      </button>
+                    ))}
+
+                    {/* Custom Code (if exists) */}
+                    {hasCustomCode && (
+                      <>
+                        <div className="my-1 border-t border-steel/30" />
+                        <button
+                          onClick={() => handleTemplateSelect("custom")}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                            currentTemplateId === "custom" ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                          }`}
+                        >
+                          {currentTemplateId === "custom" && (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          <span>{t("templates.customCode")}</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="w-px h-4 bg-steel/50" />
           <button onClick={handleUndo} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.undoTitle")}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
