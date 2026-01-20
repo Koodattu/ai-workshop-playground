@@ -3,6 +3,8 @@
 import { useState, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 
 interface PasswordModalProps {
   onAuthenticate: (password: string) => void;
@@ -12,6 +14,7 @@ interface PasswordModalProps {
 
 export function PasswordModal({ onAuthenticate, isValidating, error }: PasswordModalProps) {
   const [password, setPassword] = useState("");
+  const { t } = useLanguage();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -45,15 +48,15 @@ export function PasswordModal({ onAuthenticate, isValidating, error }: PasswordM
                 />
               </svg>
             </div>
-            <h1 className="font-display text-2xl font-bold text-white tracking-tight">Workshop Access</h1>
-            <p className="mt-2 text-gray-400 font-body text-sm">Enter your workshop password to continue</p>
+            <h1 className="font-display text-2xl font-bold text-white tracking-tight">{t("passwordModal.title")}</h1>
+            <p className="mt-2 text-gray-400 font-body text-sm">{t("passwordModal.description")}</p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="password" className="block text-xs font-mono text-gray-400 uppercase tracking-wider">
-                Password
+                {t("passwordModal.passwordLabel")}
               </label>
               <div className="relative">
                 <input
@@ -61,7 +64,7 @@ export function PasswordModal({ onAuthenticate, isValidating, error }: PasswordM
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter workshop password"
+                  placeholder={t("passwordModal.passwordPlaceholder")}
                   autoFocus
                   className="
                     w-full px-4 py-3
@@ -82,12 +85,17 @@ export function PasswordModal({ onAuthenticate, isValidating, error }: PasswordM
             </div>
 
             <Button type="submit" className="w-full" size="lg" disabled={!password.trim() || isValidating} isLoading={isValidating}>
-              {isValidating ? "Validating..." : "Enter Workshop"}
+              {isValidating ? t("passwordModal.validating") : t("passwordModal.submitButton")}
             </Button>
           </form>
 
-          {/* Footer */}
-          <p className="mt-6 text-center text-xs text-gray-500 font-body">Don&apos;t have a password? Contact your workshop organizer.</p>
+          {/* Footer with LanguageSwitcher */}
+          <div className="mt-6 space-y-3">
+            <div className="flex justify-center">
+              <LanguageSwitcher />
+            </div>
+            <p className="text-center text-xs text-gray-500 font-body">{t("passwordModal.footer")}</p>
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useRef, useCallback } from "react";
 import Editor, { OnMount, OnChange } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { Spinner } from "@/components/ui/Spinner";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface EditorPanelProps {
   code: string;
@@ -12,6 +13,7 @@ interface EditorPanelProps {
 
 export function EditorPanel({ code, onChange }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const { t } = useLanguage();
 
   const handleEditorMount: OnMount = useCallback((editor) => {
     editorRef.current = editor;
@@ -69,17 +71,17 @@ export function EditorPanel({ code, onChange }: EditorPanelProps) {
             <svg className="w-4 h-4 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
-            <h2 className="font-display text-sm font-semibold text-white tracking-wide">CODE</h2>
+            <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("editor.header")}</h2>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={handleFormat} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title="Format Code">
+          <button onClick={handleFormat} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.formatTitle")}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
             </svg>
           </button>
-          <button onClick={handleCopy} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title="Copy Code">
+          <button onClick={handleCopy} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.copyTitle")}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
@@ -104,7 +106,7 @@ export function EditorPanel({ code, onChange }: EditorPanelProps) {
             <div className="flex items-center justify-center h-full bg-void">
               <div className="flex flex-col items-center gap-3">
                 <Spinner size="lg" />
-                <span className="text-sm font-mono text-gray-400">Loading Editor...</span>
+                <span className="text-sm font-mono text-gray-400">{t("editor.loadingEditor")}</span>
               </div>
             </div>
           }

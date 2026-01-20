@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface PreviewPanelProps {
   code: string;
@@ -12,6 +13,7 @@ export function PreviewPanel({ code }: PreviewPanelProps) {
   const [displayCode, setDisplayCode] = useState(code);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [key, setKey] = useState(0);
+  const { t } = useLanguage();
 
   // Update preview based on auto-refresh setting
   useEffect(() => {
@@ -38,7 +40,7 @@ export function PreviewPanel({ code }: PreviewPanelProps) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-steel/50 bg-obsidian">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            <h2 className="font-display text-sm font-semibold text-white tracking-wide">PREVIEW</h2>
+            <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("preview.header")}</h2>
           </div>
 
           <div className="flex items-center gap-2">
@@ -50,7 +52,7 @@ export function PreviewPanel({ code }: PreviewPanelProps) {
                 transition-colors
                 ${isAutoRefresh ? "bg-success/20 text-success border border-success/30" : "bg-carbon text-gray-400 border border-steel/50 hover:text-white"}
               `}
-              title={isAutoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
+              title={isAutoRefresh ? t("preview.autoRefreshOn") : t("preview.autoRefreshOff")}
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -60,11 +62,11 @@ export function PreviewPanel({ code }: PreviewPanelProps) {
                   d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                 />
               </svg>
-              AUTO
+              {t("preview.autoRefresh")}
             </button>
 
             {/* Manual refresh */}
-            <button onClick={handleRefresh} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title="Refresh Preview">
+            <button onClick={handleRefresh} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("preview.refreshTitle")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -79,7 +81,7 @@ export function PreviewPanel({ code }: PreviewPanelProps) {
             <button
               onClick={handleToggleFullscreen}
               className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
-              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              title={isFullscreen ? t("preview.exitFullscreenTitle") : t("preview.fullscreenTitle")}
             >
               {isFullscreen ? (
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -115,8 +117,8 @@ export function PreviewPanel({ code }: PreviewPanelProps) {
                   />
                 </svg>
               </div>
-              <h3 className="font-display text-lg font-semibold text-white mb-2">No Preview</h3>
-              <p className="text-sm text-gray-400 font-body text-center max-w-50">Generate or write code to see it rendered here</p>
+              <h3 className="font-display text-lg font-semibold text-white mb-2">{t("preview.emptyTitle")}</h3>
+              <p className="text-sm text-gray-400 font-body text-center max-w-50">{t("preview.emptyDescription")}</p>
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { ChatMessage } from "@/types";
 
 interface ChatPanelProps {
@@ -18,6 +19,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { showToast, ToastContainer } = useToast();
+  const { t } = useLanguage();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -65,14 +67,14 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
       <div className="flex items-center justify-between px-4 py-4 border-b border-steel/50">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-electric animate-pulse" />
-          <h2 className="font-display text-sm font-semibold text-white tracking-wide">PROMPT</h2>
+          <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("chat.header")}</h2>
         </div>
         {remainingUses !== undefined && (
           <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-carbon border border-steel/50">
             <svg className="w-3.5 h-3.5 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            <span className="font-mono text-xs text-gray-300">{remainingUses} left</span>
+            <span className="font-mono text-xs text-gray-300">{t("chat.usageLeft", { count: remainingUses })}</span>
           </div>
         )}
       </div>
@@ -91,8 +93,8 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
                 />
               </svg>
             </div>
-            <h3 className="font-display text-lg font-semibold text-white mb-2">Ready to Create</h3>
-            <p className="text-sm text-gray-400 font-body max-w-50">Describe the web component or page you want to build</p>
+            <h3 className="font-display text-lg font-semibold text-white mb-2">{t("chat.emptyTitle")}</h3>
+            <p className="text-sm text-gray-400 font-body max-w-50">{t("chat.emptyDescription")}</p>
           </div>
         ) : (
           messages.map((message) => (
@@ -109,14 +111,14 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
                     <button
                       onClick={() => handleShowErrorDetails(message.errorDetails!)}
                       className="shrink-0 px-2 py-1 rounded bg-carbon border border-steel/50 text-xs font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
-                      title="Show error details"
+                      title={t("chat.errorDetailsTitle")}
                     >
-                      why?
+                      {t("chat.errorDetails")}
                     </button>
                   )}
                 </div>
                 <span className="block mt-2 text-[10px] font-mono text-gray-500 uppercase">
-                  {message.role === "user" ? "You" : "AI"} •{" "}
+                  {message.role === "user" ? t("chat.you") : t("chat.ai")} •{" "}
                   {new Date(message.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -132,7 +134,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
             <div className="bg-carbon border border-steel/50 rounded-xl px-4 py-3">
               <div className="flex items-center gap-2">
                 <Spinner size="sm" />
-                <span className="text-sm text-gray-400 font-mono">Generating...</span>
+                <span className="text-sm text-gray-400 font-mono">{t("chat.generating")}</span>
               </div>
             </div>
           </div>
@@ -150,7 +152,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Describe what you want to create..."
+              placeholder={t("chat.sendPlaceholder")}
               rows={1}
               className="
                 w-full px-4 py-3 pr-12
@@ -164,12 +166,12 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] font-mono text-gray-500 uppercase">Shift + Enter for new line</span>
+            <span className="text-[10px] font-mono text-gray-500 uppercase">{t("chat.shiftEnterHint")}</span>
             <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Generate
+              {t("chat.generateButton")}
             </Button>
           </div>
         </form>

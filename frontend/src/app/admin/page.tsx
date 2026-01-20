@@ -3,9 +3,12 @@
 import { useState, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { PasswordManager } from "@/components/admin/PasswordManager";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 
 export default function AdminPage() {
+  const { t } = useLanguage();
   const [adminSecret, setAdminSecret] = useState("");
   const [inputSecret, setInputSecret] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -25,10 +28,10 @@ export default function AdminPage() {
         setAdminSecret(inputSecret.trim());
         setIsAuthenticated(true);
       } else {
-        setError("Invalid admin secret");
+        setError(t("admin.invalidSecret"));
       }
     } catch (err) {
-      setError("Invalid admin secret");
+      setError(t("admin.invalidSecret"));
     } finally {
       setIsVerifying(false);
     }
@@ -57,15 +60,15 @@ export default function AdminPage() {
                   />
                 </svg>
               </div>
-              <h1 className="font-display text-2xl font-bold text-white tracking-tight">Admin Access</h1>
-              <p className="mt-2 text-gray-400 font-body text-sm">Enter the admin secret to continue</p>
+              <h1 className="font-display text-2xl font-bold text-white tracking-tight">{t("admin.title")}</h1>
+              <p className="mt-2 text-gray-400 font-body text-sm">{t("admin.description")}</p>
             </div>
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label htmlFor="secret" className="block text-xs font-mono text-gray-400 uppercase tracking-wider">
-                  Admin Secret
+                  {t("admin.secretLabel")}
                 </label>
                 <input
                   type="password"
@@ -75,7 +78,7 @@ export default function AdminPage() {
                     setInputSecret(e.target.value);
                     setError("");
                   }}
-                  placeholder="Enter admin secret"
+                  placeholder={t("admin.secretPlaceholder")}
                   autoFocus
                   disabled={isVerifying}
                   className="
@@ -91,14 +94,14 @@ export default function AdminPage() {
               </div>
 
               <Button type="submit" className="w-full bg-ember hover:bg-ember-dim focus:ring-ember" size="lg" disabled={!inputSecret.trim() || isVerifying}>
-                {isVerifying ? "Verifying..." : "Access Admin Panel"}
+                {isVerifying ? t("admin.verifying") : t("admin.submitButton")}
               </Button>
             </form>
 
             {/* Footer */}
             <div className="mt-6 text-center">
               <a href="/" className="text-xs text-gray-500 hover:text-gray-300 font-body transition-colors">
-                ← Back to Workspace
+                ← {t("admin.backToWorkshop")}
               </a>
             </div>
           </div>
@@ -127,17 +130,18 @@ export default function AdminPage() {
               </svg>
             </div>
             <div>
-              <h1 className="font-display text-xl font-bold text-white tracking-tight">Admin Dashboard</h1>
-              <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">AI Workshop Management</p>
+              <h1 className="font-display text-xl font-bold text-white tracking-tight">{t("admin.dashboardTitle")}</h1>
+              <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">{t("admin.dashboardSubtitle")}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            <LanguageSwitcher />
             <a href="/" className="text-sm font-mono text-gray-400 hover:text-white transition-colors flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              Workspace
+              {t("admin.workspaceLink")}
             </a>
             <Button
               onClick={() => {
@@ -148,7 +152,7 @@ export default function AdminPage() {
               variant="ghost"
               size="sm"
             >
-              Logout
+              {t("common.logout")}
             </Button>
           </div>
         </div>

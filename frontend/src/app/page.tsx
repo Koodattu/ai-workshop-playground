@@ -9,6 +9,8 @@ import { PasswordModal } from "@/components/workspace/PasswordModal";
 import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import type { ChatMessage } from "@/types";
 
@@ -75,12 +77,13 @@ export default function WorkspacePage() {
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
+  const { t } = useLanguage();
 
   // Check if already authenticated on mount
   const handleAuthenticate = useCallback(
     async (enteredPassword: string) => {
       if (!visitorId) {
-        setAuthError("Unable to generate visitor ID. Please refresh the page.");
+        setAuthError(t("passwordModal.visitorIdError"));
         return;
       }
 
@@ -95,12 +98,12 @@ export default function WorkspacePage() {
         if (isValid) {
           setPassword(enteredPassword);
           setIsAuthenticated(true);
-          showToast("Welcome to the workshop!", "success");
+          showToast(t("workspace.welcomeBack"), "success");
         } else {
-          setAuthError("Invalid password. Please check and try again.");
+          setAuthError(t("passwordModal.invalidPassword"));
         }
       } catch (err) {
-        setAuthError(err instanceof Error ? err.message : "Authentication failed");
+        setAuthError(err instanceof Error ? err.message : t("passwordModal.authError"));
       } finally {
         setIsValidating(false);
       }
@@ -137,19 +140,19 @@ export default function WorkspacePage() {
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: response.message || "Code generated successfully!",
+          content: response.message || t("chat.codeGenerated"),
           timestamp: new Date(),
         };
         setChatHistory((prev) => [...prev, assistantMessage]);
-        showToast("Code generated!", "success");
+        showToast(t("chat.codeGenerated"), "success");
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to generate code";
+        const errorMessage = err instanceof Error ? err.message : t("api.generateError");
 
         // Add error message to chat with details
         const errorChatMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: "Error occurred, please try again",
+          content: t("api.generateError"),
           timestamp: new Date(),
           errorDetails: errorMessage,
         };
@@ -185,19 +188,22 @@ export default function WorkspacePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <span className="font-display text-lg font-bold tracking-tight text-white">AI Workshop</span>
+              <span className="font-display text-lg font-bold tracking-tight text-white">{t("workspace.header")}</span>
             </div>
             <div className="hidden sm:block h-6 w-px bg-steel/50" />
             <span className="hidden sm:block text-xs font-mono text-gray-500 uppercase tracking-wider">Playground</span>
           </div>
 
           <div className="flex items-center gap-3">
+            <LanguageSwitcher />
             {remainingUses !== undefined && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-carbon border border-steel/50">
                 <svg className="w-3.5 h-3.5 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <span className="font-mono text-xs text-gray-300">{remainingUses} uses left</span>
+                <span className="font-mono text-xs text-gray-300">
+                  {remainingUses} {remainingUses === 1 ? t("workspace.usageCounterOne") : t("workspace.usageCounterOther")} left
+                </span>
               </div>
             )}
             <button
@@ -208,7 +214,7 @@ export default function WorkspacePage() {
               }}
               className="text-xs font-mono text-gray-400 hover:text-white transition-colors"
             >
-              Logout
+              {t("common.logout")}
             </button>
           </div>
         </header>

@@ -11,21 +11,51 @@ class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<{ data: T; headers: Headers }> {
     const url = `${this.baseUrl}${endpoint}`;
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+      });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Request failed" }));
-      throw new Error(error.error || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }));
+        throw new Error(error.error || this.getHttpErrorMessage(response.status));
+      }
+
+      const data = await response.json();
+      return { data, headers: response.headers };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      // Network errors - these will be caught by components and translated there
+      throw new Error("NETWORK_ERROR");
     }
+  }
 
-    const data = await response.json();
-    return { data, headers: response.headers };
+  private getHttpErrorMessage(status: number): string {
+    // Return error codes that can be translated by the UI layer
+    switch (status) {
+      case 401:
+        return "UNAUTHORIZED";
+      case 403:
+        return "FORBIDDEN";
+      case 404:
+        return "NOT_FOUND";
+      case 429:
+        return "TOO_MANY_REQUESTS";
+      case 400:
+        return "VALIDATION_ERROR";
+      case 500:
+      case 502:
+      case 503:
+        return "SERVER_ERROR";
+      default:
+        return `HTTP_${status}`;
+    }
   }
 
   // Generate code endpoint
