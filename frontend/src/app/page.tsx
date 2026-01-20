@@ -224,7 +224,7 @@ export default function WorkspacePage() {
           <Group orientation="horizontal" className="flex-1">
             {/* Chat Panel */}
             <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
-              <ChatPanel messages={chatHistory} onSendMessage={handleSendMessage} isLoading={isGenerating} remainingUses={remainingUses} />
+              <ChatPanel messages={chatHistory} onSendMessage={handleSendMessage} isLoading={isGenerating} remainingUses={remainingUses} showToast={showToast} />
             </Panel>
 
             <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />

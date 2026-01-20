@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { useToast } from "@/components/ui/Toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { ChatMessage } from "@/types";
 
@@ -12,13 +11,13 @@ interface ChatPanelProps {
   onSendMessage: (prompt: string) => Promise<void>;
   isLoading: boolean;
   remainingUses?: number;
+  showToast: (message: string, type: "success" | "error" | "info") => void;
 }
 
-export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, showToast }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
 
   // Auto-scroll to bottom when new messages arrive
@@ -39,12 +38,13 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
     e.preventDefault();
     if (prompt.trim() && !isLoading) {
       const trimmedPrompt = prompt.trim();
+      // Clear the prompt immediately
+      setPrompt("");
       try {
         await onSendMessage(trimmedPrompt);
-        // Only clear prompt if the message was sent successfully
-        setPrompt("");
       } catch (err) {
-        // Keep the prompt on error so user can retry
+        // Restore the prompt on error so user can retry
+        setPrompt(trimmedPrompt);
         // Error handling is done in the parent component
       }
     }
@@ -176,8 +176,6 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses }:
           </div>
         </form>
       </div>
-
-      <ToastContainer />
     </div>
   );
 }
