@@ -136,6 +136,18 @@ class ApiClient {
                     case "chunk":
                       callbacks.onChunk?.(event.chunk, event.accumulated);
                       break;
+                    case "code-start":
+                      callbacks.onCodeStart?.();
+                      break;
+                    case "code-chunk":
+                      callbacks.onCodeChunk?.(event.chunk);
+                      break;
+                    case "code-complete":
+                      callbacks.onCodeComplete?.();
+                      break;
+                    case "message-complete":
+                      callbacks.onMessageComplete?.(event.message);
+                      break;
                     case "message-update":
                       callbacks.onMessageUpdate?.(event.message);
                       break;

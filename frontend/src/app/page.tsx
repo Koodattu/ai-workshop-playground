@@ -13,7 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, PreviewControl } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -44,6 +44,12 @@ export default function WorkspacePage() {
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingCode, setStreamingCode] = useState<string>("");
   const abortStreamRef = useRef<(() => void) | null>(null);
+
+  // Preview control ref
+  const previewControlRef = useRef<PreviewControl | null>(null);
+
+  // Code buffer for streaming
+  const codeBufferRef = useRef<string>("");
 
   // Throttling refs for editor updates
   const editorUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -112,9 +118,7 @@ export default function WorkspacePage() {
       setIsStreaming(true);
       setStreamingMessage("");
       setStreamingCode("");
-
-      // Clear the editor when starting a new generation
-      setCode("");
+      codeBufferRef.current = "";
 
       try {
         // Build message history from last 10 contextMessages
@@ -133,36 +137,48 @@ export default function WorkspacePage() {
             messageHistory,
           },
           {
-            // Handle message updates (no throttling needed, text is cheap)
-            onMessageUpdate: (message: string) => {
-              setStreamingMessage(message);
+            // Step 0: Code starts - disable preview and clear editor
+            onCodeStart: () => {
+              // Disable preview auto-refresh
+              previewControlRef.current?.disableAutoRefresh();
+              // Clear the editor
+              setCode("");
+              codeBufferRef.current = "";
             },
 
-            // Handle code updates with throttling to prevent editor freezing
-            onCodeUpdate: (code: string) => {
-              // Store the pending code update
-              pendingCodeUpdateRef.current = code;
-              setStreamingCode(code);
+            // Step 1-2: Stream code chunks line by line to editor
+            onCodeChunk: (chunk: string) => {
+              // Accumulate code chunks
+              codeBufferRef.current += chunk;
 
               // Clear any existing timer
               if (editorUpdateTimerRef.current) {
                 clearTimeout(editorUpdateTimerRef.current);
               }
 
-              // Throttle editor updates to every 150ms
+              // Batch update editor every 50ms to prevent freezing
               editorUpdateTimerRef.current = setTimeout(() => {
-                if (pendingCodeUpdateRef.current !== null) {
-                  setCode(pendingCodeUpdateRef.current);
-                  pendingCodeUpdateRef.current = null;
-                }
-              }, 150);
+                setCode(codeBufferRef.current);
+              }, 500);
             },
 
-            // Fallback chunk handler for backwards compatibility
-            onChunk: (chunk: string, accumulated: string) => {
-              // This is now only a fallback if message-update/code-update events aren't sent
-              // The backend now sends parsed events, so this is rarely used
+            // Step 3: Code complete
+            onCodeComplete: () => {
+              // Clear any pending editor update timer and apply final code
+              if (editorUpdateTimerRef.current) {
+                clearTimeout(editorUpdateTimerRef.current);
+                editorUpdateTimerRef.current = null;
+              }
+              // Apply final code buffer to editor
+              setCode(codeBufferRef.current);
             },
+
+            // Step 4: Message complete - show in chat
+            onMessageComplete: (message: string) => {
+              setStreamingMessage(message);
+            },
+
+            // Step 5: All done - enable preview and update
             onDone: (data) => {
               // Clear any pending editor update timer
               if (editorUpdateTimerRef.current) {
@@ -170,13 +186,6 @@ export default function WorkspacePage() {
                 editorUpdateTimerRef.current = null;
               }
 
-              // Apply any pending code update immediately
-              if (pendingCodeUpdateRef.current !== null) {
-                setCode(pendingCodeUpdateRef.current);
-                pendingCodeUpdateRef.current = null;
-              }
-
-              // Parse the final JSON
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
 
@@ -203,6 +212,9 @@ export default function WorkspacePage() {
               setStreamingMessage("");
               setStreamingCode("");
               setIsStreaming(false);
+
+              // Enable preview and update it
+              previewControlRef.current?.enableAutoRefresh();
 
               showToast(t("chat.codeGenerated"), "success");
             },
@@ -452,7 +464,12 @@ export default function WorkspacePage() {
 
             {/* Preview Panel */}
             <Panel defaultSize={500} minSize={200} className="panel-animate" style={{ animationDelay: "0.2s" }}>
-              <PreviewPanel code={code} />
+              <PreviewPanel
+                code={code}
+                onControlReady={(control) => {
+                  previewControlRef.current = control;
+                }}
+              />
             </Panel>
           </Group>
         </main>

@@ -54,6 +54,24 @@ export interface StreamChunk {
   accumulated: string;
 }
 
+export interface StreamCodeStart {
+  type: "code-start";
+}
+
+export interface StreamCodeChunk {
+  type: "code-chunk";
+  chunk: string;
+}
+
+export interface StreamCodeComplete {
+  type: "code-complete";
+}
+
+export interface StreamMessageComplete {
+  type: "message-complete";
+  message: string;
+}
+
 export interface StreamDoneEvent {
   type: "done";
   message: string;
@@ -77,12 +95,31 @@ export interface StreamCodeUpdate {
   code: string;
 }
 
-export type StreamEvent = StreamChunk | StreamDoneEvent | StreamErrorEvent | StreamMessageUpdate | StreamCodeUpdate;
+export type StreamEvent =
+  | StreamChunk
+  | StreamCodeStart
+  | StreamCodeChunk
+  | StreamCodeComplete
+  | StreamMessageComplete
+  | StreamDoneEvent
+  | StreamErrorEvent
+  | StreamMessageUpdate
+  | StreamCodeUpdate;
 
 export interface StreamCallbacks {
   onChunk?: (chunk: string, accumulated: string) => void;
   onMessageUpdate?: (message: string) => void;
   onCodeUpdate?: (code: string) => void;
+  onCodeStart?: () => void;
+  onCodeChunk?: (chunk: string) => void;
+  onCodeComplete?: () => void;
+  onMessageComplete?: (message: string) => void;
   onDone?: (data: { message: string; code: string; remaining: number }) => void;
   onError?: (error: string, remainingUses?: number) => void;
+}
+
+// Preview control interface
+export interface PreviewControl {
+  disableAutoRefresh: () => void;
+  enableAutoRefresh: () => void;
 }

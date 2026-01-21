@@ -79,7 +79,9 @@ const generateCode = asyncHandler(async (req, res) => {
 
   let accumulatedText = "";
   let previousMessage = "";
-  let previousCode = "";
+  let codeStarted = false;
+  let codeBuffer = "";
+  let lastSentLineCount = 0;
 
   try {
     // Initialize the model with system instruction
@@ -137,45 +139,51 @@ Modify or extend the existing code based on the user's request.`;
           // Accumulate the text
           accumulatedText += chunkText;
 
-          // Send the raw chunk event (fallback)
-          const eventData = {
-            type: "chunk",
-            text: chunkText,
-            accumulated: accumulatedText,
-          };
+          // Try to detect code field boundaries and extract code progressively
+          // JSON fields appear in schema order: message, then code
 
-          res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+          // Detect code field start
+          const codeFieldMatch = accumulatedText.match(/"code"\s*:\s*"([^]*?)(?:",|"$)/);
 
-          // Try to parse the accumulated JSON
+          if (codeFieldMatch && !codeStarted) {
+            // Code field has started
+            codeStarted = true;
+            res.write(`data: ${JSON.stringify({ type: "code-start" })}\n\n`);
+          }
+
+          // Extract and send code chunks line by line
+          if (codeStarted && codeFieldMatch) {
+            const currentCode = codeFieldMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\").replace(/\\t/g, "\t");
+
+            codeBuffer = currentCode;
+
+            // Split by newlines and send complete lines only
+            const lines = codeBuffer.split("\n");
+            const completeLines = lines.slice(0, -1); // All but last (potentially incomplete) line
+            const newLines = completeLines.slice(lastSentLineCount);
+
+            if (newLines.length > 0) {
+              // Send new complete lines
+              const codeChunk = newLines.join("\n") + (newLines.length > 0 ? "\n" : "");
+              res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: codeChunk })}\n\n`);
+              lastSentLineCount = completeLines.length;
+            }
+          }
+
+          // Try to parse for message updates
           try {
             const parsed = JSON.parse(accumulatedText);
 
-            // Extract message and code fields
+            // Extract message field
             const currentMessage = parsed.message || "";
-            const currentCode = parsed.code || "";
 
-            // Send message-update event if message changed
+            // Send message-update event if message changed and is complete
             if (currentMessage && currentMessage !== previousMessage) {
-              const messageEvent = {
-                type: "message-update",
-                message: currentMessage,
-              };
-              res.write(`data: ${JSON.stringify(messageEvent)}\n\n`);
               previousMessage = currentMessage;
-            }
-
-            // Send code-update event if code changed
-            if (currentCode && currentCode !== previousCode) {
-              const codeEvent = {
-                type: "code-update",
-                code: currentCode,
-              };
-              res.write(`data: ${JSON.stringify(codeEvent)}\n\n`);
-              previousCode = currentCode;
+              // Don't send message-update during streaming - wait for message-complete
             }
           } catch (parseError) {
             // JSON not complete yet, continue accumulating
-            // This is expected during streaming
           }
         }
       } catch (chunkError) {
@@ -196,6 +204,15 @@ Modify or extend the existing code based on the user's request.`;
     if (!structuredResponse.code || !structuredResponse.message) {
       throw new AppError("Invalid AI response structure", 500);
     }
+
+    // Send code-complete event (code field is now complete)
+    if (codeStarted) {
+      res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
+    }
+
+    // Send message-complete event (message field is complete)
+    const finalMessage = structuredResponse.message;
+    res.write(`data: ${JSON.stringify({ type: "message-complete", message: finalMessage })}\n\n`);
 
     // Send the final complete response
     const finalData = {
