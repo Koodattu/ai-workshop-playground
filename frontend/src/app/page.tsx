@@ -473,6 +473,13 @@ export default function WorkspacePage() {
     [hasGeneratedWithLLM, currentTemplateId, code, customCode, language],
   );
 
+  const handleClearMessages = useCallback(() => {
+    // Clear both chat history and context messages
+    setChatHistory([]);
+    setContextMessages([]);
+    showToast(t("chat.clearChat"), "success");
+  }, [showToast, t]);
+
   // Show password modal if not authenticated
   if (!isAuthenticated) {
     return (
@@ -498,7 +505,7 @@ export default function WorkspacePage() {
               <span className="font-display text-lg font-bold tracking-tight text-white">{t("workspace.header")}</span>
             </div>
             <div className="hidden sm:block h-6 w-px bg-steel/50" />
-            <span className="hidden sm:block text-xs font-mono text-gray-500 uppercase tracking-wider">Playground</span>
+            <span className="hidden sm:block text-xs font-mono text-gray-500 uppercase tracking-wider">{t("workspace.playground")}</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -529,6 +536,7 @@ export default function WorkspacePage() {
                 remainingUses={remainingUses}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
+                onClearMessages={handleClearMessages}
               />
             </Panel>
 

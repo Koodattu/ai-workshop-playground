@@ -14,7 +14,8 @@
     "close": "Sulje"
   },
   "workspace": {
-    "header": "AI Workshop",
+    "header": "Tekoäly-työpaja",
+    "playground": "Leikkikenttä",
     "title": "Luo verkkosivuja tekoälyn avulla",
     "description": "Kuvaile mitä haluat luoda chat-paneelissa",
     "usageCounter": "{count} käyttöä jäljellä",
@@ -39,8 +40,8 @@
     "sendPlaceholder": "Kuvaile mitä haluat luoda...",
     "sendButton": "Lähetä",
     "generating": "Luodaan...",
-    "emptyTitle": "Valmis luomaan",
-    "emptyDescription": "Kuvaile verkkokomponentti tai sivu jonka haluat rakentaa",
+    "emptyTitle": "Valmiina auttamaan!",
+    "emptyDescription": "Kuvaile miten haluat koodia muokata tai minkälaisen verkkosivun haluat rakentaa",
     "you": "Sinä",
     "ai": "Tekoäly",
     "errorDetails": "miksi?",
@@ -49,7 +50,9 @@
     "shiftEnterHint": "Shift + Enter uudelle riville",
     "usageLeft": "{count} jäljellä",
     "generateButton": "Luo",
-    "streaming": "suoratoisto..."
+    "streaming": "suoratoisto...",
+    "clearChat": "Tyhjennä keskustelu",
+    "clearChatTitle": "Tyhjennä kaikki viestit"
   },
   "editor": {
     "header": "KOODIEDITORI",

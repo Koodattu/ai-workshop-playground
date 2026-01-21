@@ -15,6 +15,7 @@
   },
   "workspace": {
     "header": "AI Workshop",
+    "playground": "Playground",
     "title": "Create web pages with AI",
     "description": "Describe what you want to create in the chat panel",
     "usageCounter": "{count} uses left",
@@ -49,7 +50,9 @@
     "shiftEnterHint": "Shift + Enter for new line",
     "usageLeft": "{count} left",
     "generateButton": "Generate",
-    "streaming": "streaming..."
+    "streaming": "streaming...",
+    "clearChat": "Clear chat",
+    "clearChatTitle": "Clear all messages"
   },
   "editor": {
     "header": "CODE",

@@ -13,9 +13,10 @@ interface ChatPanelProps {
   remainingUses?: number;
   showToast: (message: string, type: "success" | "error" | "info") => void;
   streamingMessage?: string;
+  onClearMessages?: () => void;
 }
 
-export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, showToast, streamingMessage }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, showToast, streamingMessage, onClearMessages }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -70,14 +71,33 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, s
           <div className="w-2 h-2 rounded-full bg-electric" />
           <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("chat.header")}</h2>
         </div>
-        {remainingUses !== undefined && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-carbon border border-steel/50">
-            <svg className="w-3.5 h-3.5 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span className="font-mono text-xs text-gray-300">{t("chat.usageLeft", { count: remainingUses })}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {remainingUses !== undefined && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-carbon border border-steel/50">
+              <svg className="w-3.5 h-3.5 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span className="font-mono text-xs text-gray-300">{t("chat.usageLeft", { count: remainingUses })}</span>
+            </div>
+          )}
+          {onClearMessages && (
+            <button
+              onClick={onClearMessages}
+              className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
+              title={t("chat.clearChatTitle")}
+              disabled={isLoading}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
