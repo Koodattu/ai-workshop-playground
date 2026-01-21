@@ -496,16 +496,6 @@ export default function WorkspacePage() {
 
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
-            {remainingUses !== undefined && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-carbon border border-steel/50">
-                <svg className="w-3.5 h-3.5 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="font-mono text-xs text-gray-300">
-                  {remainingUses} {remainingUses === 1 ? t("workspace.usageCounterOne") : t("workspace.usageCounterOther")} left
-                </span>
-              </div>
-            )}
             <button
               onClick={() => {
                 setIsAuthenticated(false);
