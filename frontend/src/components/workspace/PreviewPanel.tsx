@@ -1,26 +1,46 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { PreviewControl } from "@/types";
 
 interface PreviewPanelProps {
   code: string;
+  onControlReady?: (control: PreviewControl) => void;
 }
 
-export function PreviewPanel({ code }: PreviewPanelProps) {
+export function PreviewPanel({ code, onControlReady }: PreviewPanelProps) {
   const [isAutoRefresh, setIsAutoRefresh] = useState(true);
+  const [manuallyDisabled, setManuallyDisabled] = useState(false);
   const [displayCode, setDisplayCode] = useState(code);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [key, setKey] = useState(0);
   const { t } = useLanguage();
 
+  // Expose control methods
+  useEffect(() => {
+    if (onControlReady) {
+      const control: PreviewControl = {
+        disableAutoRefresh: () => {
+          setIsAutoRefresh(false);
+          setManuallyDisabled(true);
+        },
+        enableAutoRefresh: () => {
+          setIsAutoRefresh(true);
+          setManuallyDisabled(false);
+        },
+      };
+      onControlReady(control);
+    }
+  }, [onControlReady]);
+
   // Update preview based on auto-refresh setting
   useEffect(() => {
-    if (isAutoRefresh) {
+    if (isAutoRefresh && !manuallyDisabled) {
       setDisplayCode(code);
     }
-  }, [code, isAutoRefresh]);
+  }, [code, isAutoRefresh, manuallyDisabled]);
 
   const handleRefresh = useCallback(() => {
     setDisplayCode(code);

@@ -48,7 +48,8 @@
     "codeGenerated": "Koodi luotu!",
     "shiftEnterHint": "Shift + Enter uudelle riville",
     "usageLeft": "{count} jäljellä",
-    "generateButton": "Luo"
+    "generateButton": "Luo",
+    "streaming": "suoratoisto..."
   },
   "editor": {
     "header": "KOODI",

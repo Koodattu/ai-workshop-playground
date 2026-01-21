@@ -37,8 +37,10 @@ CODE GENERATION RULES:
 5. Create visually appealing designs with good styling
 6. Include responsive design principles
 7. Make interactive elements functional with proper JavaScript
+8. CRITICAL: Format code with proper indentation and newlines - each tag, style rule, and script line MUST be on its own line
+9. Use proper line breaks (\n) to separate code lines - DO NOT return all code on a single line
 
-REMEMBER: Return JSON with "message" (short, in user's language) and "code" (clean HTML/CSS/JS, no markdown).`;
+REMEMBER: Return JSON with "message" (short, in user's language) and "code" (clean, PROPERLY FORMATTED HTML/CSS/JS with newlines, no markdown).`;
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
@@ -57,7 +59,7 @@ const CODE_GENERATION_SCHEMA = {
 };
 
 /**
- * Generate code using Gemini API with structured outputs
+ * Generate code using Gemini API with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
   const { prompt, existingCode, messageHistory } = req.body;
@@ -70,10 +72,23 @@ const generateCode = asyncHandler(async (req, res) => {
     throw new AppError("Gemini API key not configured", 500);
   }
 
+  // Set up SSE headers
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  let accumulatedText = "";
+  let previousMessage = "";
+  let codeStarted = false;
+  let codeBuffer = ""; // Buffer for incomplete lines
+  let lastSentPosition = 0; // Track what we've already parsed and sent
+
   try {
     // Initialize the model with system instruction
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash",
       systemInstruction: SYSTEM_INSTRUCTION,
       generationConfig: {
         responseMimeType: "application/json",
@@ -113,15 +128,102 @@ Modify or extend the existing code based on the user's request.`;
       userPrompt += prompt;
     }
 
-    // Generate content with structured output
-    const result = await model.generateContent(userPrompt);
-    const response = await result.response;
-    const text = response.text();
+    // Generate content with streaming
+    const result = await model.generateContentStream(userPrompt);
 
-    // Parse the structured JSON response
+    // Process the stream
+    for await (const chunk of result.stream) {
+      try {
+        // Extract text from the chunk
+        const chunkText = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (chunkText) {
+          // Accumulate the text
+          accumulatedText += chunkText;
+
+          // Efficient streaming parser - only look at new content
+          // Instead of regex on full buffer, find code field boundaries once
+          if (!codeStarted) {
+            // Look for "code":"  pattern
+            const codeStartIndex = accumulatedText.indexOf('"code"');
+            if (codeStartIndex !== -1) {
+              // Find the opening quote after "code":
+              const afterColon = accumulatedText.indexOf(":", codeStartIndex + 6);
+              if (afterColon !== -1) {
+                const openQuote = accumulatedText.indexOf('"', afterColon);
+                if (openQuote !== -1) {
+                  codeStarted = true;
+                  lastSentPosition = openQuote + 1; // Position after opening quote
+                  res.write(`data: ${JSON.stringify({ type: "code-start" })}\n\n`);
+                }
+              }
+            }
+          }
+
+          // If code has started, extract and send only new content
+          if (codeStarted) {
+            // Find the current end position (either closing quote or end of buffer)
+            let currentEndPos = accumulatedText.length;
+
+            // Look for closing quote (but not escaped ones)
+            // Simple approach: find "} or ", pattern (end of code field)
+            const closingPattern1 = accumulatedText.indexOf('"}', lastSentPosition);
+            const closingPattern2 = accumulatedText.indexOf('",', lastSentPosition);
+
+            if (closingPattern1 !== -1 || closingPattern2 !== -1) {
+              // Code field is complete
+              if (closingPattern1 !== -1) currentEndPos = closingPattern1;
+              if (closingPattern2 !== -1 && closingPattern2 < currentEndPos) currentEndPos = closingPattern2;
+            }
+
+            // Extract only NEW content since last send
+            if (currentEndPos > lastSentPosition) {
+              const newContent = accumulatedText.substring(lastSentPosition, currentEndPos);
+
+              // Decode JSON escape sequences
+              const decodedContent = newContent.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+
+              // Debug: Log if newlines are present
+              if (decodedContent.includes("\n")) {
+                console.log(`[Stream] Decoded chunk with ${decodedContent.split("\n").length - 1} newlines`);
+              } else {
+                console.log(`[Stream] WARNING: Decoded chunk has NO newlines (${decodedContent.length} chars)`);
+              }
+
+              // Add to buffer
+              codeBuffer += decodedContent;
+
+              // Send only complete lines (ending with \n)
+              const lines = codeBuffer.split("\n");
+
+              // If buffer ends with \n, all lines are complete
+              // If not, keep the last incomplete line in buffer
+              const hasTrailingNewline = codeBuffer.endsWith("\n");
+              const completeLines = hasTrailingNewline ? lines : lines.slice(0, -1);
+
+              if (completeLines.length > 0) {
+                // Send complete lines (with newlines preserved)
+                const linesToSend = completeLines.join("\n") + (completeLines.length > 0 ? "\n" : "");
+                res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: linesToSend })}\n\n`);
+
+                // Update buffer to keep only incomplete line
+                codeBuffer = hasTrailingNewline ? "" : lines[lines.length - 1];
+              }
+
+              lastSentPosition = currentEndPos;
+            }
+          }
+        }
+      } catch (chunkError) {
+        console.error("Error processing chunk:", chunkError);
+        // Continue processing other chunks
+      }
+    }
+
+    // Parse the final accumulated JSON response
     let structuredResponse;
     try {
-      structuredResponse = JSON.parse(text);
+      structuredResponse = JSON.parse(accumulatedText);
     } catch (parseError) {
       throw new AppError("Failed to parse AI response", 500);
     }
@@ -131,26 +233,60 @@ Modify or extend the existing code based on the user's request.`;
       throw new AppError("Invalid AI response structure", 500);
     }
 
-    res.json({
+    // Send code-complete event (code field is now complete)
+    if (codeStarted) {
+      // Send any remaining incomplete line from buffer
+      if (codeBuffer.length > 0) {
+        res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: codeBuffer })}\n\n`);
+        codeBuffer = "";
+      }
+
+      res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
+    }
+
+    // Send message-complete event (message field is complete)
+    const finalMessage = structuredResponse.message;
+    res.write(`data: ${JSON.stringify({ type: "message-complete", message: finalMessage })}\n\n`);
+
+    // Send the final complete response
+    const finalData = {
+      type: "done",
       message: structuredResponse.message,
       code: structuredResponse.code,
       remaining: req.workshop?.remaining,
-    });
+    };
+
+    res.write(`data: ${JSON.stringify(finalData)}\n\n`);
+    res.end();
   } catch (error) {
     // Handle specific Gemini API errors
+    let errorMessage = "AI generation failed";
+    let statusCode = 500;
+
     if (error.message?.includes("API key")) {
-      throw new AppError("Invalid API configuration", 500);
+      errorMessage = "Invalid API configuration";
+    } else if (error.message?.includes("quota")) {
+      errorMessage = "API quota exceeded. Please try again later.";
+      statusCode = 503;
+    } else if (error.message?.includes("safety")) {
+      errorMessage = "Request blocked due to safety filters";
+      statusCode = 400;
+    } else if (error instanceof AppError) {
+      errorMessage = error.message;
+      statusCode = error.statusCode;
+    } else {
+      errorMessage = `AI generation failed: ${error.message}`;
     }
 
-    if (error.message?.includes("quota")) {
-      throw new AppError("API quota exceeded. Please try again later.", 503);
-    }
+    // Send error event
+    const errorData = {
+      type: "error",
+      error: errorMessage,
+      statusCode: statusCode,
+    };
 
-    if (error.message?.includes("safety")) {
-      throw new AppError("Request blocked due to safety filters", 400);
-    }
-
-    throw new AppError(`AI generation failed: ${error.message}`, 500);
+    res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+    res.end();
   }
 });
 

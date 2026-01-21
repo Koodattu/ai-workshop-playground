@@ -48,7 +48,8 @@
     "codeGenerated": "Code generated!",
     "shiftEnterHint": "Shift + Enter for new line",
     "usageLeft": "{count} left",
-    "generateButton": "Generate"
+    "generateButton": "Generate",
+    "streaming": "streaming..."
   },
   "editor": {
     "header": "CODE",

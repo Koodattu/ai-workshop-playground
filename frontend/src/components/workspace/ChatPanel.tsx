@@ -12,18 +12,19 @@ interface ChatPanelProps {
   isLoading: boolean;
   remainingUses?: number;
   showToast: (message: string, type: "success" | "error" | "info") => void;
+  streamingMessage?: string;
 }
 
-export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, showToast }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, showToast, streamingMessage }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamingMessage]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -129,7 +130,22 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, s
           ))
         )}
 
-        {isLoading && (
+        {/* Streaming message - shown while AI is generating */}
+        {streamingMessage && (
+          <div className="animate-fade-in">
+            <div className="max-w-[90%] rounded-xl px-4 py-3 bg-carbon border border-steel/50 text-gray-300">
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-electric animate-pulse mt-2" />
+                <p className="text-sm font-body whitespace-pre-wrap leading-relaxed flex-1">{streamingMessage}</p>
+              </div>
+              <span className="block mt-2 text-[10px] font-mono text-gray-500 uppercase">
+                {t("chat.ai")} • {t("chat.streaming")}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {isLoading && !streamingMessage && (
           <div className="flex items-center gap-3 animate-fade-in">
             <div className="bg-carbon border border-steel/50 rounded-xl px-4 py-3">
               <div className="flex items-center gap-2">

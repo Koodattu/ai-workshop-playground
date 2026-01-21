@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
@@ -13,7 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, PreviewControl } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -38,6 +38,27 @@ export default function WorkspacePage() {
   const [authError, setAuthError] = useState<string | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
+
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [streamingCode, setStreamingCode] = useState<string>("");
+  const abortStreamRef = useRef<(() => void) | null>(null);
+
+  // Preview control ref
+  const previewControlRef = useRef<PreviewControl | null>(null);
+
+  // Monaco editor ref for direct manipulation
+  const monacoEditorRef = useRef<any>(null);
+
+  // Cursor position storage for restoration after streaming
+  const savedCursorPositionRef = useRef<{ lineNumber: number; column: number } | null>(null);
+
+  // Code buffer for streaming
+  const codeBufferRef = useRef<string>("");
+
+  // Throttling ref for editor updates (using requestAnimationFrame)
+  const editorUpdateFrameRef = useRef<number | null>(null);
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
@@ -87,6 +108,267 @@ export default function WorkspacePage() {
   );
 
   const handleSendMessage = useCallback(
+    async (prompt: string) => {
+      if (!visitorId || !password) return;
+
+      // Add user message to chat
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: prompt,
+        timestamp: new Date(),
+      };
+      setChatHistory((prev) => [...prev, userMessage]);
+      setIsGenerating(true);
+      setIsStreaming(true);
+      setStreamingMessage("");
+      setStreamingCode("");
+      codeBufferRef.current = "";
+
+      try {
+        // Build message history from last 10 contextMessages
+        const messageHistory = contextMessages.slice(-10).map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+        // Use streaming API with new event handlers
+        const abort = await api.generateCodeStream(
+          {
+            password,
+            visitorId,
+            prompt,
+            existingCode: code,
+            messageHistory,
+          },
+          {
+            // Step 0: Code starts - disable preview and clear editor
+            onCodeStart: () => {
+              // Disable preview auto-refresh
+              previewControlRef.current?.disableAutoRefresh();
+              // Clear the editor buffer
+              codeBufferRef.current = "";
+
+              // Save cursor position before clearing
+              if (monacoEditorRef.current) {
+                const position = monacoEditorRef.current.getPosition();
+                if (position) {
+                  savedCursorPositionRef.current = {
+                    lineNumber: position.lineNumber,
+                    column: position.column,
+                  };
+                }
+              }
+
+              // Clear Monaco editor directly if available (fast)
+              if (monacoEditorRef.current) {
+                const model = monacoEditorRef.current.getModel();
+                if (model) {
+                  model.setValue("");
+                }
+              } else {
+                // Fallback to React state
+                setCode("");
+              }
+            },
+
+            // Step 1-2: Stream code chunks line by line to editor
+            onCodeChunk: (chunk: string) => {
+              // Accumulate code chunks
+              codeBufferRef.current += chunk;
+
+              // Cancel any pending frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+              }
+
+              // Use requestAnimationFrame for smooth 60fps updates
+              editorUpdateFrameRef.current = requestAnimationFrame(() => {
+                if (monacoEditorRef.current) {
+                  // Direct Monaco manipulation (O(1) append operation)
+                  const model = monacoEditorRef.current.getModel();
+                  if (model) {
+                    const lineCount = model.getLineCount();
+                    const lastLineLength = model.getLineContent(lineCount).length;
+
+                    // Append chunk at the end of the document
+                    model.pushEditOperations(
+                      [],
+                      [
+                        {
+                          range: {
+                            startLineNumber: lineCount,
+                            startColumn: lastLineLength + 1,
+                            endLineNumber: lineCount,
+                            endColumn: lastLineLength + 1,
+                          },
+                          text: chunk,
+                          forceMoveMarkers: true,
+                        },
+                      ],
+                      () => null,
+                    );
+
+                    // Auto-scroll to bottom as code streams in
+                    const newLineCount = model.getLineCount();
+                    monacoEditorRef.current.revealLine(newLineCount, 0); // 0 = smooth scroll
+                  }
+                }
+              });
+            },
+
+            // Step 3: Code complete
+            onCodeComplete: () => {
+              // Clear any pending animation frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
+              }
+              // Apply final code buffer to React state (for template switching, etc.)
+              setCode(codeBufferRef.current);
+
+              // Auto-format the document after streaming completes
+              if (monacoEditorRef.current) {
+                // Use setTimeout to ensure Monaco has processed the final content
+                setTimeout(() => {
+                  monacoEditorRef.current?.getAction("editor.action.formatDocument")?.run();
+
+                  // Restore cursor position after formatting completes
+                  setTimeout(() => {
+                    if (savedCursorPositionRef.current) {
+                      const model = monacoEditorRef.current?.getModel();
+                      if (model) {
+                        const { lineNumber, column } = savedCursorPositionRef.current;
+                        const newLineCount = model.getLineCount();
+
+                        // Only restore if the line still exists
+                        if (lineNumber <= newLineCount) {
+                          const lineLength = model.getLineContent(lineNumber).length;
+                          const safeColumn = Math.min(column, lineLength + 1);
+
+                          monacoEditorRef.current.setPosition({
+                            lineNumber,
+                            column: safeColumn,
+                          });
+                          monacoEditorRef.current.revealLineInCenter(lineNumber);
+                        }
+
+                        // Clear saved position
+                        savedCursorPositionRef.current = null;
+                      }
+                    }
+                  }, 50);
+                }, 50);
+              }
+            },
+
+            // Step 4: Message complete - show in chat
+            onMessageComplete: (message: string) => {
+              setStreamingMessage(message);
+            },
+
+            // Step 5: All done - enable preview and update
+            onDone: (data) => {
+              // Clear any pending animation frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
+              }
+
+              const finalMessage = data.message || t("chat.codeGenerated");
+              const finalCode = data.code;
+
+              // Update final states with the complete code
+              setCode(finalCode);
+              setRemainingUses(data.remaining);
+              setHasGeneratedWithLLM(true);
+              setCurrentTemplateId("custom");
+              setCustomCode(finalCode);
+
+              // Add assistant message to chat history
+              const assistantMessage: ChatMessage = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: finalMessage,
+                timestamp: new Date(),
+              };
+              setChatHistory((prev) => [...prev, assistantMessage]);
+
+              // Update context messages with both user and assistant messages
+              setContextMessages((prev) => [...prev, userMessage, assistantMessage]);
+
+              // Clear streaming states
+              setStreamingMessage("");
+              setStreamingCode("");
+              setIsStreaming(false);
+
+              // Enable preview and update it
+              previewControlRef.current?.enableAutoRefresh();
+
+              showToast(t("chat.codeGenerated"), "success");
+            },
+            onError: (error, remainingUsesOnError) => {
+              // Clear any pending animation frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
+              }
+
+              const errorMessage = error || t("api.generateError");
+
+              // Update remaining uses if provided
+              if (remainingUsesOnError !== undefined) {
+                setRemainingUses(remainingUsesOnError);
+              }
+
+              // Add error message to chat
+              const errorChatMessage: ChatMessage = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: t("api.generateError"),
+                timestamp: new Date(),
+                errorDetails: errorMessage,
+              };
+              setChatHistory((prev) => [...prev, errorChatMessage]);
+
+              // Clear streaming states
+              setStreamingMessage("");
+              setStreamingCode("");
+              setIsStreaming(false);
+
+              // Re-throw to let ChatPanel know not to clear the prompt
+              throw new Error(errorMessage);
+            },
+          },
+        );
+
+        // Store the abort function
+        abortStreamRef.current = abort;
+      } catch (err) {
+        // Error already handled in onError callback
+        throw err;
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [visitorId, password, showToast, code, t, contextMessages],
+  );
+
+  // Cleanup abort on unmount
+  useEffect(() => {
+    return () => {
+      if (abortStreamRef.current) {
+        abortStreamRef.current();
+      }
+      // Clean up any pending animation frames
+      if (editorUpdateFrameRef.current) {
+        cancelAnimationFrame(editorUpdateFrameRef.current);
+      }
+    };
+  }, []);
+
+  /* FALLBACK: Old non-streaming implementation (kept as backup)
+  const handleSendMessageNonStreaming = useCallback(
     async (prompt: string) => {
       if (!visitorId || !password) return;
 
@@ -154,6 +436,7 @@ export default function WorkspacePage() {
     },
     [visitorId, password, showToast, code, t, contextMessages],
   );
+  */
 
   const handleTemplateChange = useCallback(
     (templateId: string) => {
@@ -242,7 +525,14 @@ export default function WorkspacePage() {
           <Group orientation="horizontal" className="flex-1">
             {/* Chat Panel */}
             <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
-              <ChatPanel messages={chatHistory} onSendMessage={handleSendMessage} isLoading={isGenerating} remainingUses={remainingUses} showToast={showToast} />
+              <ChatPanel
+                messages={chatHistory}
+                onSendMessage={handleSendMessage}
+                isLoading={isGenerating}
+                remainingUses={remainingUses}
+                showToast={showToast}
+                streamingMessage={streamingMessage}
+              />
             </Panel>
 
             <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />
@@ -255,6 +545,9 @@ export default function WorkspacePage() {
                 currentTemplateId={currentTemplateId}
                 onTemplateChange={handleTemplateChange}
                 hasCustomCode={hasGeneratedWithLLM && customCode !== null}
+                onEditorReady={(editor) => {
+                  monacoEditorRef.current = editor;
+                }}
               />
             </Panel>
 
@@ -262,7 +555,12 @@ export default function WorkspacePage() {
 
             {/* Preview Panel */}
             <Panel defaultSize={500} minSize={200} className="panel-animate" style={{ animationDelay: "0.2s" }}>
-              <PreviewPanel code={code} />
+              <PreviewPanel
+                code={code}
+                onControlReady={(control) => {
+                  previewControlRef.current = control;
+                }}
+              />
             </Panel>
           </Group>
         </main>
