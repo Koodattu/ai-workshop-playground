@@ -85,11 +85,6 @@ export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChang
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.25 border-b border-steel/50 bg-obsidian">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-danger/80" />
-            <div className="w-3 h-3 rounded-full bg-warning/80" />
-            <div className="w-3 h-3 rounded-full bg-success/80" />
-          </div>
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />

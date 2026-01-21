@@ -67,7 +67,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, s
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-steel/50">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-electric animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-electric" />
           <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("chat.header")}</h2>
         </div>
         {remainingUses !== undefined && (
@@ -135,7 +135,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, s
           <div className="animate-fade-in">
             <div className="max-w-[90%] rounded-xl px-4 py-3 bg-carbon border border-steel/50 text-gray-300">
               <div className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-electric animate-pulse mt-2" />
+                <div className="w-2 h-2 rounded-full bg-electric mt-2" />
                 <p className="text-sm font-body whitespace-pre-wrap leading-relaxed flex-1">{streamingMessage}</p>
               </div>
               <span className="block mt-2 text-[10px] font-mono text-gray-500 uppercase">

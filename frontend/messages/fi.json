@@ -35,7 +35,7 @@
     "visitorIdError": "Kävijätunnisteen luominen epäonnistui. Päivitä sivu."
   },
   "chat": {
-    "header": "OHJE",
+    "header": "TEKOÄLY-AVUSTAJA",
     "sendPlaceholder": "Kuvaile mitä haluat luoda...",
     "sendButton": "Lähetä",
     "generating": "Luodaan...",
@@ -52,7 +52,7 @@
     "streaming": "suoratoisto..."
   },
   "editor": {
-    "header": "KOODI",
+    "header": "KOODIEDITORI",
     "format": "Muotoile koodi",
     "copy": "Kopioi koodi",
     "copyTitle": "Kopioi koodi",

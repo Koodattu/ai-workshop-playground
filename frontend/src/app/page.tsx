@@ -107,6 +107,13 @@ export default function WorkspacePage() {
     [visitorId, setPassword, showToast, t],
   );
 
+  // Auto-validate password on page load
+  useEffect(() => {
+    if (password && visitorId && !isAuthenticated) {
+      handleAuthenticate(password);
+    }
+  }, [password, visitorId, isAuthenticated, handleAuthenticate]);
+
   const handleSendMessage = useCallback(
     async (prompt: string) => {
       if (!visitorId || !password) return;
