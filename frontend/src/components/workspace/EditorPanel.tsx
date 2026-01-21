@@ -13,15 +13,17 @@ interface EditorPanelProps {
   currentTemplateId: string;
   onTemplateChange: (templateId: string) => void;
   hasCustomCode: boolean;
+  onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
 }
 
-export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChange, hasCustomCode }: EditorPanelProps) {
+export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChange, hasCustomCode, onEditorReady }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { t } = useLanguage();
 
   const handleEditorMount: OnMount = useCallback((editor) => {
     editorRef.current = editor;
+    onEditorReady?.(editor);
 
     // Configure editor settings
     editor.updateOptions({

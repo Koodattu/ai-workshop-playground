@@ -37,8 +37,10 @@ CODE GENERATION RULES:
 5. Create visually appealing designs with good styling
 6. Include responsive design principles
 7. Make interactive elements functional with proper JavaScript
+8. CRITICAL: Format code with proper indentation and newlines - each tag, style rule, and script line MUST be on its own line
+9. Use proper line breaks (\n) to separate code lines - DO NOT return all code on a single line
 
-REMEMBER: Return JSON with "message" (short, in user's language) and "code" (clean HTML/CSS/JS, no markdown).`;
+REMEMBER: Return JSON with "message" (short, in user's language) and "code" (clean, PROPERLY FORMATTED HTML/CSS/JS with newlines, no markdown).`;
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
@@ -80,13 +82,13 @@ const generateCode = asyncHandler(async (req, res) => {
   let accumulatedText = "";
   let previousMessage = "";
   let codeStarted = false;
-  let codeBuffer = "";
-  let lastSentLineCount = 0;
+  let codeBuffer = ""; // Buffer for incomplete lines
+  let lastSentPosition = 0; // Track what we've already parsed and sent
 
   try {
     // Initialize the model with system instruction
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash",
       systemInstruction: SYSTEM_INSTRUCTION,
       generationConfig: {
         responseMimeType: "application/json",
@@ -139,51 +141,77 @@ Modify or extend the existing code based on the user's request.`;
           // Accumulate the text
           accumulatedText += chunkText;
 
-          // Try to detect code field boundaries and extract code progressively
-          // JSON fields appear in schema order: message, then code
-
-          // Detect code field start
-          const codeFieldMatch = accumulatedText.match(/"code"\s*:\s*"([^]*?)(?:",|"$)/);
-
-          if (codeFieldMatch && !codeStarted) {
-            // Code field has started
-            codeStarted = true;
-            res.write(`data: ${JSON.stringify({ type: "code-start" })}\n\n`);
-          }
-
-          // Extract and send code chunks line by line
-          if (codeStarted && codeFieldMatch) {
-            const currentCode = codeFieldMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\").replace(/\\t/g, "\t");
-
-            codeBuffer = currentCode;
-
-            // Split by newlines and send complete lines only
-            const lines = codeBuffer.split("\n");
-            const completeLines = lines.slice(0, -1); // All but last (potentially incomplete) line
-            const newLines = completeLines.slice(lastSentLineCount);
-
-            if (newLines.length > 0) {
-              // Send new complete lines
-              const codeChunk = newLines.join("\n") + (newLines.length > 0 ? "\n" : "");
-              res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: codeChunk })}\n\n`);
-              lastSentLineCount = completeLines.length;
+          // Efficient streaming parser - only look at new content
+          // Instead of regex on full buffer, find code field boundaries once
+          if (!codeStarted) {
+            // Look for "code":"  pattern
+            const codeStartIndex = accumulatedText.indexOf('"code"');
+            if (codeStartIndex !== -1) {
+              // Find the opening quote after "code":
+              const afterColon = accumulatedText.indexOf(":", codeStartIndex + 6);
+              if (afterColon !== -1) {
+                const openQuote = accumulatedText.indexOf('"', afterColon);
+                if (openQuote !== -1) {
+                  codeStarted = true;
+                  lastSentPosition = openQuote + 1; // Position after opening quote
+                  res.write(`data: ${JSON.stringify({ type: "code-start" })}\n\n`);
+                }
+              }
             }
           }
 
-          // Try to parse for message updates
-          try {
-            const parsed = JSON.parse(accumulatedText);
+          // If code has started, extract and send only new content
+          if (codeStarted) {
+            // Find the current end position (either closing quote or end of buffer)
+            let currentEndPos = accumulatedText.length;
 
-            // Extract message field
-            const currentMessage = parsed.message || "";
+            // Look for closing quote (but not escaped ones)
+            // Simple approach: find "} or ", pattern (end of code field)
+            const closingPattern1 = accumulatedText.indexOf('"}', lastSentPosition);
+            const closingPattern2 = accumulatedText.indexOf('",', lastSentPosition);
 
-            // Send message-update event if message changed and is complete
-            if (currentMessage && currentMessage !== previousMessage) {
-              previousMessage = currentMessage;
-              // Don't send message-update during streaming - wait for message-complete
+            if (closingPattern1 !== -1 || closingPattern2 !== -1) {
+              // Code field is complete
+              if (closingPattern1 !== -1) currentEndPos = closingPattern1;
+              if (closingPattern2 !== -1 && closingPattern2 < currentEndPos) currentEndPos = closingPattern2;
             }
-          } catch (parseError) {
-            // JSON not complete yet, continue accumulating
+
+            // Extract only NEW content since last send
+            if (currentEndPos > lastSentPosition) {
+              const newContent = accumulatedText.substring(lastSentPosition, currentEndPos);
+
+              // Decode JSON escape sequences
+              const decodedContent = newContent.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+
+              // Debug: Log if newlines are present
+              if (decodedContent.includes("\n")) {
+                console.log(`[Stream] Decoded chunk with ${decodedContent.split("\n").length - 1} newlines`);
+              } else {
+                console.log(`[Stream] WARNING: Decoded chunk has NO newlines (${decodedContent.length} chars)`);
+              }
+
+              // Add to buffer
+              codeBuffer += decodedContent;
+
+              // Send only complete lines (ending with \n)
+              const lines = codeBuffer.split("\n");
+
+              // If buffer ends with \n, all lines are complete
+              // If not, keep the last incomplete line in buffer
+              const hasTrailingNewline = codeBuffer.endsWith("\n");
+              const completeLines = hasTrailingNewline ? lines : lines.slice(0, -1);
+
+              if (completeLines.length > 0) {
+                // Send complete lines (with newlines preserved)
+                const linesToSend = completeLines.join("\n") + (completeLines.length > 0 ? "\n" : "");
+                res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: linesToSend })}\n\n`);
+
+                // Update buffer to keep only incomplete line
+                codeBuffer = hasTrailingNewline ? "" : lines[lines.length - 1];
+              }
+
+              lastSentPosition = currentEndPos;
+            }
           }
         }
       } catch (chunkError) {
@@ -207,6 +235,12 @@ Modify or extend the existing code based on the user's request.`;
 
     // Send code-complete event (code field is now complete)
     if (codeStarted) {
+      // Send any remaining incomplete line from buffer
+      if (codeBuffer.length > 0) {
+        res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: codeBuffer })}\n\n`);
+        codeBuffer = "";
+      }
+
       res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
     }
 

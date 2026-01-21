@@ -48,12 +48,14 @@ export default function WorkspacePage() {
   // Preview control ref
   const previewControlRef = useRef<PreviewControl | null>(null);
 
+  // Monaco editor ref for direct manipulation
+  const monacoEditorRef = useRef<any>(null);
+
   // Code buffer for streaming
   const codeBufferRef = useRef<string>("");
 
-  // Throttling refs for editor updates
-  const editorUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingCodeUpdateRef = useRef<string | null>(null);
+  // Throttling ref for editor updates (using requestAnimationFrame)
+  const editorUpdateFrameRef = useRef<number | null>(null);
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
@@ -141,9 +143,19 @@ export default function WorkspacePage() {
             onCodeStart: () => {
               // Disable preview auto-refresh
               previewControlRef.current?.disableAutoRefresh();
-              // Clear the editor
-              setCode("");
+              // Clear the editor buffer
               codeBufferRef.current = "";
+
+              // Clear Monaco editor directly if available (fast)
+              if (monacoEditorRef.current) {
+                const model = monacoEditorRef.current.getModel();
+                if (model) {
+                  model.setValue("");
+                }
+              } else {
+                // Fallback to React state
+                setCode("");
+              }
             },
 
             // Step 1-2: Stream code chunks line by line to editor
@@ -151,26 +163,59 @@ export default function WorkspacePage() {
               // Accumulate code chunks
               codeBufferRef.current += chunk;
 
-              // Clear any existing timer
-              if (editorUpdateTimerRef.current) {
-                clearTimeout(editorUpdateTimerRef.current);
+              // Cancel any pending frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
               }
 
-              // Batch update editor every 50ms to prevent freezing
-              editorUpdateTimerRef.current = setTimeout(() => {
-                setCode(codeBufferRef.current);
-              }, 500);
+              // Use requestAnimationFrame for smooth 60fps updates
+              editorUpdateFrameRef.current = requestAnimationFrame(() => {
+                if (monacoEditorRef.current) {
+                  // Direct Monaco manipulation (O(1) append operation)
+                  const model = monacoEditorRef.current.getModel();
+                  if (model) {
+                    const lineCount = model.getLineCount();
+                    const lastLineLength = model.getLineContent(lineCount).length;
+
+                    // Append chunk at the end of the document
+                    model.pushEditOperations(
+                      [],
+                      [
+                        {
+                          range: {
+                            startLineNumber: lineCount,
+                            startColumn: lastLineLength + 1,
+                            endLineNumber: lineCount,
+                            endColumn: lastLineLength + 1,
+                          },
+                          text: chunk,
+                          forceMoveMarkers: true,
+                        },
+                      ],
+                      () => null,
+                    );
+                  }
+                }
+              });
             },
 
             // Step 3: Code complete
             onCodeComplete: () => {
-              // Clear any pending editor update timer and apply final code
-              if (editorUpdateTimerRef.current) {
-                clearTimeout(editorUpdateTimerRef.current);
-                editorUpdateTimerRef.current = null;
+              // Clear any pending animation frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
               }
-              // Apply final code buffer to editor
+              // Apply final code buffer to React state (for template switching, etc.)
               setCode(codeBufferRef.current);
+
+              // Auto-format the document after streaming completes
+              if (monacoEditorRef.current) {
+                // Use setTimeout to ensure Monaco has processed the final content
+                setTimeout(() => {
+                  monacoEditorRef.current?.getAction("editor.action.formatDocument")?.run();
+                }, 50);
+              }
             },
 
             // Step 4: Message complete - show in chat
@@ -180,10 +225,10 @@ export default function WorkspacePage() {
 
             // Step 5: All done - enable preview and update
             onDone: (data) => {
-              // Clear any pending editor update timer
-              if (editorUpdateTimerRef.current) {
-                clearTimeout(editorUpdateTimerRef.current);
-                editorUpdateTimerRef.current = null;
+              // Clear any pending animation frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
               }
 
               const finalMessage = data.message || t("chat.codeGenerated");
@@ -219,12 +264,11 @@ export default function WorkspacePage() {
               showToast(t("chat.codeGenerated"), "success");
             },
             onError: (error, remainingUsesOnError) => {
-              // Clear any pending editor update timer
-              if (editorUpdateTimerRef.current) {
-                clearTimeout(editorUpdateTimerRef.current);
-                editorUpdateTimerRef.current = null;
+              // Clear any pending animation frame
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
               }
-              pendingCodeUpdateRef.current = null;
 
               const errorMessage = error || t("api.generateError");
 
@@ -272,9 +316,9 @@ export default function WorkspacePage() {
       if (abortStreamRef.current) {
         abortStreamRef.current();
       }
-      // Clean up any pending editor update timers
-      if (editorUpdateTimerRef.current) {
-        clearTimeout(editorUpdateTimerRef.current);
+      // Clean up any pending animation frames
+      if (editorUpdateFrameRef.current) {
+        cancelAnimationFrame(editorUpdateFrameRef.current);
       }
     };
   }, []);
@@ -457,6 +501,9 @@ export default function WorkspacePage() {
                 currentTemplateId={currentTemplateId}
                 onTemplateChange={handleTemplateChange}
                 hasCustomCode={hasGeneratedWithLLM && customCode !== null}
+                onEditorReady={(editor) => {
+                  monacoEditorRef.current = editor;
+                }}
               />
             </Panel>
 
