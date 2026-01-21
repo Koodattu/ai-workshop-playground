@@ -51,6 +51,9 @@ export default function WorkspacePage() {
   // Monaco editor ref for direct manipulation
   const monacoEditorRef = useRef<any>(null);
 
+  // Cursor position storage for restoration after streaming
+  const savedCursorPositionRef = useRef<{ lineNumber: number; column: number } | null>(null);
+
   // Code buffer for streaming
   const codeBufferRef = useRef<string>("");
 
@@ -146,6 +149,17 @@ export default function WorkspacePage() {
               // Clear the editor buffer
               codeBufferRef.current = "";
 
+              // Save cursor position before clearing
+              if (monacoEditorRef.current) {
+                const position = monacoEditorRef.current.getPosition();
+                if (position) {
+                  savedCursorPositionRef.current = {
+                    lineNumber: position.lineNumber,
+                    column: position.column,
+                  };
+                }
+              }
+
               // Clear Monaco editor directly if available (fast)
               if (monacoEditorRef.current) {
                 const model = monacoEditorRef.current.getModel();
@@ -194,6 +208,10 @@ export default function WorkspacePage() {
                       ],
                       () => null,
                     );
+
+                    // Auto-scroll to bottom as code streams in
+                    const newLineCount = model.getLineCount();
+                    monacoEditorRef.current.revealLine(newLineCount, 0); // 0 = smooth scroll
                   }
                 }
               });
@@ -214,6 +232,32 @@ export default function WorkspacePage() {
                 // Use setTimeout to ensure Monaco has processed the final content
                 setTimeout(() => {
                   monacoEditorRef.current?.getAction("editor.action.formatDocument")?.run();
+
+                  // Restore cursor position after formatting completes
+                  setTimeout(() => {
+                    if (savedCursorPositionRef.current) {
+                      const model = monacoEditorRef.current?.getModel();
+                      if (model) {
+                        const { lineNumber, column } = savedCursorPositionRef.current;
+                        const newLineCount = model.getLineCount();
+
+                        // Only restore if the line still exists
+                        if (lineNumber <= newLineCount) {
+                          const lineLength = model.getLineContent(lineNumber).length;
+                          const safeColumn = Math.min(column, lineLength + 1);
+
+                          monacoEditorRef.current.setPosition({
+                            lineNumber,
+                            column: safeColumn,
+                          });
+                          monacoEditorRef.current.revealLineInCenter(lineNumber);
+                        }
+
+                        // Clear saved position
+                        savedCursorPositionRef.current = null;
+                      }
+                    }
+                  }, 50);
                 }, 50);
               }
             },
