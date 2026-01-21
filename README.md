@@ -4,7 +4,7 @@
 
 An interactive web-based IDE designed for workshops and learning environments. Participants describe what they want to build using natural language, and AI generates production-ready HTML, CSS, and JavaScript code in real-time.
 
-![AI Workshop Playground Interface](docs/images/ui-screenshot.png)
+![AI Workshop Playground Interface](images/ui.png)
 _Three-panel interface: Chat with AI, edit code, see live results_
 
 ## ✨ What is This?
