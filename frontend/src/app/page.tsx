@@ -9,11 +9,12 @@ import { PasswordModal } from "@/components/workspace/PasswordModal";
 import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useCustomTemplates } from "@/hooks/useCustomTemplates";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
-import type { ChatMessage, PreviewControl } from "@/types";
+import type { ChatMessage, PreviewControl, CustomTemplate } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -24,8 +25,6 @@ const getMessages = (lang: string) => {
 
 export default function WorkspacePage() {
   const [currentTemplateId, setCurrentTemplateId] = useState(DEFAULT_TEMPLATE_ID);
-  const [customCode, setCustomCode] = useState<string | null>(null);
-  const [hasGeneratedWithLLM, setHasGeneratedWithLLM] = useState(false);
   const [code, setCode] = useState(() => {
     const defaultTemplate = getTemplateById(DEFAULT_TEMPLATE_ID);
     return defaultTemplate?.code || "";
@@ -38,6 +37,15 @@ export default function WorkspacePage() {
   const [authError, setAuthError] = useState<string | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
+
+  // Custom templates management
+  const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
+
+  // Original code snapshot for dirty checking
+  const originalCodeSnapshotRef = useRef<string>(code);
+
+  // Sequential counter for naming custom templates
+  const templateCounterRef = useRef<number>(0);
 
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -64,16 +72,22 @@ export default function WorkspacePage() {
   const { showToast, ToastContainer } = useToast();
   const { t, language } = useLanguage();
 
+  // Check if code is dirty (different from original snapshot)
+  const isCodeDirty = useCallback(() => {
+    return code !== originalCodeSnapshotRef.current;
+  }, [code]);
+
   // Update template code when language changes (for built-in templates only)
   useEffect(() => {
-    if (currentTemplateId !== "custom" && !hasGeneratedWithLLM) {
+    if (!isCustomTemplateId(currentTemplateId)) {
       const messages = getMessages(language);
       const localizedCode = getLocalizedTemplate(currentTemplateId, language, messages);
-      if (localizedCode) {
+      if (localizedCode && !isCodeDirty()) {
         setCode(localizedCode);
+        originalCodeSnapshotRef.current = localizedCode;
       }
     }
-  }, [language, currentTemplateId, hasGeneratedWithLLM]);
+  }, [language, currentTemplateId, isCustomTemplateId, isCodeDirty]);
 
   // Check if already authenticated on mount
   const handleAuthenticate = useCallback(
@@ -285,12 +299,18 @@ export default function WorkspacePage() {
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
 
-              // Update final states with the complete code
+              // Create a new custom template for the generated code
+              templateCounterRef.current += 1;
+              const messages = getMessages(language);
+              const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
+              const newTemplate = addTemplate(templateName, finalCode);
+
+              // Update states
               setCode(finalCode);
               setRemainingUses(data.remaining);
-              setHasGeneratedWithLLM(true);
-              setCurrentTemplateId("custom");
-              setCustomCode(finalCode);
+              setCurrentTemplateId(newTemplate.id);
+              // Set the snapshot to the new code so it's not dirty
+              originalCodeSnapshotRef.current = finalCode;
 
               // Add assistant message to chat history
               const assistantMessage: ChatMessage = {
@@ -447,30 +467,73 @@ export default function WorkspacePage() {
 
   const handleTemplateChange = useCallback(
     (templateId: string) => {
-      // Save current code as custom if switching away after LLM generation
-      if (hasGeneratedWithLLM && currentTemplateId === "custom" && templateId !== "custom") {
-        setCustomCode(code);
+      // Don't do anything if switching to the same template
+      if (templateId === currentTemplateId) return;
+
+      const dirty = isCodeDirty();
+
+      // Handle saving current template's changes before switching
+      if (dirty) {
+        if (isCustomTemplateId(currentTemplateId)) {
+          // Current is a custom template - update it with the modified code
+          updateTemplate(currentTemplateId, code);
+        } else {
+          // Current is a built-in template - create a new custom template with modified code
+          templateCounterRef.current += 1;
+          const messages = getMessages(language);
+          const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
+          addTemplate(templateName, code);
+        }
       }
 
-      if (templateId === "custom" && customCode) {
-        // Switch to saved custom code
-        setCode(customCode);
-        setCurrentTemplateId("custom");
-      } else if (templateId !== "custom") {
+      // Load the new template's code
+      if (isCustomTemplateId(templateId)) {
+        // Switch to a custom template
+        const customTemplate = customTemplates.find((t) => t.id === templateId);
+        if (customTemplate) {
+          setCode(customTemplate.code);
+          originalCodeSnapshotRef.current = customTemplate.code;
+          setCurrentTemplateId(templateId);
+          // Clear context messages when switching templates
+          setContextMessages([]);
+        }
+      } else {
         // Switch to a built-in template
         const template = getTemplateById(templateId);
         if (template) {
           // Use localized template based on current language
           const messages = getMessages(language);
           const localizedCode = getLocalizedTemplate(templateId, language, messages);
-          setCode(localizedCode || template.code);
+          const newCode = localizedCode || template.code;
+          setCode(newCode);
+          originalCodeSnapshotRef.current = newCode;
           setCurrentTemplateId(templateId);
           // Clear context messages when switching templates
           setContextMessages([]);
         }
       }
     },
-    [hasGeneratedWithLLM, currentTemplateId, code, customCode, language],
+    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, addTemplate, customTemplates],
+  );
+
+  const handleRemoveCustomTemplate = useCallback(
+    (id: string) => {
+      removeTemplate(id);
+      // If we're removing the currently active template, switch to default
+      if (currentTemplateId === id) {
+        const defaultTemplate = getTemplateById(DEFAULT_TEMPLATE_ID);
+        if (defaultTemplate) {
+          const messages = getMessages(language);
+          const localizedCode = getLocalizedTemplate(DEFAULT_TEMPLATE_ID, language, messages);
+          const newCode = localizedCode || defaultTemplate.code;
+          setCode(newCode);
+          originalCodeSnapshotRef.current = newCode;
+          setCurrentTemplateId(DEFAULT_TEMPLATE_ID);
+          setContextMessages([]);
+        }
+      }
+    },
+    [removeTemplate, currentTemplateId, language],
   );
 
   const handleClearMessages = useCallback(() => {
@@ -549,7 +612,8 @@ export default function WorkspacePage() {
                 onChange={setCode}
                 currentTemplateId={currentTemplateId}
                 onTemplateChange={handleTemplateChange}
-                hasCustomCode={hasGeneratedWithLLM && customCode !== null}
+                customTemplates={customTemplates}
+                onRemoveCustomTemplate={handleRemoveCustomTemplate}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                 }}

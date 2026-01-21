@@ -123,3 +123,18 @@ export interface PreviewControl {
   disableAutoRefresh: () => void;
   enableAutoRefresh: () => void;
 }
+
+// Custom template interface for user-created templates
+export interface CustomTemplate {
+  id: string;
+  name: string;
+  code: string;
+  createdAt: number; // timestamp for sorting/deletion
+  updatedAt: number; // timestamp for tracking last modification
+}
+
+// Configuration for custom template management
+export const CUSTOM_TEMPLATE_CONFIG = {
+  MAX_TEMPLATES: 10,
+  ID_PREFIX: "custom-",
+} as const;

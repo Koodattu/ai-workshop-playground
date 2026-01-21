@@ -6,17 +6,19 @@ import type { editor } from "monaco-editor";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TEMPLATES, type Template } from "@/lib/templates";
+import type { CustomTemplate } from "@/types";
 
 interface EditorPanelProps {
   code: string;
   onChange: (code: string) => void;
   currentTemplateId: string;
   onTemplateChange: (templateId: string) => void;
-  hasCustomCode: boolean;
+  customTemplates: CustomTemplate[];
+  onRemoveCustomTemplate: (id: string) => void;
   onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
 }
 
-export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChange, hasCustomCode, onEditorReady }: EditorPanelProps) {
+export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChange, customTemplates, onRemoveCustomTemplate, onEditorReady }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { t } = useLanguage();
@@ -94,6 +96,21 @@ export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChang
     [onTemplateChange],
   );
 
+  // Get the display name for the current template
+  const getCurrentTemplateName = useCallback(() => {
+    // Check if it's a custom template
+    const customTemplate = customTemplates.find((t) => t.id === currentTemplateId);
+    if (customTemplate) {
+      return customTemplate.name;
+    }
+    // Check if it's a built-in template
+    const builtInTemplate = TEMPLATES.find((t) => t.id === currentTemplateId);
+    if (builtInTemplate) {
+      return t(builtInTemplate.nameKey);
+    }
+    return t("templates.customCode");
+  }, [currentTemplateId, customTemplates, t]);
+
   return (
     <div className="flex flex-col h-full bg-void">
       {/* Header */}
@@ -123,7 +140,7 @@ export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChang
                   d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
                 />
               </svg>
-              <span className="hidden sm:inline">{t(`templates.${currentTemplateId}`) || t("templates.customCode")}</span>
+              <span className="hidden sm:inline truncate max-w-32">{getCurrentTemplateName()}</span>
               <svg className={`w-3 h-3 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
@@ -152,23 +169,44 @@ export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChang
                       </button>
                     ))}
 
-                    {/* Custom Code (if exists) */}
-                    {hasCustomCode && (
+                    {/* Custom Templates (if any exist) */}
+                    {customTemplates.length > 0 && (
                       <>
                         <div className="my-1 border-t border-steel/30" />
-                        <button
-                          onClick={() => handleTemplateSelect("custom")}
-                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                            currentTemplateId === "custom" ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
-                          }`}
-                        >
-                          {currentTemplateId === "custom" && (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                          <span>{t("templates.customCode")}</span>
-                        </button>
+                        {customTemplates.map((template) => (
+                          <div key={template.id} className="flex items-center group">
+                            <button
+                              onClick={() => handleTemplateSelect(template.id)}
+                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                currentTemplateId === template.id ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                              }`}
+                            >
+                              {currentTemplateId === template.id && (
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              <span className="truncate">{template.name}</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemoveCustomTemplate(template.id);
+                              }}
+                              className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title={t("common.delete")}
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
                       </>
                     )}
                   </div>

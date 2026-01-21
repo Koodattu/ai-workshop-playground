@@ -82,7 +82,11 @@
     "simple-todo": "Tehtävälista",
     "simple-counter": "Laskuri",
     "simple-welcome": "Tervetuloa",
-    "simple-tailwind": "Tailwind"
+    "simple-tailwind": "Tailwind",
+    "builtInSection": "Pohjat",
+    "customSection": "Omat Luomukset",
+    "customTemplateName": "Luomus #{number}",
+    "deleteCustomTemplate": "Poista"
   },
   "templateContent": {
     "simpleWelcome": {

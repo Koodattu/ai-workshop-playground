@@ -82,7 +82,11 @@
     "simple-todo": "Todo",
     "simple-counter": "Counter",
     "simple-welcome": "Welcome",
-    "simple-tailwind": "Tailwind"
+    "simple-tailwind": "Tailwind",
+    "builtInSection": "Templates",
+    "customSection": "My Creations",
+    "customTemplateName": "Creation #{number}",
+    "deleteCustomTemplate": "Delete"
   },
   "templateContent": {
     "simpleWelcome": {
