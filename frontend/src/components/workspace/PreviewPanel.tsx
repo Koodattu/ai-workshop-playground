@@ -35,10 +35,14 @@ export function PreviewPanel({ code, onControlReady }: PreviewPanelProps) {
     }
   }, [onControlReady]);
 
-  // Update preview based on auto-refresh setting
+  // Update preview based on auto-refresh setting with debounce
   useEffect(() => {
     if (isAutoRefresh && !manuallyDisabled) {
-      setDisplayCode(code);
+      const timeoutId = setTimeout(() => {
+        setDisplayCode(code);
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [code, isAutoRefresh, manuallyDisabled]);
 
