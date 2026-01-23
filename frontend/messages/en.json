@@ -14,25 +14,25 @@
     "close": "Close"
   },
   "workspace": {
-    "header": "AI Workshop",
+    "header": "AI Playground",
     "playground": "Playground",
     "title": "Create web pages with AI",
     "description": "Describe what you want to create in the chat panel",
     "usageCounter": "{count} uses left",
     "usageCounterOne": "use",
     "usageCounterOther": "uses",
-    "welcomeBack": "Welcome back to the workshop!"
+    "welcomeBack": "Welcome back to the playground!"
   },
   "passwordModal": {
-    "title": "Workshop Access",
-    "description": "Enter your workshop password to continue",
+    "title": "Playground Access",
+    "description": "Enter your playground password to continue",
     "passwordLabel": "Password",
-    "passwordPlaceholder": "Enter workshop password",
-    "submitButton": "Enter Workshop",
+    "passwordPlaceholder": "Enter playground password",
+    "submitButton": "Enter Playground",
     "validating": "Validating...",
     "invalidPassword": "Invalid password. Please check and try again.",
     "authError": "Authentication failed",
-    "footer": "Don't have a password? Contact your workshop organizer.",
+    "footer": "Don't have a password? Contact your playground organizer.",
     "visitorIdError": "Unable to generate visitor ID. Please refresh the page."
   },
   "chat": {
@@ -114,7 +114,7 @@
       "delete": "Delete"
     },
     "welcome": {
-      "title": "Welcome to AI Workshop",
+      "title": "Welcome to AI Playground",
       "description": "Describe what you want to create in the chat panel"
     },
     "tailwind": {
@@ -183,21 +183,21 @@
     "submitButton": "Access Admin Panel",
     "verifying": "Verifying...",
     "invalidSecret": "Invalid admin secret",
-    "backToWorkshop": "Back to Workshop",
+    "backToWorkshop": "Back to Playground",
     "loadingData": "Loading admin data...",
     "dashboardTitle": "Admin Dashboard",
-    "dashboardSubtitle": "AI Workshop Management",
+    "dashboardSubtitle": "AI Playground Management",
     "workspaceLink": "Workspace"
   },
   "passwordManager": {
-    "title": "Workshop Passwords",
+    "title": "Playground Passwords",
     "createButton": "Create Password",
     "cancelButton": "Cancel",
     "passwordsTab": "Passwords ({count})",
     "usageTab": "Usage ({count})",
     "createFormTitle": "Create New Password",
     "codeLabel": "Password Code",
-    "codePlaceholder": "e.g. workshop2024",
+    "codePlaceholder": "e.g. playground2024",
     "maxUsesLabel": "Max Uses Per User",
     "expiresAtLabel": "Expires At",
     "creating": "Creating...",
@@ -216,10 +216,10 @@
     "created": "Created",
     "actions": "Actions",
     "noPasswords": "No Passwords",
-    "createFirstPassword": "Create your first workshop password to get started.",
+    "createFirstPassword": "Create your first playground password to get started.",
     "usageStatsTitle": "Usage Statistics",
     "noUsage": "No Usage Data",
-    "usageDescription": "Usage statistics will appear once participants start using the workshop.",
+    "usageDescription": "Usage statistics will appear once participants start using the playground.",
     "visitor": "Visitor",
     "usedPassword": "Used Password",
     "totalRequests": "Total Requests",

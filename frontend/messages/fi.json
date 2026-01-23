@@ -21,22 +21,22 @@
     "usageCounter": "{count} käyttöä jäljellä",
     "usageCounterOne": "käyttö",
     "usageCounterOther": "käyttöä",
-    "welcomeBack": "Tervetuloa takaisin workshoppiin!"
+    "welcomeBack": "Tervetuloa takaisin leikkikenttään!"
   },
   "passwordModal": {
-    "title": "Workshop-sisäänkirjautuminen",
-    "description": "Syötä workshop-salasanasi jatkaaksesi",
+    "title": "Leikkikenttä-sisäänkirjautuminen",
+    "description": "Syötä leikkikenttä-salasanasi jatkaaksesi",
     "passwordLabel": "Salasana",
-    "passwordPlaceholder": "Syötä workshop-salasana",
-    "submitButton": "Aloita workshop",
+    "passwordPlaceholder": "Syötä leikkikenttä-salasana",
+    "submitButton": "Aloita leikkikenttä",
     "validating": "Tarkistetaan...",
     "invalidPassword": "Virheellinen salasana. Tarkista ja yritä uudelleen.",
     "authError": "Kirjautuminen epäonnistui",
-    "footer": "Eikö sinulla ole salasanaa? Ota yhteyttä workshopin järjestäjään.",
+    "footer": "Eikö sinulla ole salasanaa? Ota yhteyttä leikkikentän järjestäjään.",
     "visitorIdError": "Kävijätunnisteen luominen epäonnistui. Päivitä sivu."
   },
   "chat": {
-    "header": "TEKOÄLY-AVUSTAJA",
+    "header": "TEKOÄLYAVUSTAJA",
     "sendPlaceholder": "Kuvaile mitä haluat luoda...",
     "sendButton": "Lähetä",
     "generating": "Luodaan...",
@@ -114,7 +114,7 @@
       "delete": "Poista"
     },
     "welcome": {
-      "title": "Tervetuloa AI Workshopiin",
+      "title": "Tervetuloa AI Leikkikenttään",
       "description": "Kuvaile mitä haluat luoda chat-paneelissa"
     },
     "tailwind": {
@@ -183,21 +183,21 @@
     "submitButton": "Avaa admin-paneeli",
     "verifying": "Tarkistetaan...",
     "invalidSecret": "Virheellinen admin-salasana",
-    "backToWorkshop": "Takaisin workshoppiin",
+    "backToWorkshop": "Takaisin leikkikenttään",
     "loadingData": "Ladataan admin-tietoja...",
     "dashboardTitle": "Admin-hallintapaneeli",
-    "dashboardSubtitle": "AI Workshop -hallinta",
+    "dashboardSubtitle": "AI Leikkikenttä -hallinta",
     "workspaceLink": "Työtila"
   },
   "passwordManager": {
-    "title": "Workshop-salasanat",
+    "title": "Leikkikenttä-salasanat",
     "createButton": "Luo salasana",
     "cancelButton": "Peruuta",
     "passwordsTab": "Salasanat ({count})",
     "usageTab": "Käyttö ({count})",
     "createFormTitle": "Luo uusi salasana",
     "codeLabel": "Salasanakoodi",
-    "codePlaceholder": "esim. workshop2024",
+    "codePlaceholder": "esim. playground2024",
     "maxUsesLabel": "Maks. käyttökerrat per henkilö",
     "expiresAtLabel": "Vanhenemispäivä",
     "creating": "Luodaan...",
@@ -216,10 +216,10 @@
     "created": "Luotu",
     "actions": "Toiminnot",
     "noPasswords": "Ei salasanoja",
-    "createFirstPassword": "Luo ensimmäinen workshop-salasana aloittaaksesi.",
+    "createFirstPassword": "Luo ensimmäinen leikkikenttä-salasana aloittaaksesi.",
     "usageStatsTitle": "Käyttötilastot",
     "noUsage": "Ei käyttötietoja",
-    "usageDescription": "Käyttötilastot näkyvät kun osallistujat alkavat käyttää workshopia.",
+    "usageDescription": "Käyttötilastot näkyvät kun osallistujat alkavat käyttää leikkikenttää.",
     "visitor": "Kävijä",
     "usedPassword": "Käytetty salasana",
     "totalRequests": "Yhteensä pyyntöjä",

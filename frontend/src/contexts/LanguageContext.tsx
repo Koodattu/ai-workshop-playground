@@ -23,6 +23,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
   const [language, setLanguageState] = useState<Language>(DEFAULT_LANGUAGE);
   const [messages, setMessages] = useState<Record<string, any>>({});
   const [isLoaded, setIsLoaded] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
 
   // Load language preference from localStorage on mount
   useEffect(() => {
@@ -36,9 +37,11 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
   // Load messages when language changes
   useEffect(() => {
     const loadMessages = async () => {
+      setMessagesLoaded(false);
       try {
         const msgs = await import(`../../messages/${language}.json`);
         setMessages(msgs.default);
+        setMessagesLoaded(true);
       } catch (error) {
         console.error(`Failed to load messages for language: ${language}`, error);
         // Fallback to default language if loading fails
@@ -46,6 +49,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
           const fallbackMsgs = await import(`../../messages/${DEFAULT_LANGUAGE}.json`);
           setMessages(fallbackMsgs.default);
         }
+        setMessagesLoaded(true);
       }
     };
 
@@ -90,8 +94,8 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
     [messages],
   );
 
-  // Don't render children until language is loaded from storage
-  if (!isLoaded) {
+  // Don't render children until language and messages are loaded
+  if (!isLoaded || !messagesLoaded) {
     return null;
   }
 
