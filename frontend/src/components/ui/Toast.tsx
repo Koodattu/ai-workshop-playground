@@ -30,7 +30,7 @@ function NotificationBanner({ notification, totalCount, onShowAll, onDismiss }: 
       const timer = setTimeout(() => {
         setIsVisible(false);
         setTimeout(onDismiss, 300);
-      }, 15000);
+      }, 30000);
 
       return () => clearTimeout(timer);
     }
@@ -65,7 +65,7 @@ function NotificationBanner({ notification, totalCount, onShowAll, onDismiss }: 
   return (
     <div
       className={`
-        fixed top-4 left-1/2 -translate-x-1/2 z-50
+        fixed top-2 left-1/2 -translate-x-1/2 z-50
         transition-all duration-300
         ${isVisible ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"}
       `}
@@ -81,7 +81,6 @@ function NotificationBanner({ notification, totalCount, onShowAll, onDismiss }: 
       >
         {icons[notification.type]}
         <span>{notification.message}</span>
-        {totalCount > 1 && <span className="ml-1 opacity-70">({totalCount})</span>}
       </button>
     </div>
   );
