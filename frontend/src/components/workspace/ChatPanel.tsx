@@ -14,9 +14,21 @@ interface ChatPanelProps {
   showToast: (message: string, type: "success" | "error" | "info") => void;
   streamingMessage?: string;
   onClearMessages?: () => void;
+  autoSwitchEnabled?: boolean;
+  onAutoSwitchChange?: (enabled: boolean) => void;
 }
 
-export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, showToast, streamingMessage, onClearMessages }: ChatPanelProps) {
+export function ChatPanel({
+  messages,
+  onSendMessage,
+  isLoading,
+  remainingUses,
+  showToast,
+  streamingMessage,
+  onClearMessages,
+  autoSwitchEnabled = true,
+  onAutoSwitchChange,
+}: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -203,7 +215,45 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, s
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] font-mono text-gray-500 uppercase">{t("chat.shiftEnterHint")}</span>
+            {/* Desktop: Show shift+enter hint */}
+            <span className="hidden md:block text-[10px] font-mono text-gray-500 uppercase">{t("chat.shiftEnterHint")}</span>
+
+            {/* Mobile: Show auto-switch checkbox */}
+            {onAutoSwitchChange && (
+              <label className="md:hidden flex items-center gap-2 cursor-pointer group">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={autoSwitchEnabled}
+                    onChange={(e) => onAutoSwitchChange(e.target.checked)}
+                    className="
+                      peer w-4 h-4 appearance-none rounded
+                      border-2 border-steel/50 bg-carbon
+                      checked:border-electric checked:bg-electric/20
+                      hover:border-electric/50
+                      focus:outline-none focus:ring-2 focus:ring-electric/30
+                      transition-all duration-200 cursor-pointer
+                    "
+                  />
+                  <svg
+                    className="
+                      absolute w-3 h-3 text-electric pointer-events-none
+                      opacity-0 scale-50
+                      peer-checked:opacity-100 peer-checked:scale-100
+                      transition-all duration-200
+                    "
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={3}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
+              </label>
+            )}
+
             <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />

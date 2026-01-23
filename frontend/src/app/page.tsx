@@ -31,6 +31,7 @@ export default function WorkspacePage() {
   });
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [mobileActivePanel, setMobileActivePanel] = useState<"chat" | "editor" | "preview">("chat");
+  const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -180,8 +181,10 @@ export default function WorkspacePage() {
               previewControlRef.current?.disableAutoRefresh();
               // Clear the editor buffer
               codeBufferRef.current = "";
-              // Mobile: Switch to editor panel to watch code stream in
-              setMobileActivePanel("editor");
+              // Mobile: Switch to editor panel to watch code stream in (if auto-switch enabled)
+              if (autoSwitchEnabled) {
+                setMobileActivePanel("editor");
+              }
 
               // Save cursor position before clearing
               if (monacoEditorRef.current) {
@@ -353,8 +356,10 @@ export default function WorkspacePage() {
 
               // Enable preview and update it
               previewControlRef.current?.enableAutoRefresh();
-              // Mobile: Switch to preview panel to see the final result
-              setMobileActivePanel("preview");
+              // Mobile: Switch to preview panel to see the final result (if auto-switch enabled)
+              if (autoSwitchEnabled) {
+                setMobileActivePanel("preview");
+              }
 
               showToast(t("chat.codeGenerated"), "success");
             },
@@ -640,6 +645,8 @@ export default function WorkspacePage() {
                 showToast={showToast}
                 streamingMessage={streamingMessage}
                 onClearMessages={handleClearMessages}
+                autoSwitchEnabled={autoSwitchEnabled}
+                onAutoSwitchChange={setAutoSwitchEnabled}
               />
             </Panel>
 
@@ -687,6 +694,8 @@ export default function WorkspacePage() {
                 showToast={showToast}
                 streamingMessage={streamingMessage}
                 onClearMessages={handleClearMessages}
+                autoSwitchEnabled={autoSwitchEnabled}
+                onAutoSwitchChange={setAutoSwitchEnabled}
               />
             )}
             {mobileActivePanel === "editor" && (

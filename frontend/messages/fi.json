@@ -53,6 +53,7 @@
     "errorDetailsTitle": "Näytä virhetiedot",
     "codeGenerated": "Koodi luotu!",
     "shiftEnterHint": "Shift + Enter uudelle riville",
+    "autoSwitch": "Automaattinen paneelien vaihto",
     "usageLeft": "{count} jäljellä",
     "generateButton": "Luo",
     "streaming": "suoratoisto...",

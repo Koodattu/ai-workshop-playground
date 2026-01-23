@@ -53,6 +53,7 @@
     "errorDetailsTitle": "Show error details",
     "codeGenerated": "Code generated!",
     "shiftEnterHint": "Shift + Enter for new line",
+    "autoSwitch": "Auto-switch panels",
     "usageLeft": "{count} left",
     "generateButton": "Generate",
     "streaming": "streaming...",
