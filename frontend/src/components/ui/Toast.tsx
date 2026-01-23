@@ -163,7 +163,9 @@ function NotificationModal({ notifications, onClose, onClear }: NotificationModa
                       <div className="shrink-0 mt-0.5">{icons[notification.type]}</div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-mono wrap-break-word">{notification.message}</p>
-                        <p className="text-xs opacity-60 mt-1">{notification.timestamp.toLocaleTimeString()}</p>
+                        <p className="text-xs opacity-60 mt-1">
+                          {notification.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+                        </p>
                       </div>
                     </div>
                   ))}
