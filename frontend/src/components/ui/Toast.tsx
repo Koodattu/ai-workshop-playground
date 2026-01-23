@@ -30,7 +30,7 @@ function NotificationBanner({ notification, totalCount, onShowAll, onDismiss }: 
       const timer = setTimeout(() => {
         setIsVisible(false);
         setTimeout(onDismiss, 300);
-      }, 30000);
+      }, 3000);
 
       return () => clearTimeout(timer);
     }

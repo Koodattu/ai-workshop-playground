@@ -47,6 +47,9 @@ export default function WorkspacePage() {
   // Sequential counter for naming custom templates
   const templateCounterRef = useRef<number>(0);
 
+  // Auth attempt guard to prevent multiple simultaneous authentications
+  const isAuthenticatingRef = useRef<boolean>(false);
+
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -97,6 +100,12 @@ export default function WorkspacePage() {
         return;
       }
 
+      // Prevent concurrent authentication attempts
+      if (isAuthenticatingRef.current) {
+        return;
+      }
+      isAuthenticatingRef.current = true;
+
       setIsValidating(true);
       setAuthError(undefined);
 
@@ -116,6 +125,7 @@ export default function WorkspacePage() {
         setAuthError(err instanceof Error ? err.message : t("passwordModal.authError"));
       } finally {
         setIsValidating(false);
+        isAuthenticatingRef.current = false;
       }
     },
     [visitorId, setPassword, showToast, t],
@@ -299,16 +309,25 @@ export default function WorkspacePage() {
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
 
-              // Create a new custom template for the generated code
-              templateCounterRef.current += 1;
-              const messages = getMessages(language);
-              const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
-              const newTemplate = addTemplate(templateName, finalCode);
+              // If user is in a custom template, update it instead of creating a new one
+              if (isCustomTemplateId(currentTemplateId)) {
+                // Update the existing custom template
+                updateTemplate(currentTemplateId, finalCode);
+                // Keep the same template ID
+                setCurrentTemplateId(currentTemplateId);
+              } else {
+                // User is in a built-in template, create a new custom template
+                templateCounterRef.current += 1;
+                const messages = getMessages(language);
+                const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
+                const newTemplate = addTemplate(templateName, finalCode);
+                // Switch to the new custom template
+                setCurrentTemplateId(newTemplate.id);
+              }
 
               // Update states
               setCode(finalCode);
               setRemainingUses(data.remaining);
-              setCurrentTemplateId(newTemplate.id);
               // Set the snapshot to the new code so it's not dirty
               originalCodeSnapshotRef.current = finalCode;
 
@@ -378,7 +397,7 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code, t, contextMessages],
+    [visitorId, password, showToast, code, t, contextMessages, language, currentTemplateId, isCustomTemplateId, updateTemplate, addTemplate],
   );
 
   // Cleanup abort on unmount

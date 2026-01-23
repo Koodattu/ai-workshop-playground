@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 
 type Language = "fi" | "en";
 
@@ -59,33 +59,36 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
 
   // Translation function with nested key support (e.g., "common.loading")
   // and parameter interpolation (e.g., "Hello {name}" with params: { name: "World" })
-  const t = (key: string, params?: Record<string, any>): string => {
-    const keys = key.split(".");
-    let value: any = messages;
+  const t = useCallback(
+    (key: string, params?: Record<string, any>): string => {
+      const keys = key.split(".");
+      let value: any = messages;
 
-    for (const k of keys) {
-      if (value && typeof value === "object" && k in value) {
-        value = value[k];
-      } else {
-        // Return key itself if translation not found
-        console.warn(`Translation missing for key: ${key}`);
+      for (const k of keys) {
+        if (value && typeof value === "object" && k in value) {
+          value = value[k];
+        } else {
+          // Return key itself if translation not found
+          console.warn(`Translation missing for key: ${key}`);
+          return key;
+        }
+      }
+
+      if (typeof value !== "string") {
         return key;
       }
-    }
 
-    if (typeof value !== "string") {
-      return key;
-    }
+      // Replace parameters in the translation string
+      if (params) {
+        return value.replace(/\{(\w+)\}/g, (match, paramKey) => {
+          return params[paramKey] !== undefined ? String(params[paramKey]) : match;
+        });
+      }
 
-    // Replace parameters in the translation string
-    if (params) {
-      return value.replace(/\{(\w+)\}/g, (match, paramKey) => {
-        return params[paramKey] !== undefined ? String(params[paramKey]) : match;
-      });
-    }
-
-    return value;
-  };
+      return value;
+    },
+    [messages],
+  );
 
   // Don't render children until language is loaded from storage
   if (!isLoaded) {
