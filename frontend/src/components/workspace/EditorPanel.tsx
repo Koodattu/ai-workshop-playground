@@ -365,8 +365,11 @@ export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChang
           options={{
             minimap: { enabled: false },
             fontSize: 14,
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontFamily: "'JetBrains Mono', monospace",
             lineNumbers: "on",
+            lineNumbersMinChars: 4,
+            lineDecorationsWidth: 0,
+            glyphMargin: false,
             roundedSelection: true,
             scrollBeyondLastLine: false,
             automaticLayout: true,
