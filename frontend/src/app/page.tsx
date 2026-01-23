@@ -565,10 +565,8 @@ export default function WorkspacePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <span className="font-display text-lg font-bold tracking-tight text-white">{t("workspace.header")}</span>
+              <span className="font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
             </div>
-            <div className="hidden sm:block h-6 w-px bg-steel/50" />
-            <span className="hidden sm:block text-xs font-mono text-gray-500 uppercase tracking-wider">{t("workspace.playground")}</span>
           </div>
 
           <div className="flex items-center gap-3">
