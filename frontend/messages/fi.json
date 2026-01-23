@@ -234,6 +234,11 @@
     "usageCount": "Käyttökerrat",
     "passwordId": "Salasana-ID"
   },
+  "notifications": {
+    "title": "Ilmoitukset",
+    "empty": "Ei ilmoituksia vielä",
+    "clearAll": "Tyhjennä kaikki"
+  },
   "api": {
     "networkError": "Verkkovirhe. Tarkista yhteytesi.",
     "serverError": "Palvelinvirhe. Yritä myöhemmin uudelleen.",

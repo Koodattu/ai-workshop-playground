@@ -1,49 +1,62 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-interface ToastProps {
+// Notification item
+interface NotificationItem {
+  id: string;
   message: string;
-  type?: "success" | "error" | "info";
-  duration?: number;
-  onClose: () => void;
+  type: "success" | "error" | "info";
+  timestamp: Date;
 }
 
-export function Toast({ message, type = "info", duration = 4000, onClose }: ToastProps) {
+// Notification banner that shows the latest notification
+interface NotificationBannerProps {
+  notification: NotificationItem | null;
+  totalCount: number;
+  onShowAll: () => void;
+  onDismiss: () => void;
+}
+
+function NotificationBanner({ notification, totalCount, onShowAll, onDismiss }: NotificationBannerProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const [isLeaving, setIsLeaving] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
-    // Trigger entrance animation
-    requestAnimationFrame(() => setIsVisible(true));
+    if (notification) {
+      setIsVisible(true);
+      // Auto-dismiss after 5 seconds
+      const timer = setTimeout(() => {
+        setIsVisible(false);
+        setTimeout(onDismiss, 300);
+      }, 15000);
 
-    const timer = setTimeout(() => {
-      setIsLeaving(true);
-      setTimeout(onClose, 300);
-    }, duration);
+      return () => clearTimeout(timer);
+    }
+  }, [notification, onDismiss]);
 
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  if (!notification) return null;
 
   const typeStyles = {
-    success: "border-success/50 bg-success/10 text-success",
-    error: "border-danger/50 bg-danger/10 text-danger",
-    info: "border-electric/50 bg-electric/10 text-electric",
+    success: "bg-success/20 text-success border-success/30",
+    error: "bg-danger/20 text-danger border-danger/30",
+    info: "bg-electric/20 text-electric border-electric/30",
   };
 
   const icons = {
     success: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
       </svg>
     ),
     error: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
       </svg>
     ),
     info: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
@@ -52,58 +65,158 @@ export function Toast({ message, type = "info", duration = 4000, onClose }: Toas
   return (
     <div
       className={`
-        fixed bottom-6 right-6 z-50
-        flex items-center gap-3 px-4 py-3
-        border rounded-lg backdrop-blur-sm
-        font-mono text-sm
-        transition-all duration-300 ease-out
-        ${typeStyles[type]}
-        ${isVisible && !isLeaving ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}
+        fixed top-4 left-1/2 -translate-x-1/2 z-50
+        transition-all duration-300
+        ${isVisible ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"}
       `}
     >
-      {icons[type]}
-      <span>{message}</span>
       <button
-        onClick={() => {
-          setIsLeaving(true);
-          setTimeout(onClose, 300);
-        }}
-        className="ml-2 opacity-60 hover:opacity-100 transition-opacity"
+        onClick={onShowAll}
+        className={`
+          flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono
+          transition-colors border
+          ${typeStyles[notification.type]}
+          hover:brightness-110 cursor-pointer
+        `}
       >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
+        {icons[notification.type]}
+        <span>{notification.message}</span>
+        {totalCount > 1 && <span className="ml-1 opacity-70">({totalCount})</span>}
       </button>
     </div>
   );
 }
 
-// Toast container for managing multiple toasts
-interface ToastItem {
-  id: string;
-  message: string;
-  type: "success" | "error" | "info";
+// Modal to show all notifications
+interface NotificationModalProps {
+  notifications: NotificationItem[];
+  onClose: () => void;
+  onClear: () => void;
 }
 
-export function useToast() {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
+function NotificationModal({ notifications, onClose, onClear }: NotificationModalProps) {
+  const { t } = useLanguage();
 
-  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
-    const id = crypto.randomUUID();
-    setToasts((prev) => [...prev, { id, message, type }]);
+  const typeStyles = {
+    success: "bg-success/10 text-success border-success/20",
+    error: "bg-danger/10 text-danger border-danger/20",
+    info: "bg-electric/10 text-electric border-electric/20",
   };
 
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  const icons = {
+    success: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      </svg>
+    ),
+    error: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    ),
+    info: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md">
+        <div className="bg-obsidian border border-steel/30 rounded-lg shadow-xl">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-steel/30">
+            <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("notifications.title")}</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={onClear} className="text-xs font-mono text-gray-400 hover:text-white transition-colors">
+                {t("notifications.clearAll")}
+              </button>
+              <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Notifications list */}
+          <div className="max-h-96 overflow-y-auto p-4">
+            {notifications.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">{t("notifications.empty")}</div>
+            ) : (
+              <div className="space-y-2">
+                {notifications
+                  .slice()
+                  .reverse()
+                  .map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`
+                      flex items-start gap-3 px-3 py-2 rounded border
+                      ${typeStyles[notification.type]}
+                    `}
+                    >
+                      <div className="shrink-0 mt-0.5">{icons[notification.type]}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-mono wrap-break-word">{notification.message}</p>
+                        <p className="text-xs opacity-60 mt-1">{notification.timestamp.toLocaleTimeString()}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Hook for managing notifications
+export function useToast() {
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [currentNotification, setCurrentNotification] = useState<NotificationItem | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+    const notification: NotificationItem = {
+      id: crypto.randomUUID(),
+      message,
+      type,
+      timestamp: new Date(),
+    };
+
+    setNotifications((prev) => [...prev, notification]);
+    setCurrentNotification(notification);
+  };
+
+  const handleShowAll = () => {
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+  };
+
+  const handleClearAll = () => {
+    setNotifications([]);
+    setCurrentNotification(null);
+    setShowModal(false);
+  };
+
+  const handleDismissCurrent = () => {
+    setCurrentNotification(null);
   };
 
   const ToastContainer = () => (
     <>
-      {toasts.map((toast, index) => (
-        <div key={toast.id} style={{ transform: `translateY(-${index * 70}px)` }} className="transition-transform duration-300">
-          <Toast message={toast.message} type={toast.type} onClose={() => removeToast(toast.id)} />
-        </div>
-      ))}
+      <NotificationBanner notification={currentNotification} totalCount={notifications.length} onShowAll={handleShowAll} onDismiss={handleDismissCurrent} />
+      {showModal && <NotificationModal notifications={notifications} onClose={handleCloseModal} onClear={handleClearAll} />}
     </>
   );
 
