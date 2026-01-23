@@ -61,17 +61,20 @@
   },
   "editor": {
     "header": "KOODIEDITORI",
-    "format": "Muotoile koodi",
-    "copy": "Kopioi koodi",
+    "format": "Muotoile",
+    "copy": "Kopioi",
     "copyTitle": "Kopioi koodi",
     "formatTitle": "Muotoile koodi",
     "undoTitle": "Kumoa",
     "redoTitle": "Tee uudelleen",
     "copied": "Kopioitu!",
-    "download": "Lataa tiedosto",
+    "download": "Lataa",
     "language": "Kieli",
     "loadingEditor": "Ladataan editoria...",
-    "selectTemplate": "Valitse Pohja"
+    "selectTemplate": "Valitse Pohja",
+    "actionsMenu": "Toiminnot",
+    "undo": "Kumoa",
+    "redo": "Tee uudelleen"
   },
   "templates": {
     "welcome": "Laaja Tervetuloa",

@@ -180,6 +180,8 @@ export default function WorkspacePage() {
               previewControlRef.current?.disableAutoRefresh();
               // Clear the editor buffer
               codeBufferRef.current = "";
+              // Mobile: Switch to editor panel to watch code stream in
+              setMobileActivePanel("editor");
 
               // Save cursor position before clearing
               if (monacoEditorRef.current) {
@@ -351,6 +353,8 @@ export default function WorkspacePage() {
 
               // Enable preview and update it
               previewControlRef.current?.enableAutoRefresh();
+              // Mobile: Switch to preview panel to see the final result
+              setMobileActivePanel("preview");
 
               showToast(t("chat.codeGenerated"), "success");
             },
@@ -589,8 +593,9 @@ export default function WorkspacePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <LanguageSwitcher />
+            {/* Mobile: Icon-only logout button */}
             <button
               onClick={() => {
                 setIsAuthenticated(false);
@@ -598,7 +603,24 @@ export default function WorkspacePage() {
                 setChatHistory([]);
                 setContextMessages([]);
               }}
-              className="text-xs font-mono text-gray-400 hover:text-white transition-colors"
+              className="md:hidden p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
+              title={t("common.logout")}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9" />
+                <polyline points="17 17 22 12 17 7" />
+                <line x1="10" y1="12" x2="22" y2="12" />
+              </svg>
+            </button>
+            {/* Desktop: Text logout button */}
+            <button
+              onClick={() => {
+                setIsAuthenticated(false);
+                setPassword("");
+                setChatHistory([]);
+                setContextMessages([]);
+              }}
+              className="hidden md:inline text-xs font-mono text-gray-400 hover:text-white transition-colors"
             >
               {t("common.logout")}
             </button>

@@ -61,17 +61,20 @@
   },
   "editor": {
     "header": "CODE",
-    "format": "Format Code",
-    "copy": "Copy Code",
+    "format": "Format",
+    "copy": "Copy",
     "copyTitle": "Copy Code",
     "formatTitle": "Format Code",
     "undoTitle": "Undo",
     "redoTitle": "Redo",
     "copied": "Copied!",
-    "download": "Download File",
+    "download": "Download",
     "language": "Language",
     "loadingEditor": "Loading Editor...",
-    "selectTemplate": "Select Template"
+    "selectTemplate": "Select Template",
+    "actionsMenu": "Actions",
+    "undo": "Undo",
+    "redo": "Redo"
   },
   "templates": {
     "welcome": "Advanced Welcome",
