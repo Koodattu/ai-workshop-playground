@@ -21,7 +21,12 @@
     "usageCounter": "{count} uses left",
     "usageCounterOne": "use",
     "usageCounterOther": "uses",
-    "welcomeBack": "Welcome back to the playground!"
+    "welcomeBack": "Welcome back to the playground!",
+    "mobileNav": {
+      "chat": "Chat",
+      "editor": "Editor",
+      "preview": "Preview"
+    }
   },
   "passwordModal": {
     "title": "Playground Access",

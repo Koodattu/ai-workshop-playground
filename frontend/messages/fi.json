@@ -21,7 +21,12 @@
     "usageCounter": "{count} käyttöä jäljellä",
     "usageCounterOne": "käyttö",
     "usageCounterOther": "käyttöä",
-    "welcomeBack": "Tervetuloa takaisin leikkikenttään!"
+    "welcomeBack": "Tervetuloa takaisin leikkikenttään!",
+    "mobileNav": {
+      "chat": "Chat",
+      "editor": "Editori",
+      "preview": "Esikatselu"
+    }
   },
   "passwordModal": {
     "title": "Leikkikenttä-sisäänkirjautuminen",

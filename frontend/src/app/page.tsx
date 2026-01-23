@@ -30,6 +30,7 @@ export default function WorkspacePage() {
     return defaultTemplate?.code || "";
   });
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [mobileActivePanel, setMobileActivePanel] = useState<"chat" | "editor" | "preview">("chat");
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -604,8 +605,8 @@ export default function WorkspacePage() {
           </div>
         </header>
 
-        {/* Main content - 3 column layout */}
-        <main className="flex-1 flex overflow-hidden">
+        {/* Desktop: 3 column resizable layout */}
+        <main className="flex-1 hidden md:flex overflow-hidden">
           <Group orientation="horizontal" className="flex-1">
             {/* Chat Panel */}
             <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
@@ -650,6 +651,94 @@ export default function WorkspacePage() {
             </Panel>
           </Group>
         </main>
+
+        {/* Mobile: Single panel with bottom navigation */}
+        <div className="flex-1 flex flex-col md:hidden overflow-hidden">
+          {/* Active panel content */}
+          <div className="flex-1 overflow-hidden">
+            {mobileActivePanel === "chat" && (
+              <ChatPanel
+                messages={chatHistory}
+                onSendMessage={handleSendMessage}
+                isLoading={isGenerating}
+                remainingUses={remainingUses}
+                showToast={showToast}
+                streamingMessage={streamingMessage}
+                onClearMessages={handleClearMessages}
+              />
+            )}
+            {mobileActivePanel === "editor" && (
+              <EditorPanel
+                code={code}
+                onChange={setCode}
+                currentTemplateId={currentTemplateId}
+                onTemplateChange={handleTemplateChange}
+                customTemplates={customTemplates}
+                onRemoveCustomTemplate={handleRemoveCustomTemplate}
+                onEditorReady={(editor) => {
+                  monacoEditorRef.current = editor;
+                }}
+              />
+            )}
+            {mobileActivePanel === "preview" && (
+              <PreviewPanel
+                code={code}
+                onControlReady={(control) => {
+                  previewControlRef.current = control;
+                }}
+              />
+            )}
+          </div>
+
+          {/* Bottom app bar */}
+          <nav className="shrink-0 bg-obsidian border-t border-steel/30">
+            <div className="flex justify-around items-center h-16">
+              {/* Chat button */}
+              <button
+                onClick={() => setMobileActivePanel("chat")}
+                className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+                  mobileActivePanel === "chat" ? "text-electric bg-electric/10" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <svg className="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="text-xs font-mono">{t("workspace.mobileNav.chat")}</span>
+              </button>
+
+              {/* Editor button */}
+              <button
+                onClick={() => setMobileActivePanel("editor")}
+                className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+                  mobileActivePanel === "editor" ? "text-electric bg-electric/10" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <svg className="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+                <span className="text-xs font-mono">{t("workspace.mobileNav.editor")}</span>
+              </button>
+
+              {/* Preview button */}
+              <button
+                onClick={() => setMobileActivePanel("preview")}
+                className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+                  mobileActivePanel === "preview" ? "text-electric bg-electric/10" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <svg className="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
+                </svg>
+                <span className="text-xs font-mono">{t("workspace.mobileNav.preview")}</span>
+              </button>
+            </div>
+          </nav>
+        </div>
       </div>
 
       <ToastContainer />
