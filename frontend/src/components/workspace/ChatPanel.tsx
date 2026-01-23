@@ -66,7 +66,7 @@ export function ChatPanel({ messages, onSendMessage, isLoading, remainingUses, s
   return (
     <div className="flex flex-col h-full bg-obsidian">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-steel/50">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-steel/50">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-electric" />
           <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("chat.header")}</h2>
