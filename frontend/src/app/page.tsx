@@ -52,6 +52,9 @@ export default function WorkspacePage() {
   // Auth attempt guard to prevent multiple simultaneous authentications
   const isAuthenticatingRef = useRef<boolean>(false);
 
+  // Track if auto-validation has been attempted to prevent loops
+  const hasAttemptedAutoValidationRef = useRef<boolean>(false);
+
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -121,10 +124,23 @@ export default function WorkspacePage() {
           setIsAuthenticated(true);
           showToast(t("workspace.welcomeBack"), "success");
         } else {
+          // Clear invalid password from localStorage
+          setPassword("");
           setAuthError(t("passwordModal.invalidPassword"));
         }
       } catch (err) {
-        setAuthError(err instanceof Error ? err.message : t("passwordModal.authError"));
+        // Clear invalid/expired password from localStorage
+        setPassword("");
+
+        // Handle specific error messages
+        const errorMessage = err instanceof Error ? err.message : "";
+        if (errorMessage.includes("expired")) {
+          setAuthError(t("passwordModal.expiredPassword"));
+        } else if (errorMessage.includes("Invalid")) {
+          setAuthError(t("passwordModal.invalidPassword"));
+        } else {
+          setAuthError(t("passwordModal.authError"));
+        }
       } finally {
         setIsValidating(false);
         isAuthenticatingRef.current = false;
@@ -133,9 +149,10 @@ export default function WorkspacePage() {
     [visitorId, setPassword, showToast, t],
   );
 
-  // Auto-validate password on page load
+  // Auto-validate password on page load (only once)
   useEffect(() => {
-    if (password && visitorId && !isAuthenticated) {
+    if (password && visitorId && !isAuthenticated && !hasAttemptedAutoValidationRef.current) {
+      hasAttemptedAutoValidationRef.current = true;
       handleAuthenticate(password);
     }
   }, [password, visitorId, isAuthenticated, handleAuthenticate]);

@@ -36,6 +36,7 @@
     "submitButton": "Aloita leikkikenttä",
     "validating": "Tarkistetaan...",
     "invalidPassword": "Virheellinen salasana. Tarkista ja yritä uudelleen.",
+    "expiredPassword": "Tämä salasana on vanhentunut. Ota yhteyttä järjestäjään uuden salasanan saamiseksi.",
     "authError": "Kirjautuminen epäonnistui",
     "footer": "Eikö sinulla ole salasanaa? Ota yhteyttä leikkikentän järjestäjään.",
     "visitorIdError": "Kävijätunnisteen luominen epäonnistui. Päivitä sivu."

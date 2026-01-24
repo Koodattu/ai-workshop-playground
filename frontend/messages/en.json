@@ -36,6 +36,7 @@
     "submitButton": "Enter Playground",
     "validating": "Validating...",
     "invalidPassword": "Invalid password. Please check and try again.",
+    "expiredPassword": "This password has expired. Please contact your organizer for a new password.",
     "authError": "Authentication failed",
     "footer": "Don't have a password? Contact your playground organizer.",
     "visitorIdError": "Unable to generate visitor ID. Please refresh the page."

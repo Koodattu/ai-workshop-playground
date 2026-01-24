@@ -201,8 +201,9 @@ class ApiClient {
         }),
       });
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      // Re-throw the error so the caller can handle specific error messages
+      throw error;
     }
   }
 
