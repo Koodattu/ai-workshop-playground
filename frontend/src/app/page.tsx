@@ -135,6 +135,22 @@ export default function WorkspacePage() {
     [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming],
   );
 
+  // Auto-save code changes to custom templates (debounced)
+  useEffect(() => {
+    // Skip if not a custom template, if streaming, or if code hasn't changed
+    if (!isCustomTemplateId(currentTemplateId) || isStreaming || !isCodeDirty()) {
+      return;
+    }
+
+    // Debounce: wait 1 second after user stops typing before saving
+    const saveTimer = setTimeout(() => {
+      updateTemplate(currentTemplateId, code);
+      originalCodeSnapshotRef.current = code;
+    }, 1000);
+
+    return () => clearTimeout(saveTimer);
+  }, [code, currentTemplateId, isCustomTemplateId, isStreaming, isCodeDirty, updateTemplate]);
+
   // Load saved template from localStorage once templates are loaded
   useEffect(() => {
     if (!savedTemplateId || savedTemplateId === DEFAULT_TEMPLATE_ID) return;
