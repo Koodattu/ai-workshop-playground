@@ -30,10 +30,13 @@ export interface PasswordEntry {
 
 export interface UsageStats {
   _id: string;
-  visitorId: string;
-  passwordId: string;
-  usageCount: number;
-  lastUsedAt: string;
+  totalUses: number;
+  uniqueUsers: number;
+  maxUsesPerUser: number;
+  passwordCode: string;
+  passwordActive: boolean;
+  passwordExpires: string;
+  avgUsesPerUser: number;
 }
 
 export interface ApiError {

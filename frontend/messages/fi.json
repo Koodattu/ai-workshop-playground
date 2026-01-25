@@ -242,7 +242,12 @@
     "noUsageYet": "Käyttötietoja ei ole vielä",
     "disabled": "POIS KÄYTÖSTÄ",
     "usageCount": "Käyttökerrat",
-    "passwordId": "Salasana-ID"
+    "passwordId": "Salasanan ID",
+    "passwordCode": "Salasana",
+    "totalUses": "Käyttökerrat yhteensä",
+    "uniqueUsers": "Yksilöllisiä käyttäjiä",
+    "avgUsesPerUser": "Keskim. käyttökerrat",
+    "maxUsesPerUser": "Maks. käyttökerrat"
   },
   "notifications": {
     "title": "Ilmoitukset",

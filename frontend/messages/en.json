@@ -242,7 +242,12 @@
     "noUsageYet": "No usage data yet",
     "disabled": "DISABLED",
     "usageCount": "Usage Count",
-    "passwordId": "Password ID"
+    "passwordId": "Password ID",
+    "passwordCode": "Password",
+    "totalUses": "Total Uses",
+    "uniqueUsers": "Unique Users",
+    "avgUsesPerUser": "Avg. Uses/User",
+    "maxUsesPerUser": "Max Uses/User"
   },
   "notifications": {
     "title": "Notifications",

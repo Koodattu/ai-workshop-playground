@@ -270,19 +270,33 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-steel/50">
-                    <th className="text-left py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.visitorId")}</th>
-                    <th className="text-left py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.passwordId")}</th>
-                    <th className="text-right py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.usageCount")}</th>
-                    <th className="text-right py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.lastUsed")}</th>
+                    <th className="text-left py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.passwordCode")}</th>
+                    <th className="text-right py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.totalUses")}</th>
+                    <th className="text-right py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.uniqueUsers")}</th>
+                    <th className="text-right py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.avgUsesPerUser")}</th>
+                    <th className="text-right py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.maxUsesPerUser")}</th>
+                    <th className="text-center py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.status")}</th>
+                    <th className="text-right py-3 px-4 text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.expires")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-steel/30">
                   {usage.map((stat) => (
                     <tr key={stat._id} className="hover:bg-carbon/50 transition-colors">
-                      <td className="py-3 px-4 font-mono text-sm text-gray-300">{stat.visitorId.slice(0, 8)}...</td>
-                      <td className="py-3 px-4 font-mono text-sm text-gray-300">{stat.passwordId.slice(0, 8)}...</td>
-                      <td className="py-3 px-4 font-mono text-sm text-electric text-right">{stat.usageCount}</td>
-                      <td className="py-3 px-4 font-mono text-sm text-gray-400 text-right">{formatDate(stat.lastUsedAt)}</td>
+                      <td className="py-3 px-4 font-mono text-sm text-white font-semibold">{stat.passwordCode}</td>
+                      <td className="py-3 px-4 font-mono text-sm text-electric text-right">{stat.totalUses}</td>
+                      <td className="py-3 px-4 font-mono text-sm text-gray-300 text-right">{stat.uniqueUsers}</td>
+                      <td className="py-3 px-4 font-mono text-sm text-gray-300 text-right">{stat.avgUsesPerUser.toFixed(2)}</td>
+                      <td className="py-3 px-4 font-mono text-sm text-gray-300 text-right">{stat.maxUsesPerUser}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`inline-flex px-2 py-1 rounded-full text-xs font-mono ${
+                            stat.passwordActive && new Date(stat.passwordExpires) > new Date() ? "bg-electric/20 text-electric" : "bg-red-500/20 text-red-400"
+                          }`}
+                        >
+                          {stat.passwordActive && new Date(stat.passwordExpires) > new Date() ? t("passwordManager.active") : t("passwordManager.inactive")}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-sm text-gray-400 text-right">{formatDate(stat.passwordExpires)}</td>
                     </tr>
                   ))}
                 </tbody>
