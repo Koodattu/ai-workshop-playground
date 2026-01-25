@@ -51,7 +51,7 @@
     "emptyDescription": "Describe the web component or page you want to build",
     "you": "You",
     "ai": "AI",
-    "errorDetails": "why?",
+    "errorDetails": "Details",
     "errorDetailsTitle": "Show error details",
     "codeGenerated": "Code generated!",
     "shiftEnterHint": "Shift + Enter for new line",

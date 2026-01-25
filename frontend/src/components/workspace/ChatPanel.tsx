@@ -138,26 +138,26 @@ export function ChatPanel({
                   ${message.role === "user" ? "bg-electric/20 border border-electric/30 text-white" : "bg-carbon border border-steel/50 text-gray-300"}
                 `}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-body whitespace-pre-wrap leading-relaxed flex-1">{message.content}</p>
+                <p className="text-sm font-body whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[10px] font-mono text-gray-500 uppercase">
+                    {message.role === "user" ? t("chat.you") : t("chat.ai")} •{" "}
+                    {new Date(message.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                    })}
+                  </span>
                   {message.errorDetails && (
                     <button
                       onClick={() => handleShowErrorDetails(message.errorDetails!)}
-                      className="shrink-0 px-2 py-1 rounded bg-carbon border border-steel/50 text-xs font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
+                      className="px-2 py-0.5 rounded bg-carbon border border-steel/50 text-[10px] font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
                       title={t("chat.errorDetailsTitle")}
                     >
                       {t("chat.errorDetails")}
                     </button>
                   )}
                 </div>
-                <span className="block mt-2 text-[10px] font-mono text-gray-500 uppercase">
-                  {message.role === "user" ? t("chat.you") : t("chat.ai")} •{" "}
-                  {new Date(message.timestamp).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: false,
-                  })}
-                </span>
               </div>
             </div>
           ))
