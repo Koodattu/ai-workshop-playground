@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Editor, { OnMount, OnChange } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { Spinner } from "@/components/ui/Spinner";
@@ -36,7 +37,38 @@ export function EditorPanel({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const actionsButtonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [actionsPosition, setActionsPosition] = useState({ top: 0, left: 0 });
   const { t } = useLanguage();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Update dropdown position when it opens
+  useEffect(() => {
+    if (isDropdownOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.right,
+      });
+    }
+  }, [isDropdownOpen]);
+
+  // Update actions menu position when it opens
+  useEffect(() => {
+    if (isActionsMenuOpen && actionsButtonRef.current) {
+      const rect = actionsButtonRef.current.getBoundingClientRect();
+      setActionsPosition({
+        top: rect.bottom + 8,
+        left: rect.right,
+      });
+    }
+  }, [isActionsMenuOpen]);
 
   const handleEditorMount: OnMount = useCallback((editor) => {
     editorRef.current = editor;
@@ -149,6 +181,7 @@ export function EditorPanel({
           {/* Template Selector */}
           <div className="relative">
             <button
+              ref={buttonRef}
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-carbon text-gray-300 hover:text-white hover:bg-graphite transition-all border border-steel/30 hover:border-steel/50"
               title={t("editor.selectTemplate")}
@@ -167,155 +200,19 @@ export function EditorPanel({
               </svg>
             </button>
 
-            {isDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
-                {/* Mobile: Vertical dropdown with scrolling */}
-                <div className="md:hidden absolute top-full right-0 mt-2 w-56 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-20 overflow-hidden">
-                  <div className="py-1 max-h-[70vh] overflow-y-auto">
-                    {/* Built-in Templates */}
-                    <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
-                        />
-                      </svg>
-                      <span>{t("templates.builtInSection")}</span>
-                    </div>
-                    {TEMPLATES.map((template: Template) => (
-                      <button
-                        key={template.id}
-                        onClick={() => handleTemplateSelect(template.id)}
-                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                          currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
-                        }`}
-                      >
-                        {currentTemplateId === template.id && (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                        <span>{t(template.nameKey)}</span>
-                      </button>
-                    ))}
-
-                    {/* Custom Templates (if any exist) */}
-                    {customTemplates.length > 0 && (
-                      <>
-                        <div className="my-1 border-t border-steel/30" />
-                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                            />
-                          </svg>
-                          <span>{t("templates.customSection")}</span>
-                        </div>
-                        {customTemplates.map((template) => (
-                          <div key={template.id} className="flex items-center group">
-                            <button
-                              onClick={() => handleTemplateSelect(template.id)}
-                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                                currentTemplateId === template.id ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
-                              }`}
-                            >
-                              {currentTemplateId === template.id && (
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              <span className="truncate">{template.name}</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onRemoveCustomTemplate(template.id);
-                              }}
-                              className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title={t("common.delete")}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </>
-                    )}
-
-                    {/* Shared Templates (from share links) */}
-                    {sharedTemplates.length > 0 && (
-                      <>
-                        <div className="my-1 border-t border-steel/30" />
-                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                            />
-                          </svg>
-                          <span>{t("templates.sharedSection")}</span>
-                        </div>
-                        {sharedTemplates.map((template) => (
-                          <div key={template.id} className="flex items-center group">
-                            <button
-                              onClick={() => handleTemplateSelect(template.id)}
-                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                                currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
-                              }`}
-                            >
-                              {currentTemplateId === template.id && (
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              <span className="truncate">{template.projectName || template.title || template.shareId}</span>
-                            </button>
-                            {onRemoveSharedTemplate && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onRemoveSharedTemplate(template.id);
-                                }}
-                                className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title={t("common.delete")}
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Desktop: Horizontal three-column layout */}
-                <div className="hidden md:block absolute top-full right-0 mt-2 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-100 overflow-hidden">
-                  <div className="flex divide-x divide-steel/30">
-                    {/* Column 1: Built-in Templates */}
-                    <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
-                      <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+            {mounted &&
+              isDropdownOpen &&
+              createPortal(
+                <>
+                  <div className="fixed inset-0 z-9998" onClick={() => setIsDropdownOpen(false)} />
+                  {/* Mobile: Vertical dropdown with scrolling */}
+                  <div
+                    className="md:hidden fixed w-56 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-9999 overflow-hidden"
+                    style={{ top: `${dropdownPosition.top}px`, right: `${window.innerWidth - dropdownPosition.left}px` }}
+                  >
+                    <div className="py-1 max-h-[70vh] overflow-y-auto">
+                      {/* Built-in Templates */}
+                      <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path
                             strokeLinecap="round"
@@ -335,102 +232,48 @@ export function EditorPanel({
                           }`}
                         >
                           {currentTemplateId === template.id && (
-                            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                           )}
                           <span>{t(template.nameKey)}</span>
                         </button>
                       ))}
-                    </div>
 
-                    {/* Column 2: Custom Templates */}
-                    <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
-                      <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                          />
-                        </svg>
-                        <span>{t("templates.customSection")}</span>
-                      </div>
-                      {customTemplates.length > 0 ? (
-                        customTemplates.map((template) => (
-                          <div key={template.id} className="flex items-center group">
-                            <button
-                              onClick={() => handleTemplateSelect(template.id)}
-                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                                currentTemplateId === template.id ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
-                              }`}
-                            >
-                              {currentTemplateId === template.id && (
-                                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              <span className="truncate">{template.name}</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onRemoveCustomTemplate(template.id);
-                              }}
-                              className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title={t("common.delete")}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
-                            </button>
+                      {/* Custom Templates (if any exist) */}
+                      {customTemplates.length > 0 && (
+                        <>
+                          <div className="my-1 border-t border-steel/30" />
+                          <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                              />
+                            </svg>
+                            <span>{t("templates.customSection")}</span>
                           </div>
-                        ))
-                      ) : (
-                        <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noCustomTemplates")}</div>
-                      )}
-                    </div>
-
-                    {/* Column 3: Shared Templates */}
-                    <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
-                      <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                          />
-                        </svg>
-                        <span>{t("templates.sharedSection")}</span>
-                      </div>
-                      {sharedTemplates.length > 0 ? (
-                        sharedTemplates.map((template) => (
-                          <div key={template.id} className="flex items-center group">
-                            <button
-                              onClick={() => handleTemplateSelect(template.id)}
-                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                                currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
-                              }`}
-                            >
-                              {currentTemplateId === template.id && (
-                                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              <span className="truncate">{template.projectName || template.title || template.shareId}</span>
-                            </button>
-                            {onRemoveSharedTemplate && (
+                          {customTemplates.map((template) => (
+                            <div key={template.id} className="flex items-center group">
+                              <button
+                                onClick={() => handleTemplateSelect(template.id)}
+                                className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                  currentTemplateId === template.id ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                                }`}
+                              >
+                                {currentTemplateId === template.id && (
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                <span className="truncate">{template.name}</span>
+                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onRemoveSharedTemplate(template.id);
+                                  onRemoveCustomTemplate(template.id);
                                 }}
                                 className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                                 title={t("common.delete")}
@@ -444,23 +287,223 @@ export function EditorPanel({
                                   />
                                 </svg>
                               </button>
-                            )}
+                            </div>
+                          ))}
+                        </>
+                      )}
+
+                      {/* Shared Templates (from share links) */}
+                      {sharedTemplates.length > 0 && (
+                        <>
+                          <div className="my-1 border-t border-steel/30" />
+                          <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                              />
+                            </svg>
+                            <span>{t("templates.sharedSection")}</span>
                           </div>
-                        ))
-                      ) : (
-                        <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noSharedTemplates")}</div>
+                          {sharedTemplates.map((template) => (
+                            <div key={template.id} className="flex items-center group">
+                              <button
+                                onClick={() => handleTemplateSelect(template.id)}
+                                className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                  currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                                }`}
+                              >
+                                {currentTemplateId === template.id && (
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                <span className="truncate">{template.projectName || template.title || template.shareId}</span>
+                              </button>
+                              {onRemoveSharedTemplate && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemoveSharedTemplate(template.id);
+                                  }}
+                                  className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title={t("common.delete")}
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                    />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </>
                       )}
                     </div>
                   </div>
-                </div>
-              </>
-            )}
+
+                  {/* Desktop: Horizontal three-column layout */}
+                  <div
+                    className="hidden md:block fixed bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-9999 overflow-hidden"
+                    style={{ top: `${dropdownPosition.top}px`, right: `${window.innerWidth - dropdownPosition.left}px` }}
+                  >
+                    <div className="flex divide-x divide-steel/30">
+                      {/* Column 1: Built-in Templates */}
+                      <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
+                            />
+                          </svg>
+                          <span>{t("templates.builtInSection")}</span>
+                        </div>
+                        {TEMPLATES.map((template: Template) => (
+                          <button
+                            key={template.id}
+                            onClick={() => handleTemplateSelect(template.id)}
+                            className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                              currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                            }`}
+                          >
+                            {currentTemplateId === template.id && (
+                              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                            <span>{t(template.nameKey)}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Column 2: Custom Templates */}
+                      <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                            />
+                          </svg>
+                          <span>{t("templates.customSection")}</span>
+                        </div>
+                        {customTemplates.length > 0 ? (
+                          customTemplates.map((template) => (
+                            <div key={template.id} className="flex items-center group">
+                              <button
+                                onClick={() => handleTemplateSelect(template.id)}
+                                className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                  currentTemplateId === template.id ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                                }`}
+                              >
+                                {currentTemplateId === template.id && (
+                                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                <span className="truncate">{template.name}</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRemoveCustomTemplate(template.id);
+                                }}
+                                className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={t("common.delete")}
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noCustomTemplates")}</div>
+                        )}
+                      </div>
+
+                      {/* Column 3: Shared Templates */}
+                      <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                            />
+                          </svg>
+                          <span>{t("templates.sharedSection")}</span>
+                        </div>
+                        {sharedTemplates.length > 0 ? (
+                          sharedTemplates.map((template) => (
+                            <div key={template.id} className="flex items-center group">
+                              <button
+                                onClick={() => handleTemplateSelect(template.id)}
+                                className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                  currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                                }`}
+                              >
+                                {currentTemplateId === template.id && (
+                                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                <span className="truncate">{template.projectName || template.title || template.shareId}</span>
+                              </button>
+                              {onRemoveSharedTemplate && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemoveSharedTemplate(template.id);
+                                  }}
+                                  className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title={t("common.delete")}
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                    />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noSharedTemplates")}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>,
+                document.body,
+              )}
           </div>
 
           {/* Mobile: Actions dropdown menu */}
           <div className="md:hidden relative">
             <div className="w-px h-4 bg-steel/50 inline-block mr-2" />
             <button
+              ref={actionsButtonRef}
               onClick={() => setIsActionsMenuOpen(!isActionsMenuOpen)}
               className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
               title={t("editor.actionsMenu")}
@@ -472,81 +515,87 @@ export function EditorPanel({
               </svg>
             </button>
 
-            {isActionsMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setIsActionsMenuOpen(false)} />
-                <div className="absolute top-full right-0 mt-2 w-44 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-20 overflow-hidden">
-                  <div className="py-1">
-                    <button
-                      onClick={() => {
-                        handleUndo();
-                        setIsActionsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                      </svg>
-                      <span>{t("editor.undo")}</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleRedo();
-                        setIsActionsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
-                      </svg>
-                      <span>{t("editor.redo")}</span>
-                    </button>
-                    <div className="my-1 border-t border-steel/30" />
-                    <button
-                      onClick={() => {
-                        handleFormat();
-                        setIsActionsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-                      </svg>
-                      <span>{t("editor.format")}</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleCopy();
-                        setIsActionsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                        />
-                      </svg>
-                      <span>{t("editor.copy")}</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleDownload();
-                        setIsActionsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      <span>{t("editor.download")}</span>
-                    </button>
+            {mounted &&
+              isActionsMenuOpen &&
+              createPortal(
+                <>
+                  <div className="fixed inset-0 z-9998" onClick={() => setIsActionsMenuOpen(false)} />
+                  <div
+                    className="fixed w-44 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-9999 overflow-hidden"
+                    style={{ top: `${actionsPosition.top}px`, right: `${window.innerWidth - actionsPosition.left}px` }}
+                  >
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          handleUndo();
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        <span>{t("editor.undo")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleRedo();
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
+                        </svg>
+                        <span>{t("editor.redo")}</span>
+                      </button>
+                      <div className="my-1 border-t border-steel/30" />
+                      <button
+                        onClick={() => {
+                          handleFormat();
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                        </svg>
+                        <span>{t("editor.format")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleCopy();
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                        <span>{t("editor.copy")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleDownload();
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-graphite hover:text-white transition-colors flex items-center gap-3"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        <span>{t("editor.download")}</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>,
+                document.body,
+              )}
           </div>
 
           {/* Desktop: Individual toolbar buttons */}
