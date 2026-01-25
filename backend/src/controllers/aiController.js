@@ -50,6 +50,11 @@ CODE MODIFICATION RULES:
 - If user wants something completely new, you can start fresh
 - Preserve working functionality unless asked to remove it
 
+IF YOU NEED IMAGES:
+- Use https://static.photos/ for placeholder images, https://static.photos/CATEGORY/RESOLUTION
+- Possible categories: nature, office, people, technology, minimal, abstract, cityscape, workspace, food, travel, finance, medical, wellness, education, industry, gaming, automotive
+- Example https://static.photos/nature/640x360
+
 CODE GENERATION RULES:
 1. Generate complete, self-contained HTML files
 2. Use inline <style> tags for CSS and inline <script> tags for JavaScript
