@@ -87,6 +87,38 @@ export default function WorkspacePage() {
     return code !== originalCodeSnapshotRef.current;
   }, [code]);
 
+  // Handle code changes and auto-convert built-in templates to custom on first edit
+  const handleCodeChange = useCallback(
+    (newCode: string) => {
+      // Don't auto-convert during AI streaming - let the onDone handler create the template
+      if (isStreaming) {
+        setCode(newCode);
+        return;
+      }
+
+      // Check if we need to auto-convert from built-in to custom template
+      const wasBuiltInTemplate = !isCustomTemplateId(currentTemplateId);
+      const isFirstEdit = wasBuiltInTemplate && newCode !== originalCodeSnapshotRef.current;
+
+      if (isFirstEdit) {
+        // First edit of a built-in template - convert to custom template
+        templateCounterRef.current += 1;
+        const messages = getMessages(language);
+        const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
+        const newTemplate = addTemplate(templateName, newCode);
+
+        // Switch to the newly created custom template
+        setCurrentTemplateId(newTemplate.id);
+        originalCodeSnapshotRef.current = newCode;
+        setCode(newCode);
+      } else {
+        // Normal code update
+        setCode(newCode);
+      }
+    },
+    [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming],
+  );
+
   // Update template code when language changes (for built-in templates only)
   useEffect(() => {
     if (!isCustomTemplateId(currentTemplateId)) {
@@ -521,17 +553,11 @@ export default function WorkspacePage() {
       const dirty = isCodeDirty();
 
       // Handle saving current template's changes before switching
-      if (dirty) {
-        if (isCustomTemplateId(currentTemplateId)) {
-          // Current is a custom template - update it with the modified code
-          updateTemplate(currentTemplateId, code);
-        } else {
-          // Current is a built-in template - create a new custom template with modified code
-          templateCounterRef.current += 1;
-          const messages = getMessages(language);
-          const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
-          addTemplate(templateName, code);
-        }
+      // Note: Built-in templates are automatically converted to custom templates on first edit,
+      // so we only need to handle updating existing custom templates here
+      if (dirty && isCustomTemplateId(currentTemplateId)) {
+        // Current is a custom template - update it with the modified code
+        updateTemplate(currentTemplateId, code);
       }
 
       // Load the new template's code
@@ -561,7 +587,7 @@ export default function WorkspacePage() {
         }
       }
     },
-    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, addTemplate, customTemplates],
+    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates],
   );
 
   const handleRemoveCustomTemplate = useCallback(
@@ -676,7 +702,7 @@ export default function WorkspacePage() {
             <Panel defaultSize={500} minSize={200} className="border-r border-steel/30 panel-animate" style={{ animationDelay: "0.1s" }}>
               <EditorPanel
                 code={code}
-                onChange={setCode}
+                onChange={handleCodeChange}
                 currentTemplateId={currentTemplateId}
                 onTemplateChange={handleTemplateChange}
                 customTemplates={customTemplates}
@@ -721,7 +747,7 @@ export default function WorkspacePage() {
             {mobileActivePanel === "editor" && (
               <EditorPanel
                 code={code}
-                onChange={setCode}
+                onChange={handleCodeChange}
                 currentTemplateId={currentTemplateId}
                 onTemplateChange={handleTemplateChange}
                 customTemplates={customTemplates}
