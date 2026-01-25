@@ -172,6 +172,17 @@ export function EditorPanel({
                 <div className="absolute top-full right-0 mt-2 w-56 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-20 overflow-hidden">
                   <div className="py-1">
                     {/* Built-in Templates */}
+                    <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
+                        />
+                      </svg>
+                      <span>{t("templates.builtInSection")}</span>
+                    </div>
                     {TEMPLATES.map((template: Template) => (
                       <button
                         key={template.id}
@@ -193,6 +204,17 @@ export function EditorPanel({
                     {customTemplates.length > 0 && (
                       <>
                         <div className="my-1 border-t border-steel/30" />
+                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                            />
+                          </svg>
+                          <span>{t("templates.customSection")}</span>
+                        </div>
                         {customTemplates.map((template) => (
                           <div key={template.id} className="flex items-center group">
                             <button
@@ -234,7 +256,17 @@ export function EditorPanel({
                     {sharedTemplates.length > 0 && (
                       <>
                         <div className="my-1 border-t border-steel/30" />
-                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider">{t("templates.sharedSection")}</div>
+                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                            />
+                          </svg>
+                          <span>{t("templates.sharedSection")}</span>
+                        </div>
                         {sharedTemplates.map((template) => (
                           <div key={template.id} className="flex items-center group">
                             <button
@@ -248,14 +280,6 @@ export function EditorPanel({
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                               )}
-                              <svg className="w-3 h-3 text-electric/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                                />
-                              </svg>
                               <span className="truncate">{template.title || template.shareId}</span>
                             </button>
                             {onRemoveSharedTemplate && (
