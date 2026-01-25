@@ -727,11 +727,7 @@ export default function WorkspacePage() {
         <header className="flex items-center justify-between px-4 py-2 border-b border-steel/30 bg-obsidian">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-linear-to-br from-electric to-ember flex items-center justify-center">
-                <svg className="w-5 h-5 text-void" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
+              <img src="/web-app-manifest-192x192.png" alt="App icon" className="w-8 h-8 object-contain" />
               <span className="font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
             </div>
           </div>
