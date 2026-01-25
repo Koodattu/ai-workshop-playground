@@ -14,7 +14,7 @@ interface ShareDialogProps {
 export function ShareDialog({ isOpen, onClose, onCreateShare, isSharing }: ShareDialogProps) {
   const { t } = useLanguage();
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [copiedType, setCopiedType] = useState<"template" | "preview" | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleCreateShare = useCallback(async () => {
     const url = await onCreateShare();
@@ -23,26 +23,21 @@ export function ShareDialog({ isOpen, onClose, onCreateShare, isSharing }: Share
     }
   }, [onCreateShare]);
 
-  const handleCopyLink = useCallback(
-    async (type: "template" | "preview") => {
-      if (!shareUrl) return;
+  const handleCopyLink = useCallback(async () => {
+    if (!shareUrl) return;
 
-      const urlToCopy = type === "preview" ? `${shareUrl}?mode=preview` : shareUrl;
-
-      try {
-        await navigator.clipboard.writeText(urlToCopy);
-        setCopiedType(type);
-        setTimeout(() => setCopiedType(null), 2000);
-      } catch (error) {
-        console.error("Failed to copy:", error);
-      }
-    },
-    [shareUrl],
-  );
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  }, [shareUrl]);
 
   const handleClose = useCallback(() => {
     setShareUrl(null);
-    setCopiedType(null);
+    setCopied(false);
     onClose();
   }, [onClose]);
 
@@ -98,11 +93,10 @@ export function ShareDialog({ isOpen, onClose, onCreateShare, isSharing }: Share
                 </button>
               </div>
             ) : (
-              // Share links created
+              // Share link created
               <div className="space-y-4">
-                <p className="text-gray-400 text-sm text-center mb-4">{t("shareDialog.linksReady")}</p>
+                <p className="text-gray-400 text-sm text-center mb-4">{t("shareDialog.linkReady")}</p>
 
-                {/* Share as Template */}
                 <div className="bg-carbon/50 border border-steel/30 rounded-xl p-4">
                   <div className="flex items-start gap-3 mb-3">
                     <div className="p-2 bg-electric/20 rounded-lg shrink-0">
@@ -111,81 +105,24 @@ export function ShareDialog({ isOpen, onClose, onCreateShare, isSharing }: Share
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
+                          d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
                         />
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-white mb-1">{t("shareDialog.templateTitle")}</h3>
-                      <p className="text-xs text-gray-500">{t("shareDialog.templateDescription")}</p>
+                      <h3 className="font-medium text-white mb-1">{t("shareDialog.shareLinkTitle")}</h3>
+                      <p className="text-xs text-gray-500">{t("shareDialog.shareLinkDescription")}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <input type="text" readOnly value={shareUrl} className="flex-1 px-3 py-2 bg-void border border-steel/30 rounded-lg text-sm text-gray-300 font-mono truncate" />
                     <button
-                      onClick={() => handleCopyLink("template")}
+                      onClick={handleCopyLink}
                       className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-1.5 shrink-0 ${
-                        copiedType === "template"
-                          ? "bg-success/20 text-success border border-success/30"
-                          : "bg-electric/20 text-electric border border-electric/30 hover:bg-electric/30"
+                        copied ? "bg-success/20 text-success border border-success/30" : "bg-electric/20 text-electric border border-electric/30 hover:bg-electric/30"
                       }`}
                     >
-                      {copiedType === "template" ? (
-                        <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>{t("shareDialog.copied")}</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <span>{t("shareDialog.copy")}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Share as Website */}
-                <div className="bg-carbon/50 border border-steel/30 rounded-xl p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2 bg-ember/20 rounded-lg shrink-0">
-                      <svg className="w-5 h-5 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
-                        />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-white mb-1">{t("shareDialog.websiteTitle")}</h3>
-                      <p className="text-xs text-gray-500">{t("shareDialog.websiteDescription")}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={`${shareUrl}?mode=preview`}
-                      className="flex-1 px-3 py-2 bg-void border border-steel/30 rounded-lg text-sm text-gray-300 font-mono truncate"
-                    />
-                    <button
-                      onClick={() => handleCopyLink("preview")}
-                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-1.5 shrink-0 ${
-                        copiedType === "preview" ? "bg-success/20 text-success border border-success/30" : "bg-ember/20 text-ember border border-ember/30 hover:bg-ember/30"
-                      }`}
-                    >
-                      {copiedType === "preview" ? (
+                      {copied ? (
                         <>
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

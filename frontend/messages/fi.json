@@ -228,14 +228,12 @@
   },
   "shareDialog": {
     "title": "Jaa Luomuksesi",
-    "description": "Valitse miten haluat jakaa projektisi",
+    "description": "Luo jaettava linkki projektiisi",
     "creating": "Luodaan linkkiä...",
     "createLink": "Luo Jakolinkki",
-    "linksReady": "Jakolinkkisi ovat valmiina!",
-    "templateTitle": "Jaa Pohjana",
-    "templateDescription": "Avautuu leikkikentällä muokattavaksi ja opittavaksi",
-    "websiteTitle": "Jaa Verkkosivuna",
-    "websiteDescription": "Avautuu koko näytön esikatselutilassa katsottavaksi",
+    "linkReady": "Jakolinkkisi on valmis!",
+    "shareLinkTitle": "Jakolinkki",
+    "shareLinkDescription": "Kuka tahansa linkin kanssa voi katsella ja käyttää projektiasi",
     "copy": "Kopioi",
     "copied": "Kopioitu!"
   },
@@ -246,7 +244,14 @@
     "loadError": "Jaetun koodin lataaminen epäonnistui. Yritä uudelleen.",
     "errorTitle": "Jakamislinkin Virhe",
     "goHome": "Siirry Leikkikenttään",
-    "createError": "Jakamislinkin luominen epäonnistui. Yritä uudelleen."
+    "createError": "Jakamislinkin luominen epäonnistui. Yritä uudelleen.",
+    "viewingProject": "Katselet:",
+    "useTemplate": "Käytä Tätä Pohjaa",
+    "useTemplateShort": "Käytä",
+    "untitledProject": "Nimetön Projekti",
+    "templateAdded": "Pohja lisätty työtilaan!",
+    "noContent": "Ei Sisältöä",
+    "noContentDescription": "Tämä jaettu projekti näyttää tyhjältä"
   },
   "admin": {
     "title": "Admin-paneeli",

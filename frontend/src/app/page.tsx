@@ -69,7 +69,6 @@ export default function WorkspacePage() {
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
-  const [previewInitialFullscreen, setPreviewInitialFullscreen] = useState(false);
   const abortStreamRef = useRef<(() => void) | null>(null);
 
   // Preview control ref
@@ -227,14 +226,7 @@ export default function WorkspacePage() {
         setCode(pendingShare.code);
         originalCodeSnapshotRef.current = pendingShare.code;
 
-        // If preview mode was requested, open preview in fullscreen
-        if (pendingShare.previewMode) {
-          setPreviewInitialFullscreen(true);
-          // Also switch to preview panel on mobile
-          setMobileActivePanel("preview");
-        }
-
-        showToast(t("workspace.welcomeBack"), "success");
+        showToast(t("share.templateAdded"), "success");
       } catch (e) {
         console.error("Failed to load pending shared template:", e);
       }
@@ -856,7 +848,6 @@ export default function WorkspacePage() {
                 }}
                 onShare={handleShare}
                 isSharing={isSharing}
-                initialFullscreen={previewInitialFullscreen}
               />
             </Panel>
           </Group>
@@ -905,7 +896,6 @@ export default function WorkspacePage() {
                 }}
                 onShare={handleShare}
                 isSharing={isSharing}
-                initialFullscreen={previewInitialFullscreen}
               />
             )}
           </div>

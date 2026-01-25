@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/Button";
+import { useState, useCallback, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Spinner } from "@/components/ui/Spinner";
 import { ShareDialog } from "@/components/workspace/ShareDialog";
 import type { PreviewControl } from "@/types";
 
@@ -12,14 +10,13 @@ interface PreviewPanelProps {
   onControlReady?: (control: PreviewControl) => void;
   onShare?: () => Promise<string | null>;
   isSharing?: boolean;
-  initialFullscreen?: boolean;
 }
 
-export function PreviewPanel({ code, onControlReady, onShare, isSharing = false, initialFullscreen = false }: PreviewPanelProps) {
+export function PreviewPanel({ code, onControlReady, onShare, isSharing = false }: PreviewPanelProps) {
   const [isAutoRefresh, setIsAutoRefresh] = useState(true);
   const [manuallyDisabled, setManuallyDisabled] = useState(false);
   const [displayCode, setDisplayCode] = useState(code);
-  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [key, setKey] = useState(0);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const { t } = useLanguage();

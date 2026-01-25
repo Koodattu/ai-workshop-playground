@@ -228,14 +228,12 @@
   },
   "shareDialog": {
     "title": "Share Your Creation",
-    "description": "Choose how you want to share your project",
+    "description": "Create a shareable link for your project",
     "creating": "Creating link...",
     "createLink": "Create Share Link",
-    "linksReady": "Your share links are ready!",
-    "templateTitle": "Share as Template",
-    "templateDescription": "Opens in the playground for editing and learning",
-    "websiteTitle": "Share as Website",
-    "websiteDescription": "Opens in fullscreen preview mode for viewing",
+    "linkReady": "Your share link is ready!",
+    "shareLinkTitle": "Share Link",
+    "shareLinkDescription": "Anyone with this link can view and use your project",
     "copy": "Copy",
     "copied": "Copied!"
   },
@@ -246,7 +244,14 @@
     "loadError": "Failed to load shared code. Please try again.",
     "errorTitle": "Share Link Error",
     "goHome": "Go to Playground",
-    "createError": "Failed to create share link. Please try again."
+    "createError": "Failed to create share link. Please try again.",
+    "viewingProject": "Viewing:",
+    "useTemplate": "Use This Template",
+    "useTemplateShort": "Use",
+    "untitledProject": "Untitled Project",
+    "templateAdded": "Template added to your workspace!",
+    "noContent": "No Content",
+    "noContentDescription": "This shared project appears to be empty"
   },
   "admin": {
     "title": "Admin Access",
