@@ -28,6 +28,128 @@ function calculateCostInCents(promptTokens, candidatesTokens) {
   return totalCostDollars * 100; // Convert to cents
 }
 
+/**
+ * JSON String Stream Decoder
+ *
+ * Correctly decodes escape sequences from a streaming JSON string value.
+ * Handles:
+ * - Partial escape sequences across chunk boundaries
+ * - Nested escapes (\\n → \n literal, not newline)
+ * - Unicode escapes (\uXXXX)
+ * - Proper string termination detection
+ */
+function createJsonStringDecoder() {
+  let pendingEscape = ""; // Holds incomplete escape sequence
+  let isComplete = false; // True when closing quote found
+
+  // Escape sequence mapping per RFC 8259
+  const escapeMap = {
+    n: "\n",
+    t: "\t",
+    r: "\r",
+    '"': '"',
+    "\\": "\\",
+    "/": "/",
+    b: "\b",
+    f: "\f",
+  };
+
+  /**
+   * Decode a chunk of JSON string content (after the opening quote)
+   * @param {string} chunk - Raw JSON string content (may contain escape sequences)
+   * @returns {{ decoded: string, done: boolean, remaining: string }}
+   */
+  function decode(chunk) {
+    if (isComplete) {
+      return { decoded: "", done: true, remaining: chunk };
+    }
+
+    let decoded = "";
+    let i = 0;
+    const input = pendingEscape + chunk;
+    pendingEscape = "";
+
+    while (i < input.length) {
+      const char = input[i];
+
+      if (char === "\\") {
+        // Check if we have the next character
+        if (i + 1 >= input.length) {
+          // Escape sequence incomplete - save for next chunk
+          pendingEscape = "\\";
+          break;
+        }
+
+        const nextChar = input[i + 1];
+
+        // Handle unicode escape \uXXXX
+        if (nextChar === "u") {
+          if (i + 5 >= input.length) {
+            // Unicode sequence incomplete - save for next chunk
+            pendingEscape = input.substring(i);
+            break;
+          }
+          // Parse the 4 hex digits
+          const hex = input.substring(i + 2, i + 6);
+          if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+            decoded += String.fromCharCode(parseInt(hex, 16));
+            i += 6;
+          } else {
+            // Invalid unicode escape - pass through as-is
+            decoded += "\\u";
+            i += 2;
+          }
+          continue;
+        }
+
+        // Handle standard escapes
+        if (Object.prototype.hasOwnProperty.call(escapeMap, nextChar)) {
+          decoded += escapeMap[nextChar];
+        } else {
+          // Unknown escape - pass through (shouldn't happen in valid JSON)
+          decoded += nextChar;
+        }
+        i += 2;
+      } else if (char === '"') {
+        // Unescaped quote = end of string
+        isComplete = true;
+        return {
+          decoded,
+          done: true,
+          remaining: input.substring(i + 1),
+        };
+      } else {
+        // Normal character
+        decoded += char;
+        i++;
+      }
+    }
+
+    return {
+      decoded,
+      done: false,
+      remaining: "",
+    };
+  }
+
+  /**
+   * Check if there's a pending incomplete escape sequence
+   */
+  function hasPending() {
+    return pendingEscape.length > 0;
+  }
+
+  /**
+   * Reset the decoder state
+   */
+  function reset() {
+    pendingEscape = "";
+    isComplete = false;
+  }
+
+  return { decode, hasPending, reset };
+}
+
 // Initialize Gemini AI client
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
 
@@ -65,10 +187,9 @@ CODE GENERATION RULES:
 5. Create visually appealing designs with good styling
 6. Include responsive design principles
 7. Make interactive elements functional with proper JavaScript
-8. CRITICAL: Format code with proper indentation and newlines - each tag, style rule, and script line MUST be on its own line
-9. Use proper line breaks (\n) to separate code lines - DO NOT return all code on a single line
+8. Format code with proper indentation - each tag, style rule, and script line should be on its own line
 
-REMEMBER: Return JSON with "message" (short, in user's language), "projectName" (TWO words only, creative name in user's language), and "code" (clean, PROPERLY FORMATTED HTML/CSS/JS with newlines, no markdown).`;
+REMEMBER: Return JSON with "message" (short, in user's language), "projectName" (TWO words only, creative name in user's language), and "code" (clean, properly formatted HTML/CSS/JS, no markdown).`;
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
@@ -112,10 +233,10 @@ const generateCode = asyncHandler(async (req, res) => {
   });
 
   let accumulatedText = "";
-  let previousMessage = "";
   let codeStarted = false;
-  let codeBuffer = ""; // Buffer for incomplete lines
-  let lastSentPosition = 0; // Track what we've already parsed and sent
+  let codeComplete = false;
+  let codeFieldStartPos = -1; // Position after opening quote of code field
+  const codeDecoder = createJsonStringDecoder();
 
   try {
     // Initialize the model with system instruction
@@ -174,76 +295,52 @@ Modify or extend the existing code based on the user's request.`;
           // Accumulate the text
           accumulatedText += chunkText;
 
-          // Efficient streaming parser - only look at new content
-          // Instead of regex on full buffer, find code field boundaries once
+          // If code field hasn't started yet, look for it
           if (!codeStarted) {
-            // Look for "code":"  pattern
-            const codeStartIndex = accumulatedText.indexOf('"code"');
-            if (codeStartIndex !== -1) {
-              // Find the opening quote after "code":
-              const afterColon = accumulatedText.indexOf(":", codeStartIndex + 6);
-              if (afterColon !== -1) {
-                const openQuote = accumulatedText.indexOf('"', afterColon);
-                if (openQuote !== -1) {
+            // Look for "code": pattern
+            const codeKeyIndex = accumulatedText.indexOf('"code"');
+            if (codeKeyIndex !== -1) {
+              // Find the colon after "code"
+              const colonPos = accumulatedText.indexOf(":", codeKeyIndex + 6);
+              if (colonPos !== -1) {
+                // Skip whitespace after colon and find opening quote
+                let openQuotePos = colonPos + 1;
+                while (openQuotePos < accumulatedText.length && /\s/.test(accumulatedText[openQuotePos])) {
+                  openQuotePos++;
+                }
+
+                if (accumulatedText[openQuotePos] === '"') {
                   codeStarted = true;
-                  lastSentPosition = openQuote + 1; // Position after opening quote
+                  codeFieldStartPos = openQuotePos + 1; // Position after opening quote
                   res.write(`data: ${JSON.stringify({ type: "code-start" })}\n\n`);
+
+                  // Decode any content we already have after the opening quote
+                  const initialContent = accumulatedText.substring(codeFieldStartPos);
+                  if (initialContent.length > 0) {
+                    const { decoded, done } = codeDecoder.decode(initialContent);
+                    if (decoded) {
+                      res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: decoded })}\n\n`);
+                    }
+                    if (done) {
+                      codeComplete = true;
+                      res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
+                    }
+                  }
                 }
               }
             }
-          }
+          } else if (!codeComplete) {
+            // Code has started but not complete - decode the new chunk directly
+            // We only pass the new chunk text to the decoder (it maintains state)
+            const { decoded, done } = codeDecoder.decode(chunkText);
 
-          // If code has started, extract and send only new content
-          if (codeStarted) {
-            // Find the current end position (either closing quote or end of buffer)
-            let currentEndPos = accumulatedText.length;
-
-            // Look for closing quote (but not escaped ones)
-            // Simple approach: find "} or ", pattern (end of code field)
-            const closingPattern1 = accumulatedText.indexOf('"}', lastSentPosition);
-            const closingPattern2 = accumulatedText.indexOf('",', lastSentPosition);
-
-            if (closingPattern1 !== -1 || closingPattern2 !== -1) {
-              // Code field is complete
-              if (closingPattern1 !== -1) currentEndPos = closingPattern1;
-              if (closingPattern2 !== -1 && closingPattern2 < currentEndPos) currentEndPos = closingPattern2;
+            if (decoded) {
+              res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: decoded })}\n\n`);
             }
 
-            // Extract only NEW content since last send
-            if (currentEndPos > lastSentPosition) {
-              const newContent = accumulatedText.substring(lastSentPosition, currentEndPos);
-
-              // Decode JSON escape sequences
-              const decodedContent = newContent.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
-
-              // Debug: Log if newlines are present
-              if (decodedContent.includes("\n")) {
-                console.log(`[Stream] Decoded chunk with ${decodedContent.split("\n").length - 1} newlines`);
-              } else {
-                console.log(`[Stream] WARNING: Decoded chunk has NO newlines (${decodedContent.length} chars)`);
-              }
-
-              // Add to buffer
-              codeBuffer += decodedContent;
-
-              // Send only complete lines (ending with \n)
-              const lines = codeBuffer.split("\n");
-
-              // If buffer ends with \n, all lines are complete
-              // If not, keep the last incomplete line in buffer
-              const hasTrailingNewline = codeBuffer.endsWith("\n");
-              const completeLines = hasTrailingNewline ? lines : lines.slice(0, -1);
-
-              if (completeLines.length > 0) {
-                // Send complete lines (with newlines preserved)
-                const linesToSend = completeLines.join("\n") + (completeLines.length > 0 ? "\n" : "");
-                res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: linesToSend })}\n\n`);
-
-                // Update buffer to keep only incomplete line
-                codeBuffer = hasTrailingNewline ? "" : lines[lines.length - 1];
-              }
-
-              lastSentPosition = currentEndPos;
+            if (done) {
+              codeComplete = true;
+              res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
             }
           }
         }
@@ -266,14 +363,8 @@ Modify or extend the existing code based on the user's request.`;
       throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
     }
 
-    // Send code-complete event (code field is now complete)
-    if (codeStarted) {
-      // Send any remaining incomplete line from buffer
-      if (codeBuffer.length > 0) {
-        res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: codeBuffer })}\n\n`);
-        codeBuffer = "";
-      }
-
+    // Ensure code-complete was sent (handles edge case where stream ends abruptly)
+    if (codeStarted && !codeComplete) {
       res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
     }
 
