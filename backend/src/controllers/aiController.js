@@ -10,12 +10,12 @@ const { ERROR_CODES } = require("../constants/errorCodes");
 const RequestLog = require("../models/RequestLog");
 const Usage = require("../models/Usage");
 
-// Gemini 2.0 Flash pricing (per token)
-// Input: $0.10 per 1M tokens = $0.0000001 per token
-// Output: $0.40 per 1M tokens = $0.0000004 per token
+// Gemini 2.5 Flash pricing (per token)
+// Input: $0.30 per 1M tokens = $0.0000003 per token
+// Output: $2.50 per 1M tokens = $0.0000025 per token
 const GEMINI_PRICING = {
-  inputPerToken: 0.0000001,
-  outputPerToken: 0.0000004,
+  inputPerToken: 0.0000003,
+  outputPerToken: 0.0000025,
 };
 
 /**
