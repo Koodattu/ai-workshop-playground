@@ -570,6 +570,8 @@ export default function WorkspacePage() {
           setCurrentTemplateId(templateId);
           // Clear context messages when switching templates
           setContextMessages([]);
+          // Force instant preview update with the new code
+          previewControlRef.current?.forceRefresh(customTemplate.code);
         }
       } else {
         // Switch to a built-in template
@@ -584,6 +586,8 @@ export default function WorkspacePage() {
           setCurrentTemplateId(templateId);
           // Clear context messages when switching templates
           setContextMessages([]);
+          // Force instant preview update with the new code
+          previewControlRef.current?.forceRefresh(newCode);
         }
       }
     },

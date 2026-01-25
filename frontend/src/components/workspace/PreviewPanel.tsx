@@ -30,10 +30,14 @@ export function PreviewPanel({ code, onControlReady }: PreviewPanelProps) {
           setIsAutoRefresh(true);
           setManuallyDisabled(false);
         },
+        forceRefresh: (newCode?: string) => {
+          setDisplayCode(newCode ?? code);
+          setKey((prev) => prev + 1);
+        },
       };
       onControlReady(control);
     }
-  }, [onControlReady]);
+  }, [onControlReady, code]);
 
   // Update preview based on auto-refresh setting with debounce
   useEffect(() => {
