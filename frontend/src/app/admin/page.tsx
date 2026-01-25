@@ -1,40 +1,73 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { PasswordManager } from "@/components/admin/PasswordManager";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 export default function AdminPage() {
   const { t } = useLanguage();
-  const [adminSecret, setAdminSecret] = useState("");
+  const [adminSecret, setAdminSecret] = useLocalStorage<string>("admin-secret", "");
   const [inputSecret, setInputSecret] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState("");
 
+  // Auth attempt guard to prevent multiple simultaneous authentications
+  const isAuthenticatingRef = useRef<boolean>(false);
+
+  // Track if auto-validation has been attempted to prevent loops
+  const hasAttemptedAutoValidationRef = useRef<boolean>(false);
+
+  const handleAuthenticate = useCallback(
+    async (enteredSecret: string) => {
+      // Prevent concurrent authentication attempts
+      if (isAuthenticatingRef.current) {
+        return;
+      }
+      isAuthenticatingRef.current = true;
+
+      setIsVerifying(true);
+      setError("");
+
+      try {
+        const isValid = await api.verifyAdminSecret(enteredSecret);
+        if (isValid) {
+          setAdminSecret(enteredSecret);
+          setIsAuthenticated(true);
+        } else {
+          // Clear invalid secret from localStorage
+          setAdminSecret("");
+          setError(t("admin.invalidSecret"));
+        }
+      } catch (err) {
+        // Clear invalid/expired secret from localStorage
+        setAdminSecret("");
+        setError(t("admin.invalidSecret"));
+      } finally {
+        setIsVerifying(false);
+        isAuthenticatingRef.current = false;
+      }
+    },
+    [setAdminSecret, t],
+  );
+
+  // Auto-validate admin secret on page load (only once)
+  useEffect(() => {
+    if (adminSecret && !isAuthenticated && !hasAttemptedAutoValidationRef.current) {
+      hasAttemptedAutoValidationRef.current = true;
+      handleAuthenticate(adminSecret);
+    }
+  }, [adminSecret, isAuthenticated, handleAuthenticate]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!inputSecret.trim()) return;
 
-    setIsVerifying(true);
-    setError("");
-
-    try {
-      const isValid = await api.verifyAdminSecret(inputSecret.trim());
-      if (isValid) {
-        setAdminSecret(inputSecret.trim());
-        setIsAuthenticated(true);
-      } else {
-        setError(t("admin.invalidSecret"));
-      }
-    } catch (err) {
-      setError(t("admin.invalidSecret"));
-    } finally {
-      setIsVerifying(false);
-    }
+    await handleAuthenticate(inputSecret.trim());
   };
 
   if (!isAuthenticated) {
