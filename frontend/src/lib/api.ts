@@ -22,7 +22,12 @@ class ApiClient {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }));
-        throw new Error(error.error || this.getHttpErrorMessage(response.status));
+        // Create an error object that includes both the message and the error code
+        const errorObj = new Error(error.error || this.getHttpErrorMessage(response.status));
+        // Attach errorCode and details as properties so they can be accessed by error handlers
+        (errorObj as any).errorCode = error.errorCode;
+        (errorObj as any).details = error.details;
+        throw errorObj;
       }
 
       const data = await response.json();
@@ -91,7 +96,8 @@ class ApiClient {
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }));
         const errorMessage = error.error || this.getHttpErrorMessage(response.status);
-        callbacks.onError?.(errorMessage);
+        // Pass the full error object including errorCode if available
+        callbacks.onError?.(errorMessage, undefined, error.errorCode, error.details);
         return () => abortController.abort();
       }
 
@@ -162,7 +168,7 @@ class ApiClient {
                       });
                       break;
                     case "error":
-                      callbacks.onError?.(event.error, event.remainingUses);
+                      callbacks.onError?.(event.error, event.remainingUses, event.errorCode, event.details);
                       break;
                   }
                 } catch (parseError) {

@@ -4,6 +4,7 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   errorDetails?: string;
+  errorCode?: string;
 }
 
 export interface GenerateRequest {
@@ -41,6 +42,8 @@ export interface UsageStats {
 
 export interface ApiError {
   error: string;
+  errorCode?: string;
+  details?: string[];
   remainingUses?: number;
 }
 
@@ -85,6 +88,8 @@ export interface StreamDoneEvent {
 export interface StreamErrorEvent {
   type: "error";
   error: string;
+  errorCode?: string;
+  details?: string[];
   remainingUses?: number;
 }
 
@@ -118,7 +123,7 @@ export interface StreamCallbacks {
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
   onDone?: (data: { message: string; code: string; remaining: number }) => void;
-  onError?: (error: string, remainingUses?: number) => void;
+  onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
 // Preview control interface

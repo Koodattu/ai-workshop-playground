@@ -4,14 +4,16 @@
  */
 
 const config = require("../config");
+const { ERROR_CODES } = require("../constants/errorCodes");
 
 /**
  * Custom application error class
  */
 class AppError extends Error {
-  constructor(message, statusCode) {
+  constructor(message, statusCode, errorCode = null) {
     super(message);
     this.statusCode = statusCode;
+    this.errorCode = errorCode;
     this.isOperational = true;
     Error.captureStackTrace(this, this.constructor);
   }
@@ -21,7 +23,7 @@ class AppError extends Error {
  * Handle Mongoose CastError (invalid ObjectId)
  */
 const handleCastError = (err) => {
-  return new AppError(`Invalid ${err.path}: ${err.value}`, 400);
+  return new AppError(`Invalid ${err.path}: ${err.value}`, 400, ERROR_CODES.INVALID_OBJECT_ID);
 };
 
 /**
@@ -29,7 +31,7 @@ const handleCastError = (err) => {
  */
 const handleDuplicateKeyError = (err) => {
   const field = Object.keys(err.keyValue)[0];
-  return new AppError(`Duplicate value for field: ${field}`, 409);
+  return new AppError(`Duplicate value for field: ${field}`, 409, ERROR_CODES.DUPLICATE_ENTRY);
 };
 
 /**
@@ -37,7 +39,7 @@ const handleDuplicateKeyError = (err) => {
  */
 const handleValidationError = (err) => {
   const messages = Object.values(err.errors).map((e) => e.message);
-  return new AppError(`Validation failed: ${messages.join(", ")}`, 400);
+  return new AppError(`Validation failed: ${messages.join(", ")}`, 400, ERROR_CODES.VALIDATION_FAILED);
 };
 
 /**
@@ -72,9 +74,11 @@ const errorHandler = (err, req, res, next) => {
   // Default to 500 if status code not set
   const statusCode = error.statusCode || err.statusCode || 500;
   const message = error.message || "Internal server error";
+  const errorCode = error.errorCode || err.errorCode || (statusCode === 500 ? ERROR_CODES.INTERNAL_SERVER_ERROR : null);
 
   res.status(statusCode).json({
     error: message,
+    ...(errorCode && { errorCode }),
     ...(config.nodeEnv === "development" && { stack: err.stack }),
   });
 };

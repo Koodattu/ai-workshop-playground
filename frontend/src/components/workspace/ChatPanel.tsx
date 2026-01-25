@@ -201,8 +201,9 @@ export function ChatPanel({
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={t("chat.sendPlaceholder")}
+              placeholder={remainingUses === 0 ? t("chat.noUsesLeft") : t("chat.sendPlaceholder")}
               rows={1}
+              disabled={remainingUses === 0 || isLoading}
               className="
                 w-full px-4 py-3 pr-12
                 bg-carbon border border-steel rounded-xl
@@ -210,6 +211,7 @@ export function ChatPanel({
                 focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
                 resize-none transition-all duration-200
                 scrollbar-thin
+                disabled:opacity-50 disabled:cursor-not-allowed
               "
             />
           </div>
@@ -254,7 +256,7 @@ export function ChatPanel({
               </label>
             )}
 
-            <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>
+            <Button type="submit" size="md" disabled={!prompt.trim() || isLoading || remainingUses === 0} isLoading={isLoading}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>

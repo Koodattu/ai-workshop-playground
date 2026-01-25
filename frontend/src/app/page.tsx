@@ -15,6 +15,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
+import { getErrorMessage } from "@/lib/errorTranslation";
 import type { ChatMessage, PreviewControl, CustomTemplate } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
@@ -166,14 +167,22 @@ export default function WorkspacePage() {
         // Clear invalid/expired password from localStorage
         setPassword("");
 
-        // Handle specific error messages
-        const errorMessage = err instanceof Error ? err.message : "";
-        if (errorMessage.includes("expired")) {
-          setAuthError(t("passwordModal.expiredPassword"));
-        } else if (errorMessage.includes("Invalid")) {
-          setAuthError(t("passwordModal.invalidPassword"));
+        // Handle specific error codes if available
+        const errorCode = (err as any).errorCode;
+        if (errorCode) {
+          // Use the error translation utility to get localized message
+          const translatedError = getErrorMessage(errorCode, t);
+          setAuthError(translatedError);
         } else {
-          setAuthError(t("passwordModal.authError"));
+          // Fallback to checking error message strings
+          const errorMessage = err instanceof Error ? err.message : "";
+          if (errorMessage.includes("expired")) {
+            setAuthError(t("passwordModal.expiredPassword"));
+          } else if (errorMessage.includes("Invalid")) {
+            setAuthError(t("passwordModal.invalidPassword"));
+          } else {
+            setAuthError(t("passwordModal.authError"));
+          }
         }
       } finally {
         setIsValidating(false);
@@ -414,27 +423,35 @@ export default function WorkspacePage() {
 
               showToast(t("chat.codeGenerated"), "success");
             },
-            onError: (error, remainingUsesOnError) => {
+            onError: (error, remainingUsesOnError, errorCode, details) => {
               // Clear any pending animation frame
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
               }
 
-              const errorMessage = error || t("api.generateError");
+              // Get translated error message based on error code
+              const translatedErrorMessage = getErrorMessage(errorCode, t, error);
+
+              // Format details if available for the "why" button
+              let formattedErrorDetails = error;
+              if (details && details.length > 0) {
+                formattedErrorDetails = `${error}\n\nDetails:\n${details.map((d) => `• ${d}`).join("\n")}`;
+              }
 
               // Update remaining uses if provided
               if (remainingUsesOnError !== undefined) {
                 setRemainingUses(remainingUsesOnError);
               }
 
-              // Add error message to chat
+              // Add error message to chat with translated message
               const errorChatMessage: ChatMessage = {
                 id: crypto.randomUUID(),
                 role: "assistant",
-                content: t("api.generateError"),
+                content: translatedErrorMessage,
                 timestamp: new Date(),
-                errorDetails: errorMessage,
+                errorDetails: formattedErrorDetails,
+                errorCode: errorCode,
               };
               setChatHistory((prev) => [...prev, errorChatMessage]);
 
@@ -442,18 +459,12 @@ export default function WorkspacePage() {
               setStreamingMessage("");
               setStreamingCode("");
               setIsStreaming(false);
-
-              // Re-throw to let ChatPanel know not to clear the prompt
-              throw new Error(errorMessage);
             },
           },
         );
 
         // Store the abort function
         abortStreamRef.current = abort;
-      } catch (err) {
-        // Error already handled in onError callback
-        throw err;
       } finally {
         setIsGenerating(false);
       }

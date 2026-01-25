@@ -44,6 +44,7 @@
   "chat": {
     "header": "PROMPT",
     "sendPlaceholder": "Describe what you want to create...",
+    "noUsesLeft": "No uses left. Contact organizer for more.",
     "sendButton": "Send",
     "generating": "Generating...",
     "emptyTitle": "Ready to Create",
@@ -59,7 +60,34 @@
     "generateButton": "Generate",
     "streaming": "streaming...",
     "clearChat": "Clear chat",
-    "clearChatTitle": "Clear all messages"
+    "clearChatTitle": "Clear all messages",
+    "errors": {
+      "VALIDATION_FAILED": "Validation failed",
+      "PASSWORD_REQUIRED": "Workshop password is required",
+      "VISITOR_ID_REQUIRED": "Visitor ID is required",
+      "VISITOR_ID_TOO_SHORT": "Visitor ID is too short",
+      "PROMPT_REQUIRED": "Prompt is required",
+      "PROMPT_TOO_SHORT": "Prompt is too short (minimum 10 characters)",
+      "PROMPT_TOO_LONG": "Prompt is too long (maximum 10,000 characters)",
+      "MESSAGE_HISTORY_INVALID": "Message history format is invalid",
+      "MESSAGE_ROLE_INVALID": "Message role is invalid",
+      "MESSAGE_CONTENT_INVALID": "Message content is invalid",
+      "MESSAGE_CONTENT_TOO_LONG": "Message content is too long",
+      "INVALID_OBJECT_ID": "Invalid data format",
+      "SAFETY_FILTER_BLOCKED": "Content blocked by safety filters",
+      "PASSWORD_INVALID": "Invalid workshop password",
+      "PASSWORD_EXPIRED": "Workshop password has expired",
+      "DUPLICATE_ENTRY": "Duplicate entry detected",
+      "RATE_LIMIT_EXCEEDED": "You've reached the usage limit for this session",
+      "API_KEY_NOT_CONFIGURED": "API is not properly configured",
+      "API_KEY_INVALID": "API configuration is invalid",
+      "AI_RESPONSE_PARSE_FAILED": "Failed to understand AI response",
+      "AI_RESPONSE_INVALID": "AI response format is invalid",
+      "AI_GENERATION_FAILED": "Code generation failed",
+      "INTERNAL_SERVER_ERROR": "An unexpected error occurred",
+      "API_QUOTA_EXCEEDED": "Service temporarily unavailable. Please try again later.",
+      "UNKNOWN_ERROR": "An unknown error occurred"
+    }
   },
   "editor": {
     "header": "CODE",

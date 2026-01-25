@@ -6,6 +6,7 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
+const { ERROR_CODES } = require("../constants/errorCodes");
 
 // Initialize Gemini AI client
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
@@ -65,11 +66,11 @@ const generateCode = asyncHandler(async (req, res) => {
   const { prompt, existingCode, messageHistory } = req.body;
 
   if (!prompt) {
-    throw new AppError("Prompt is required", 400);
+    throw new AppError("Prompt is required", 400, ERROR_CODES.PROMPT_REQUIRED);
   }
 
   if (!config.geminiApiKey) {
-    throw new AppError("Gemini API key not configured", 500);
+    throw new AppError("Gemini API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
   }
 
   // Set up SSE headers
@@ -225,12 +226,12 @@ Modify or extend the existing code based on the user's request.`;
     try {
       structuredResponse = JSON.parse(accumulatedText);
     } catch (parseError) {
-      throw new AppError("Failed to parse AI response", 500);
+      throw new AppError("Failed to parse AI response", 500, ERROR_CODES.AI_RESPONSE_PARSE_FAILED);
     }
 
     // Validate response has required fields
     if (!structuredResponse.code || !structuredResponse.message) {
-      throw new AppError("Invalid AI response structure", 500);
+      throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
     }
 
     // Send code-complete event (code field is now complete)
@@ -262,18 +263,23 @@ Modify or extend the existing code based on the user's request.`;
     // Handle specific Gemini API errors
     let errorMessage = "AI generation failed";
     let statusCode = 500;
+    let errorCode = ERROR_CODES.AI_GENERATION_FAILED;
 
     if (error.message?.includes("API key")) {
       errorMessage = "Invalid API configuration";
+      errorCode = ERROR_CODES.API_KEY_INVALID;
     } else if (error.message?.includes("quota")) {
       errorMessage = "API quota exceeded. Please try again later.";
       statusCode = 503;
+      errorCode = ERROR_CODES.API_QUOTA_EXCEEDED;
     } else if (error.message?.includes("safety")) {
       errorMessage = "Request blocked due to safety filters";
       statusCode = 400;
+      errorCode = ERROR_CODES.SAFETY_FILTER_BLOCKED;
     } else if (error instanceof AppError) {
       errorMessage = error.message;
       statusCode = error.statusCode;
+      errorCode = error.errorCode || ERROR_CODES.AI_GENERATION_FAILED;
     } else {
       errorMessage = `AI generation failed: ${error.message}`;
     }
@@ -282,6 +288,7 @@ Modify or extend the existing code based on the user's request.`;
     const errorData = {
       type: "error",
       error: errorMessage,
+      errorCode: errorCode,
       statusCode: statusCode,
     };
 
