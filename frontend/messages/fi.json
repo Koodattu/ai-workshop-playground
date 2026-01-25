@@ -110,7 +110,8 @@
     "selectTemplate": "Valitse Pohja",
     "actionsMenu": "Toiminnot",
     "undo": "Kumoa",
-    "redo": "Tee uudelleen"
+    "redo": "Tee uudelleen",
+    "downloadTitle": "Lataa koodi tiedostona"
   },
   "templates": {
     "welcome": "Laaja Tervetuloa",

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import type { CustomTemplate } from "@/types";
 import { CUSTOM_TEMPLATE_CONFIG } from "@/types";
 
@@ -21,11 +21,29 @@ interface UseCustomTemplatesReturn {
 
 /**
  * Hook for managing user-created custom templates.
- * Templates are stored in memory and persist only for the session.
+ * Templates are stored in localStorage and persist across sessions.
  * Automatically enforces the maximum template limit by removing oldest templates.
  */
 export function useCustomTemplates(): UseCustomTemplatesReturn {
-  const [templates, setTemplates] = useState<CustomTemplate[]>([]);
+  const [templates, setTemplates] = useState<CustomTemplate[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem(CUSTOM_TEMPLATE_CONFIG.STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Persist to localStorage whenever templates change
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(CUSTOM_TEMPLATE_CONFIG.STORAGE_KEY, JSON.stringify(templates));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [templates]);
 
   /** Generate a unique ID for a new custom template */
   const generateId = useCallback(() => {

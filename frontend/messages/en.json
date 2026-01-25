@@ -42,7 +42,7 @@
     "visitorIdError": "Unable to generate visitor ID. Please refresh the page."
   },
   "chat": {
-    "header": "PROMPT",
+    "header": "AI-ASSISTANT",
     "sendPlaceholder": "Describe what you want to create...",
     "noUsesLeft": "No uses left. Contact organizer for more.",
     "sendButton": "Send",
@@ -96,7 +96,7 @@
     }
   },
   "editor": {
-    "header": "CODE",
+    "header": "CODE EDITOR",
     "format": "Format",
     "copy": "Copy",
     "copyTitle": "Copy Code",
@@ -110,7 +110,8 @@
     "selectTemplate": "Select Template",
     "actionsMenu": "Actions",
     "undo": "Undo",
-    "redo": "Redo"
+    "redo": "Redo",
+    "downloadTitle": "Download Code as File"
   },
   "templates": {
     "welcome": "Advanced Welcome",

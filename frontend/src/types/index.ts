@@ -146,6 +146,7 @@ export interface CustomTemplate {
 export const CUSTOM_TEMPLATE_CONFIG = {
   MAX_TEMPLATES: 10,
   ID_PREFIX: "custom-",
+  STORAGE_KEY: "custom-templates",
 } as const;
 
 // System-wide statistics

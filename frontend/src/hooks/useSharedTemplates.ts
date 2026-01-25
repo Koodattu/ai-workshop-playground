@@ -64,8 +64,9 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
   /** Get a shared template by shareId */
   const getTemplateByShareId = useCallback(
     (shareId: string): SharedTemplate | undefined => {
+      if (!shareId) return undefined;
       const normalizedShareId = shareId.toUpperCase();
-      return templates.find((t) => t.shareId.toUpperCase() === normalizedShareId);
+      return templates.find((t) => t.shareId?.toUpperCase() === normalizedShareId);
     },
     [templates],
   );
@@ -77,10 +78,14 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
    */
   const addSharedTemplate = useCallback(
     (shareId: string, code: string, title: string | null): SharedTemplate => {
+      if (!shareId) {
+        throw new Error("shareId is required to add a shared template");
+      }
+
       const normalizedShareId = shareId.toUpperCase();
 
       // Check if this share already exists
-      const existingIndex = templates.findIndex((t) => t.shareId.toUpperCase() === normalizedShareId);
+      const existingIndex = templates.findIndex((t) => t.shareId?.toUpperCase() === normalizedShareId);
 
       if (existingIndex !== -1) {
         // Update the existing template and move it to the front
@@ -93,7 +98,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
         };
 
         setTemplates((prev) => {
-          const filtered = prev.filter((t) => t.shareId.toUpperCase() !== normalizedShareId);
+          const filtered = prev.filter((t) => t.shareId?.toUpperCase() !== normalizedShareId);
           return [updated, ...filtered];
         });
 

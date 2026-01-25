@@ -361,17 +361,17 @@ class ApiClient {
 
   // Create a share link
   async createShareLink(code: string, title?: string): Promise<CreateShareResponse> {
-    const { data } = await this.request<CreateShareResponse>("/api/share", {
+    const { data } = await this.request<{ message: string; data: CreateShareResponse }>("/api/share", {
       method: "POST",
       body: JSON.stringify({ code, title }),
     });
-    return data;
+    return data.data;
   }
 
   // Get shared code by share ID
   async getSharedCode(shareId: string): Promise<GetShareResponse> {
-    const { data } = await this.request<GetShareResponse>(`/api/share/${shareId}`);
-    return data;
+    const { data } = await this.request<{ message: string; data: GetShareResponse }>(`/api/share/${shareId}`);
+    return data.data;
   }
 }
 
