@@ -292,10 +292,16 @@ export default function WorkspacePage() {
 
               // Clear Monaco editor directly (do NOT call setCode during streaming to avoid conflicts)
               if (monacoEditorRef.current) {
-                const model = monacoEditorRef.current.getModel();
-                if (model) {
-                  // Use setValue for clean slate - this completely replaces content
-                  model.setValue("");
+                try {
+                  const model = monacoEditorRef.current.getModel();
+                  if (model) {
+                    // Use setValue for clean slate - this completely replaces content
+                    model.setValue("");
+                    // Ensure editor is ready by forcing a layout update
+                    monacoEditorRef.current.layout();
+                  }
+                } catch (error) {
+                  console.warn("Failed to clear editor:", error);
                 }
               }
             },
@@ -339,8 +345,9 @@ export default function WorkspacePage() {
 
                     // Auto-scroll to bottom as code streams in
                     const newLineCount = model.getLineCount();
-                    // Use revealLineInCenter with immediate scroll type (1) for better visibility
-                    monacoEditorRef.current.revealLineInCenter(newLineCount, 1);
+                    // Use revealLine for smooth scrolling to keep bottom visible
+                    // ScrollType 0 = Smooth animation
+                    monacoEditorRef.current.revealLine(newLineCount, 0);
                   }
                 }
                 // Clear the frame ref since this frame has executed

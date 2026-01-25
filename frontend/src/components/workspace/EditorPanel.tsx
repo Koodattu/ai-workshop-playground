@@ -355,7 +355,7 @@ export function EditorPanel({
                   >
                     <div className="flex divide-x divide-steel/30">
                       {/* Column 1: Built-in Templates */}
-                      <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                      <div className="min-w-40 max-w-60 py-1 max-h-[70vh] overflow-y-auto">
                         <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path
@@ -387,7 +387,7 @@ export function EditorPanel({
 
                       {/* Column 2: Custom Templates */}
                       {customTemplates.length > 0 && (
-                        <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                        <div className="min-w-40 max-w-60 py-1 max-h-[70vh] overflow-y-auto">
                           <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path
@@ -438,7 +438,7 @@ export function EditorPanel({
 
                       {/* Column 3: Shared Templates */}
                       {sharedTemplates.length > 0 && (
-                        <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                        <div className="min-w-40 max-w-60 py-1 max-h-[70vh] overflow-y-auto">
                           <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path
