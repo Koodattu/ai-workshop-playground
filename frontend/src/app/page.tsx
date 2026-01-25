@@ -69,6 +69,7 @@ export default function WorkspacePage() {
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
+  const [previewInitialFullscreen, setPreviewInitialFullscreen] = useState(false);
   const abortStreamRef = useRef<(() => void) | null>(null);
 
   // Preview control ref
@@ -218,13 +219,20 @@ export default function WorkspacePage() {
         const pendingShare = JSON.parse(pendingShareStr);
         sessionStorage.removeItem("pending-shared-template");
 
-        // Add to shared templates and switch to it
-        const newTemplate = addSharedTemplate(pendingShare.shareId, pendingShare.code, pendingShare.title);
+        // Add to shared templates and switch to it (include projectName if available)
+        const newTemplate = addSharedTemplate(pendingShare.shareId, pendingShare.code, pendingShare.title, pendingShare.projectName);
 
         // Switch to the shared template
         setCurrentTemplateId(newTemplate.id);
         setCode(pendingShare.code);
         originalCodeSnapshotRef.current = pendingShare.code;
+
+        // If preview mode was requested, open preview in fullscreen
+        if (pendingShare.previewMode) {
+          setPreviewInitialFullscreen(true);
+          // Also switch to preview panel on mobile
+          setMobileActivePanel("preview");
+        }
 
         showToast(t("workspace.welcomeBack"), "success");
       } catch (e) {
@@ -408,19 +416,26 @@ export default function WorkspacePage() {
 
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
+              const projectName = data.projectName;
 
               // If user is in a custom template, update it instead of creating a new one
               if (isCustomTemplateId(currentTemplateId)) {
-                // Update the existing custom template
-                updateTemplate(currentTemplateId, finalCode);
+                // Update the existing custom template with new code (and optionally projectName)
+                updateTemplate(currentTemplateId, finalCode, projectName);
                 // Keep the same template ID
                 setCurrentTemplateId(currentTemplateId);
               } else {
                 // User is in a built-in template, create a new custom template
-                templateCounterRef.current += 1;
-                const messages = getMessages(language);
-                const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
-                const newTemplate = addTemplate(templateName, finalCode);
+                // Use LLM-provided projectName if available, otherwise fall back to sequential naming
+                let templateName: string;
+                if (projectName) {
+                  templateName = projectName;
+                } else {
+                  templateCounterRef.current += 1;
+                  const messages = getMessages(language);
+                  templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
+                }
+                const newTemplate = addTemplate(templateName, finalCode, projectName);
                 // Switch to the new custom template
                 setCurrentTemplateId(newTemplate.id);
               }
@@ -683,12 +698,28 @@ export default function WorkspacePage() {
     showToast(t("chat.clearChat"), "success");
   }, [showToast, t]);
 
+  // Get the current template's projectName for sharing
+  const getCurrentProjectName = useCallback((): string | undefined => {
+    // Check if current template is a custom template
+    const customTemplate = customTemplates.find((t) => t.id === currentTemplateId);
+    if (customTemplate?.projectName) {
+      return customTemplate.projectName;
+    }
+    // Check if it's a shared template
+    const sharedTemplate = getSharedTemplate(currentTemplateId);
+    if (sharedTemplate?.projectName) {
+      return sharedTemplate.projectName;
+    }
+    return undefined;
+  }, [customTemplates, currentTemplateId, getSharedTemplate]);
+
   const handleShare = useCallback(async (): Promise<string | null> => {
     if (!code.trim()) return null;
 
     setIsSharing(true);
     try {
-      const response = await api.createShareLink(code);
+      const projectName = getCurrentProjectName();
+      const response = await api.createShareLink(code, undefined, projectName);
       const shareUrl = `${window.location.origin}/share/${response.shareId}`;
 
       // Copy to clipboard
@@ -702,7 +733,7 @@ export default function WorkspacePage() {
     } finally {
       setIsSharing(false);
     }
-  }, [code, showToast, t]);
+  }, [code, showToast, t, getCurrentProjectName]);
 
   // Handle opening the password modal
   const handleOpenPasswordModal = useCallback(() => {
@@ -825,6 +856,7 @@ export default function WorkspacePage() {
                 }}
                 onShare={handleShare}
                 isSharing={isSharing}
+                initialFullscreen={previewInitialFullscreen}
               />
             </Panel>
           </Group>
@@ -873,6 +905,7 @@ export default function WorkspacePage() {
                 }}
                 onShare={handleShare}
                 isSharing={isSharing}
+                initialFullscreen={previewInitialFullscreen}
               />
             )}
           </div>

@@ -121,7 +121,8 @@ export function EditorPanel({
     // Check if it's a shared template
     const sharedTemplate = sharedTemplates.find((t) => t.id === currentTemplateId);
     if (sharedTemplate) {
-      return sharedTemplate.title || `${t("templates.sharedCode")} (${sharedTemplate.shareId})`;
+      // Prefer projectName, then title, then fallback to shareId
+      return sharedTemplate.projectName || sharedTemplate.title || `${t("templates.sharedCode")} (${sharedTemplate.shareId})`;
     }
     // Check if it's a built-in template
     const builtInTemplate = TEMPLATES.find((t) => t.id === currentTemplateId);
@@ -280,7 +281,7 @@ export function EditorPanel({
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                               )}
-                              <span className="truncate">{template.title || template.shareId}</span>
+                              <span className="truncate">{template.projectName || template.title || template.shareId}</span>
                             </button>
                             {onRemoveSharedTemplate && (
                               <button

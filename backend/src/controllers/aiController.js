@@ -39,9 +39,11 @@ Reply in the same language as the user, and SUPER shortly tell what you did. SUP
 CRITICAL OUTPUT RULES - FOLLOW EXACTLY:
 1. Return code in the "code" field - absolutely NO markdown code fences, NO explanations
 2. Return a SUPER short message in the "message" field in the SAME LANGUAGE as the user
-3. The code field should contain ONLY the code itself - start directly with <!DOCTYPE html> or the first line of code
-4. NO markdown code fences (no \`\`\`html, no \`\`\`, nothing) in the code field
-5. The message should be 1-2 sentences maximum
+3. Return a TWO-WORD project name in the "projectName" field in the SAME LANGUAGE as the user
+4. The code field should contain ONLY the code itself - start directly with <!DOCTYPE html> or the first line of code
+5. NO markdown code fences (no \`\`\`html, no \`\`\`, nothing) in the code field
+6. The message should be 1-2 sentences maximum
+7. The projectName MUST be exactly TWO WORDS that describe the project creatively (e.g., "Solar Dashboard", "Pixel Art", "Magic Quiz")
 
 CODE MODIFICATION RULES:
 - If existing code is provided, modify/extend it based on the user's request
@@ -66,7 +68,7 @@ CODE GENERATION RULES:
 8. CRITICAL: Format code with proper indentation and newlines - each tag, style rule, and script line MUST be on its own line
 9. Use proper line breaks (\n) to separate code lines - DO NOT return all code on a single line
 
-REMEMBER: Return JSON with "message" (short, in user's language) and "code" (clean, PROPERLY FORMATTED HTML/CSS/JS with newlines, no markdown).`;
+REMEMBER: Return JSON with "message" (short, in user's language), "projectName" (TWO words only, creative name in user's language), and "code" (clean, PROPERLY FORMATTED HTML/CSS/JS with newlines, no markdown).`;
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
@@ -76,12 +78,16 @@ const CODE_GENERATION_SCHEMA = {
       type: "string",
       description: "A very short response in the same language as the user describing what was done (1-2 sentences max)",
     },
+    projectName: {
+      type: "string",
+      description: "A creative TWO-WORD name for this project in the same language as the user (e.g., 'Solar Dashboard', 'Pixel Art', 'Magic Quiz')",
+    },
     code: {
       type: "string",
       description: "The generated or modified HTML/CSS/JS code without any markdown formatting",
     },
   },
-  required: ["message", "code"],
+  required: ["message", "projectName", "code"],
 };
 
 /**
@@ -333,6 +339,7 @@ Modify or extend the existing code based on the user's request.`;
       type: "done",
       message: structuredResponse.message,
       code: structuredResponse.code,
+      projectName: structuredResponse.projectName,
       remaining: req.workshop?.remaining,
     };
 

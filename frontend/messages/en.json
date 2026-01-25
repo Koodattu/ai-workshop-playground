@@ -226,6 +226,19 @@
     "shareCopied": "Copied!",
     "shareCreating": "Creating share link..."
   },
+  "shareDialog": {
+    "title": "Share Your Creation",
+    "description": "Choose how you want to share your project",
+    "creating": "Creating link...",
+    "createLink": "Create Share Link",
+    "linksReady": "Your share links are ready!",
+    "templateTitle": "Share as Template",
+    "templateDescription": "Opens in the playground for editing and learning",
+    "websiteTitle": "Share as Website",
+    "websiteDescription": "Opens in fullscreen preview mode for viewing",
+    "copy": "Copy",
+    "copied": "Copied!"
+  },
   "share": {
     "loading": "Loading shared code...",
     "notFound": "This share link was not found or has been removed.",

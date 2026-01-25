@@ -6,9 +6,9 @@ interface UseCustomTemplatesReturn {
   /** All custom templates, sorted by creation time (newest first) */
   templates: CustomTemplate[];
   /** Add a new custom template, auto-deletes oldest if exceeding max */
-  addTemplate: (name: string, code: string) => CustomTemplate;
-  /** Update an existing custom template's code */
-  updateTemplate: (id: string, code: string) => void;
+  addTemplate: (name: string, code: string, projectName?: string) => CustomTemplate;
+  /** Update an existing custom template's code and optionally projectName */
+  updateTemplate: (id: string, code: string, projectName?: string) => void;
   /** Remove a custom template by id */
   removeTemplate: (id: string) => void;
   /** Get a custom template by id */
@@ -68,12 +68,13 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
    * If the number of templates exceeds MAX_TEMPLATES, the oldest template is removed.
    */
   const addTemplate = useCallback(
-    (name: string, code: string): CustomTemplate => {
+    (name: string, code: string, projectName?: string): CustomTemplate => {
       const now = Date.now();
       const newTemplate: CustomTemplate = {
         id: generateId(),
         name,
         code,
+        projectName,
         createdAt: now,
         updatedAt: now,
       };
@@ -98,14 +99,16 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
     [generateId],
   );
 
-  /** Update an existing custom template's code */
-  const updateTemplate = useCallback((id: string, code: string): void => {
+  /** Update an existing custom template's code and optionally projectName/name */
+  const updateTemplate = useCallback((id: string, code: string, projectName?: string): void => {
     setTemplates((prev) =>
       prev.map((t) =>
         t.id === id
           ? {
               ...t,
               code,
+              // Update both name and projectName if a new projectName is provided
+              ...(projectName ? { name: projectName, projectName } : {}),
               updatedAt: Date.now(),
             }
           : t,

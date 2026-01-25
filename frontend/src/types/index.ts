@@ -82,6 +82,7 @@ export interface StreamDoneEvent {
   type: "done";
   message: string;
   code: string;
+  projectName?: string;
   remaining: number;
 }
 
@@ -122,7 +123,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; remaining: number }) => void;
+  onDone?: (data: { message: string; code: string; projectName?: string; remaining: number }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
@@ -138,6 +139,7 @@ export interface CustomTemplate {
   id: string;
   name: string;
   code: string;
+  projectName?: string; // LLM-provided project name
   createdAt: number; // timestamp for sorting/deletion
   updatedAt: number; // timestamp for tracking last modification
 }
@@ -257,6 +259,7 @@ export interface SharedTemplate {
   shareId: string; // the 4-letter share code from the server
   code: string;
   title: string | null;
+  projectName?: string; // LLM-provided project name for shared projects
   loadedAt: number; // timestamp when loaded
 }
 
@@ -277,5 +280,6 @@ export interface GetShareResponse {
   shareId: string;
   code: string;
   title: string | null;
+  projectName?: string;
   createdAt: string;
 }

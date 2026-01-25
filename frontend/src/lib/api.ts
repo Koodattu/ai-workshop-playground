@@ -178,6 +178,7 @@ class ApiClient {
                       callbacks.onDone?.({
                         message: event.message,
                         code: event.code,
+                        projectName: event.projectName,
                         remaining: event.remaining,
                       });
                       break;
@@ -360,10 +361,10 @@ class ApiClient {
   }
 
   // Create a share link
-  async createShareLink(code: string, title?: string): Promise<CreateShareResponse> {
+  async createShareLink(code: string, title?: string, projectName?: string): Promise<CreateShareResponse> {
     const { data } = await this.request<{ message: string; data: CreateShareResponse }>("/api/share", {
       method: "POST",
-      body: JSON.stringify({ code, title }),
+      body: JSON.stringify({ code, title, projectName }),
     });
     return data.data;
   }

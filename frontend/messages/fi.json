@@ -226,6 +226,19 @@
     "shareCopied": "Kopioitu!",
     "shareCreating": "Luodaan jakamislinkkiä..."
   },
+  "shareDialog": {
+    "title": "Jaa Luomuksesi",
+    "description": "Valitse miten haluat jakaa projektisi",
+    "creating": "Luodaan linkkiä...",
+    "createLink": "Luo Jakolinkki",
+    "linksReady": "Jakolinkkisi ovat valmiina!",
+    "templateTitle": "Jaa Pohjana",
+    "templateDescription": "Avautuu leikkikentällä muokattavaksi ja opittavaksi",
+    "websiteTitle": "Jaa Verkkosivuna",
+    "websiteDescription": "Avautuu koko näytön esikatselutilassa katsottavaksi",
+    "copy": "Kopioi",
+    "copied": "Kopioitu!"
+  },
   "share": {
     "loading": "Ladataan jaettua koodia...",
     "notFound": "Tätä jakamislinkkiä ei löytynyt tai se on poistettu.",

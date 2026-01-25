@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -16,12 +16,14 @@ export default function SharePage({ params }: SharePageProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useLanguage();
 
   useEffect(() => {
     const loadSharedCode = async () => {
       try {
         const shareId = resolvedParams.id;
+        const isPreviewMode = searchParams.get("mode") === "preview";
 
         // Validate shareId format (4 alphabetical characters)
         if (!/^[a-zA-Z]{4}$/.test(shareId)) {
@@ -38,7 +40,9 @@ export default function SharePage({ params }: SharePageProps) {
           shareId: response.shareId,
           code: response.code,
           title: response.title,
+          projectName: response.projectName,
           createdAt: response.createdAt,
+          previewMode: isPreviewMode,
         };
         sessionStorage.setItem("pending-shared-template", JSON.stringify(pendingShare));
 
@@ -56,7 +60,7 @@ export default function SharePage({ params }: SharePageProps) {
     };
 
     loadSharedCode();
-  }, [resolvedParams.id, router, t]);
+  }, [resolvedParams.id, router, t, searchParams]);
 
   if (isLoading) {
     return (

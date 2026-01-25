@@ -6,7 +6,7 @@ interface UseSharedTemplatesReturn {
   /** All shared templates, sorted by loadedAt (newest first) */
   templates: SharedTemplate[];
   /** Add a new shared template from a share link, auto-removes oldest if exceeding max */
-  addSharedTemplate: (shareId: string, code: string, title: string | null) => SharedTemplate;
+  addSharedTemplate: (shareId: string, code: string, title: string | null, projectName?: string) => SharedTemplate;
   /** Remove a shared template by id */
   removeTemplate: (id: string) => void;
   /** Get a shared template by id */
@@ -77,7 +77,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
    * If exceeding MAX_TEMPLATES, the oldest template is removed.
    */
   const addSharedTemplate = useCallback(
-    (shareId: string, code: string, title: string | null): SharedTemplate => {
+    (shareId: string, code: string, title: string | null, projectName?: string): SharedTemplate => {
       if (!shareId) {
         throw new Error("shareId is required to add a shared template");
       }
@@ -94,6 +94,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
           ...existing,
           code,
           title,
+          projectName,
           loadedAt: Date.now(),
         };
 
@@ -111,6 +112,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
         shareId: normalizedShareId,
         code,
         title,
+        projectName,
         loadedAt: Date.now(),
       };
 

@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Spinner } from "@/components/ui/Spinner";
+import { ShareDialog } from "@/components/workspace/ShareDialog";
 import type { PreviewControl } from "@/types";
 
 interface PreviewPanelProps {
@@ -11,15 +12,16 @@ interface PreviewPanelProps {
   onControlReady?: (control: PreviewControl) => void;
   onShare?: () => Promise<string | null>;
   isSharing?: boolean;
+  initialFullscreen?: boolean;
 }
 
-export function PreviewPanel({ code, onControlReady, onShare, isSharing = false }: PreviewPanelProps) {
+export function PreviewPanel({ code, onControlReady, onShare, isSharing = false, initialFullscreen = false }: PreviewPanelProps) {
   const [isAutoRefresh, setIsAutoRefresh] = useState(true);
   const [manuallyDisabled, setManuallyDisabled] = useState(false);
   const [displayCode, setDisplayCode] = useState(code);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
   const [key, setKey] = useState(0);
-  const [showShareCopied, setShowShareCopied] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const { t } = useLanguage();
 
   // Expose control methods
@@ -63,14 +65,13 @@ export function PreviewPanel({ code, onControlReady, onShare, isSharing = false 
     setIsFullscreen((prev) => !prev);
   }, []);
 
-  const handleShare = useCallback(async () => {
-    if (!onShare) return;
-    const shareUrl = await onShare();
-    if (shareUrl) {
-      setShowShareCopied(true);
-      setTimeout(() => setShowShareCopied(false), 2000);
-    }
-  }, [onShare]);
+  const handleOpenShareDialog = useCallback(() => {
+    setIsShareDialogOpen(true);
+  }, []);
+
+  const handleCloseShareDialog = useCallback(() => {
+    setIsShareDialogOpen(false);
+  }, []);
 
   const hasCode = displayCode.trim().length > 0;
 
@@ -176,33 +177,19 @@ export function PreviewPanel({ code, onControlReady, onShare, isSharing = false 
             {/* Share button */}
             {onShare && hasCode && (
               <button
-                onClick={handleShare}
-                disabled={isSharing}
-                className={`
-                  flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono
-                  transition-colors
-                  ${showShareCopied ? "bg-success/20 text-success border border-success/30" : "bg-electric/20 text-electric border border-electric/30 hover:bg-electric/30"}
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                `}
+                onClick={handleOpenShareDialog}
+                className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-colors bg-electric/20 text-electric border border-electric/30 hover:bg-electric/30"
                 title={t("preview.shareTitle")}
               >
-                {isSharing ? (
-                  <Spinner size="sm" />
-                ) : showShareCopied ? (
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                    />
-                  </svg>
-                )}
-                {showShareCopied ? t("preview.shareCopied") : t("preview.share")}
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                  />
+                </svg>
+                {t("preview.share")}
               </button>
             )}
 
@@ -261,6 +248,9 @@ export function PreviewPanel({ code, onControlReady, onShare, isSharing = false 
 
       {/* Fullscreen overlay backdrop */}
       {isFullscreen && <div className="fixed inset-0 bg-black/50 z-40" onClick={handleToggleFullscreen} />}
+
+      {/* Share Dialog */}
+      {onShare && <ShareDialog isOpen={isShareDialogOpen} onClose={handleCloseShareDialog} onCreateShare={onShare} isSharing={isSharing} />}
     </>
   );
 }

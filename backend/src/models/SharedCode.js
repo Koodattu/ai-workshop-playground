@@ -21,6 +21,11 @@ const sharedCodeSchema = new mongoose.Schema(
       maxlength: [100, "Title cannot exceed 100 characters"],
       default: null,
     },
+    projectName: {
+      type: String,
+      maxlength: [50, "Project name cannot exceed 50 characters"],
+      default: null,
+    },
   },
   {
     timestamps: true,
