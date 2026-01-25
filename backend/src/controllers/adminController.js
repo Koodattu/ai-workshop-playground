@@ -287,7 +287,7 @@ const getSystemStats = asyncHandler(async (req, res) => {
     requestsToday,
     requestsThisWeek,
     requestsThisMonth,
-    activePasswordsCount,
+    activePasswords: activePasswordsCount,
   });
 });
 
