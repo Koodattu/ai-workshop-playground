@@ -290,15 +290,13 @@ export default function WorkspacePage() {
                 }
               }
 
-              // Clear Monaco editor directly if available (fast)
+              // Clear Monaco editor directly (do NOT call setCode during streaming to avoid conflicts)
               if (monacoEditorRef.current) {
                 const model = monacoEditorRef.current.getModel();
                 if (model) {
+                  // Use setValue for clean slate - this completely replaces content
                   model.setValue("");
                 }
-              } else {
-                // Fallback to React state
-                setCode("");
               }
             },
 
@@ -341,9 +339,12 @@ export default function WorkspacePage() {
 
                     // Auto-scroll to bottom as code streams in
                     const newLineCount = model.getLineCount();
-                    monacoEditorRef.current.revealLine(newLineCount, 0); // 0 = smooth scroll
+                    // Use revealLineInCenter with immediate scroll type (1) for better visibility
+                    monacoEditorRef.current.revealLineInCenter(newLineCount, 1);
                   }
                 }
+                // Clear the frame ref since this frame has executed
+                editorUpdateFrameRef.current = null;
               });
             },
 
