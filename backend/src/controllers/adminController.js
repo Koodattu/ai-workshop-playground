@@ -340,7 +340,7 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
 
   res.json({
     password: {
-      id: password._id,
+      _id: password._id,
       code: password.code,
       isActive: password.isActive,
       expiresAt: password.expiresAt,
@@ -349,12 +349,10 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
     },
     stats: {
       totalRequests: stats.totalRequests,
-      tokens: {
-        prompt: stats.totalPromptTokens,
-        candidates: stats.totalCandidatesTokens,
-        thoughts: stats.totalThoughtsTokens,
-        total: stats.totalTokens,
-      },
+      promptTokens: stats.totalPromptTokens,
+      candidatesTokens: stats.totalCandidatesTokens,
+      thoughtsTokens: stats.totalThoughtsTokens,
+      totalTokens: stats.totalTokens,
       estimatedCost: Math.round(stats.totalEstimatedCost * 1000000) / 1000000,
     },
     users: visitorStats.map((v) => ({
@@ -363,6 +361,7 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
       totalTokens: v.totalTokens,
       estimatedCost: Math.round(v.estimatedCost * 1000000) / 1000000,
       lastUsed: v.updatedAt,
+      firstUsed: v.createdAt,
     })),
     uniqueUsersCount: visitorStats.length,
   });
