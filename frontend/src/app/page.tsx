@@ -27,7 +27,20 @@ const getMessages = (lang: string) => {
 };
 
 export default function WorkspacePage() {
+  // Custom templates management (needed early for validation)
+  const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
+
+  // Shared templates management (needed early for validation)
+  const { templates: sharedTemplates, addSharedTemplate, removeTemplate: removeSharedTemplate, isSharedTemplateId, getTemplate: getSharedTemplate } = useSharedTemplates();
+
+  const { language } = useLanguage();
+
+  // Persist template selection to localStorage with validation
+  const [savedTemplateId, setSavedTemplateId] = useLocalStorage<string>("current-template-id", DEFAULT_TEMPLATE_ID);
+
+  // Start with default, then load saved template via useEffect once templates are loaded
   const [currentTemplateId, setCurrentTemplateId] = useState(DEFAULT_TEMPLATE_ID);
+
   const [code, setCode] = useState(() => {
     const defaultTemplate = getTemplateById(DEFAULT_TEMPLATE_ID);
     return defaultTemplate?.code || "";
@@ -43,12 +56,6 @@ export default function WorkspacePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-
-  // Custom templates management
-  const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
-
-  // Shared templates management
-  const { templates: sharedTemplates, addSharedTemplate, removeTemplate: removeSharedTemplate, isSharedTemplateId, getTemplate: getSharedTemplate } = useSharedTemplates();
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
@@ -88,7 +95,7 @@ export default function WorkspacePage() {
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
 
   // Check if code is dirty (different from original snapshot)
@@ -127,6 +134,47 @@ export default function WorkspacePage() {
     },
     [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming],
   );
+
+  // Load saved template from localStorage once templates are loaded
+  useEffect(() => {
+    if (!savedTemplateId || savedTemplateId === DEFAULT_TEMPLATE_ID) return;
+
+    // Check if current template is already the saved one
+    if (currentTemplateId === savedTemplateId) return;
+
+    // Try to load the saved template
+    let templateCode: string | undefined;
+
+    // Check shared templates
+    const sharedTemplate = sharedTemplates.find((t) => t.id === savedTemplateId);
+    if (sharedTemplate) {
+      templateCode = sharedTemplate.code;
+    }
+
+    // Check custom templates
+    if (!templateCode) {
+      const customTemplate = customTemplates.find((t) => t.id === savedTemplateId);
+      if (customTemplate) {
+        templateCode = customTemplate.code;
+      }
+    }
+
+    // Check built-in templates
+    if (!templateCode) {
+      const builtInTemplate = getTemplateById(savedTemplateId);
+      if (builtInTemplate) {
+        const messages = getMessages(language);
+        templateCode = getLocalizedTemplate(savedTemplateId, language, messages) || builtInTemplate.code;
+      }
+    }
+
+    // If template exists, switch to it
+    if (templateCode) {
+      setCurrentTemplateId(savedTemplateId);
+      setCode(templateCode);
+      originalCodeSnapshotRef.current = templateCode;
+    }
+  }, [customTemplates, sharedTemplates, savedTemplateId, language]); // Only run when templates or savedTemplateId changes
 
   // Update template code when language changes (for built-in templates only)
   useEffect(() => {
@@ -612,6 +660,9 @@ export default function WorkspacePage() {
     (templateId: string) => {
       // Don't do anything if switching to the same template
       if (templateId === currentTemplateId) return;
+
+      // Save the new template ID to localStorage
+      setSavedTemplateId(templateId);
 
       const dirty = isCodeDirty();
 
