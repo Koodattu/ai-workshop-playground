@@ -131,7 +131,7 @@
     "builtInSection": "Pohjat",
     "customSection": "Omat Luomukset",
     "sharedSection": "Jaetut Minulle",
-    "sharedCode": "Jaettu Koodi",
+    "sharedCode": "Jaettu",
     "customTemplateName": "Luomus #{number}",
     "deleteCustomTemplate": "Poista"
   },

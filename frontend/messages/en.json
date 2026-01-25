@@ -129,9 +129,9 @@
     "simple-welcome": "Welcome",
     "simple-tailwind": "Tailwind",
     "builtInSection": "Templates",
-    "customSection": "Own Creations",
+    "customSection": "My Creations",
     "sharedSection": "Shared With Me",
-    "sharedCode": "Shared Code",
+    "sharedCode": "Shared",
     "customTemplateName": "Creation #{number}",
     "deleteCustomTemplate": "Delete"
   },
