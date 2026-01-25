@@ -60,7 +60,7 @@ export function PasswordModal({ onAuthenticate, isValidating, error }: PasswordM
               </label>
               <div className="relative">
                 <input
-                  type="password"
+                  type="text"
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
