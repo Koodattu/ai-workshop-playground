@@ -170,8 +170,9 @@ export function EditorPanel({
             {isDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
-                <div className="absolute top-full right-0 mt-2 w-56 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-20 overflow-hidden">
-                  <div className="py-1">
+                {/* Mobile: Vertical dropdown with scrolling */}
+                <div className="md:hidden absolute top-full right-0 mt-2 w-56 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-20 overflow-hidden">
+                  <div className="py-1 max-h-[70vh] overflow-y-auto">
                     {/* Built-in Templates */}
                     <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2">
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -306,6 +307,150 @@ export function EditorPanel({
                         ))}
                       </>
                     )}
+                  </div>
+                </div>
+
+                {/* Desktop: Horizontal three-column layout */}
+                <div className="hidden md:block absolute top-full right-0 mt-2 bg-obsidian border border-steel/50 rounded-lg shadow-2xl z-100 overflow-hidden">
+                  <div className="flex divide-x divide-steel/30">
+                    {/* Column 1: Built-in Templates */}
+                    <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                      <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
+                          />
+                        </svg>
+                        <span>{t("templates.builtInSection")}</span>
+                      </div>
+                      {TEMPLATES.map((template: Template) => (
+                        <button
+                          key={template.id}
+                          onClick={() => handleTemplateSelect(template.id)}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                            currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                          }`}
+                        >
+                          {currentTemplateId === template.id && (
+                            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          <span>{t(template.nameKey)}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Column 2: Custom Templates */}
+                    <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                      <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                          />
+                        </svg>
+                        <span>{t("templates.customSection")}</span>
+                      </div>
+                      {customTemplates.length > 0 ? (
+                        customTemplates.map((template) => (
+                          <div key={template.id} className="flex items-center group">
+                            <button
+                              onClick={() => handleTemplateSelect(template.id)}
+                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                currentTemplateId === template.id ? "bg-ember/20 text-ember font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                              }`}
+                            >
+                              {currentTemplateId === template.id && (
+                                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              <span className="truncate">{template.name}</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemoveCustomTemplate(template.id);
+                              }}
+                              className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title={t("common.delete")}
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noCustomTemplates")}</div>
+                      )}
+                    </div>
+
+                    {/* Column 3: Shared Templates */}
+                    <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                      <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                          />
+                        </svg>
+                        <span>{t("templates.sharedSection")}</span>
+                      </div>
+                      {sharedTemplates.length > 0 ? (
+                        sharedTemplates.map((template) => (
+                          <div key={template.id} className="flex items-center group">
+                            <button
+                              onClick={() => handleTemplateSelect(template.id)}
+                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                              }`}
+                            >
+                              {currentTemplateId === template.id && (
+                                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              <span className="truncate">{template.projectName || template.title || template.shareId}</span>
+                            </button>
+                            {onRemoveSharedTemplate && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRemoveSharedTemplate(template.id);
+                                }}
+                                className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={t("common.delete")}
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noSharedTemplates")}</div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </>

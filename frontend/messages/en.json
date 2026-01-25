@@ -133,7 +133,9 @@
     "sharedSection": "Shared With Me",
     "sharedCode": "Shared",
     "customTemplateName": "Creation #{number}",
-    "deleteCustomTemplate": "Delete"
+    "deleteCustomTemplate": "Delete",
+    "noCustomTemplates": "No saved creations yet",
+    "noSharedTemplates": "No shared templates yet"
   },
   "templateContent": {
     "simpleWelcome": {

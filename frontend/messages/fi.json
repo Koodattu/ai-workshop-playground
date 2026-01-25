@@ -133,7 +133,9 @@
     "sharedSection": "Jaetut Minulle",
     "sharedCode": "Jaettu",
     "customTemplateName": "Luomus #{number}",
-    "deleteCustomTemplate": "Poista"
+    "deleteCustomTemplate": "Poista",
+    "noCustomTemplates": "Ei tallennettuja luomuksia vielä",
+    "noSharedTemplates": "Ei jaettuja pohjia vielä"
   },
   "templateContent": {
     "simpleWelcome": {
