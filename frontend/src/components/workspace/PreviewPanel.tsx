@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { ShareDialog } from "@/components/workspace/ShareDialog";
 import type { PreviewControl } from "@/types";
 
 interface PreviewPanelProps {
@@ -18,7 +17,7 @@ export function PreviewPanel({ code, onControlReady, onShare, isSharing = false 
   const [displayCode, setDisplayCode] = useState(code);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [key, setKey] = useState(0);
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(false);
   const { t } = useLanguage();
 
   // Expose control methods
@@ -62,13 +61,20 @@ export function PreviewPanel({ code, onControlReady, onShare, isSharing = false 
     setIsFullscreen((prev) => !prev);
   }, []);
 
-  const handleOpenShareDialog = useCallback(() => {
-    setIsShareDialogOpen(true);
-  }, []);
+  const handleShare = useCallback(async () => {
+    if (!onShare || isSharing) return;
 
-  const handleCloseShareDialog = useCallback(() => {
-    setIsShareDialogOpen(false);
-  }, []);
+    try {
+      const url = await onShare();
+      if (url) {
+        // Show success feedback
+        setShareSuccess(true);
+        setTimeout(() => setShareSuccess(false), 2000);
+      }
+    } catch (error) {
+      console.error("Failed to share:", error);
+    }
+  }, [onShare, isSharing]);
 
   const hasCode = displayCode.trim().length > 0;
 
@@ -174,19 +180,49 @@ export function PreviewPanel({ code, onControlReady, onShare, isSharing = false 
             {/* Share button */}
             {onShare && hasCode && (
               <button
-                onClick={handleOpenShareDialog}
-                className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-colors bg-electric/20 text-electric border border-electric/30 hover:bg-electric/30"
+                onClick={handleShare}
+                disabled={isSharing}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-colors ${
+                  shareSuccess
+                    ? "bg-success/20 text-success border border-success/30"
+                    : isSharing
+                      ? "bg-electric/10 text-electric/50 border border-electric/20 cursor-wait"
+                      : "bg-electric/20 text-electric border border-electric/30 hover:bg-electric/30"
+                }`}
                 title={t("preview.shareTitle")}
               >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                  />
-                </svg>
-                {t("preview.share")}
+                {shareSuccess ? (
+                  <>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {t("preview.shareCopied")}
+                  </>
+                ) : isSharing ? (
+                  <>
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    {t("preview.shareCreating")}
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                      />
+                    </svg>
+                    {t("preview.share")}
+                  </>
+                )}
               </button>
             )}
 
@@ -245,9 +281,6 @@ export function PreviewPanel({ code, onControlReady, onShare, isSharing = false 
 
       {/* Fullscreen overlay backdrop */}
       {isFullscreen && <div className="fixed inset-0 bg-black/50 z-40" onClick={handleToggleFullscreen} />}
-
-      {/* Share Dialog */}
-      {onShare && <ShareDialog isOpen={isShareDialogOpen} onClose={handleCloseShareDialog} onCreateShare={onShare} isSharing={isSharing} />}
     </>
   );
 }

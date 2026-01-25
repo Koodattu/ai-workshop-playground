@@ -195,7 +195,7 @@ export default function SharePage({ params }: SharePageProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={handleUseTemplate}
-            className="flex items-center gap-2 px-4 py-1.5 bg-electric hover:bg-electric/80 text-white text-sm font-medium rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-1.5 bg-electric/70 hover:bg-electric/90 text-white text-sm font-medium rounded-lg transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
