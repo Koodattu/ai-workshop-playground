@@ -293,29 +293,10 @@ const LoadingSkeleton = ({ rows = 3 }: { rows?: number }) => (
 
 interface OverviewTabProps {
   systemStats: SystemStats | null;
-  isLoading: boolean;
-  error: string | null;
   t: (key: string, params?: Record<string, unknown>) => string;
 }
 
-const OverviewTab = ({ systemStats, isLoading, error, t }: OverviewTabProps) => {
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 bg-graphite/50 rounded-xl animate-pulse" />
-          ))}
-        </div>
-        <LoadingSkeleton rows={2} />
-      </div>
-    );
-  }
-
-  if (error) {
-    return <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger font-mono text-sm">{error}</div>;
-  }
-
+const OverviewTab = ({ systemStats, t }: OverviewTabProps) => {
   if (!systemStats) {
     return <div className="text-center py-12 text-gray-400 font-body">{t("passwordManager.noUsageYet")}</div>;
   }
@@ -377,8 +358,6 @@ const OverviewTab = ({ systemStats, isLoading, error, t }: OverviewTabProps) => 
 interface PasswordsTabProps {
   passwords: PasswordEntry[];
   passwordStats: Map<string, PasswordDetailedStats>;
-  isLoading: boolean;
-  error: string | null;
   onCreatePassword: (e: React.FormEvent) => Promise<void>;
   onTogglePassword: (id: string, isActive: boolean) => Promise<void>;
   onDeletePassword: (id: string) => Promise<void>;
@@ -400,8 +379,6 @@ interface PasswordsTabProps {
 const PasswordsTab = ({
   passwords,
   passwordStats,
-  isLoading,
-  error,
   onCreatePassword,
   onTogglePassword,
   onDeletePassword,
@@ -419,15 +396,8 @@ const PasswordsTab = ({
   setExpandedPasswordId,
   t,
 }: PasswordsTabProps) => {
-  if (isLoading) {
-    return <LoadingSkeleton rows={4} />;
-  }
-
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Error display */}
-      {error && <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger font-mono text-sm animate-fade-in">{error}</div>}
-
       {/* Header with create button */}
       <div className="flex justify-between items-center">
         <h3 className="font-display text-lg font-semibold text-white">{t("passwordManager.title")}</h3>
@@ -613,23 +583,13 @@ const PasswordsTab = ({
 interface UsageTabProps {
   usage: UsageStats[];
   passwordStats: Map<string, PasswordDetailedStats>;
-  isLoading: boolean;
-  error: string | null;
   onViewDetails: (id: string) => Promise<void>;
   expandedUsageId: string | null;
   setExpandedUsageId: (id: string | null) => void;
   t: (key: string, params?: Record<string, unknown>) => string;
 }
 
-const UsageTab = ({ usage, passwordStats, isLoading, error, onViewDetails, expandedUsageId, setExpandedUsageId, t }: UsageTabProps) => {
-  if (isLoading) {
-    return <LoadingSkeleton rows={5} />;
-  }
-
-  if (error) {
-    return <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger font-mono text-sm">{error}</div>;
-  }
-
+const UsageTab = ({ usage, passwordStats, onViewDetails, expandedUsageId, setExpandedUsageId, t }: UsageTabProps) => {
   return (
     <div className="space-y-4 animate-fade-in">
       <h3 className="font-display text-lg font-semibold text-white">{t("passwordManager.usageStatsTitle")}</h3>
@@ -744,27 +704,17 @@ const UsageTab = ({ usage, passwordStats, isLoading, error, onViewDetails, expan
 
 interface ActivityTabProps {
   recentRequests: RequestLogEntry[];
-  isLoading: boolean;
-  error: string | null;
   period: ActivityPeriod;
   setPeriod: (period: ActivityPeriod) => void;
   t: (key: string, params?: Record<string, unknown>) => string;
 }
 
-const ActivityTab = ({ recentRequests, isLoading, error, period, setPeriod, t }: ActivityTabProps) => {
+const ActivityTab = ({ recentRequests, period, setPeriod, t }: ActivityTabProps) => {
   const periodLabels: Record<ActivityPeriod, string> = {
     "24h": "24 Hours",
     "7d": "7 Days",
     "30d": "30 Days",
   };
-
-  if (isLoading) {
-    return <LoadingSkeleton rows={6} />;
-  }
-
-  if (error) {
-    return <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger font-mono text-sm">{error}</div>;
-  }
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -870,17 +820,11 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [recentRequests, setRecentRequests] = useState<RequestLogEntry[]>([]);
   const [passwordStats, setPasswordStats] = useState<Map<string, PasswordDetailedStats>>(new Map());
 
-  // Loading states per section
-  const [isLoadingOverview, setIsLoadingOverview] = useState(true);
-  const [isLoadingPasswords, setIsLoadingPasswords] = useState(true);
-  const [isLoadingUsage, setIsLoadingUsage] = useState(true);
-  const [isLoadingActivity, setIsLoadingActivity] = useState(true);
+  // Single unified loading state for initial data load
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // Error states per section
-  const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [passwordsError, setPasswordsError] = useState<string | null>(null);
-  const [usageError, setUsageError] = useState<string | null>(null);
-  const [activityError, setActivityError] = useState<string | null>(null);
+  // Single error state (will show error message at top level if initial load fails)
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Create password form state
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -900,60 +844,35 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   // DATA FETCHING
   // ============================================================================
 
-  const fetchOverviewData = useCallback(async () => {
-    setIsLoadingOverview(true);
-    setOverviewError(null);
-    try {
-      const stats = await api.getSystemStats(adminSecret);
-      setSystemStats(stats);
-    } catch (err) {
-      setOverviewError(err instanceof Error ? err.message : t("api.dataFetchError"));
-    } finally {
-      setIsLoadingOverview(false);
-    }
-  }, [adminSecret, t]);
+  // Fetch all data in parallel on mount
+  const fetchAllData = useCallback(async () => {
+    setIsInitialLoading(true);
+    setLoadError(null);
 
-  const fetchPasswordsData = useCallback(async () => {
-    setIsLoadingPasswords(true);
-    setPasswordsError(null);
-    try {
-      const passwordsData = await api.getPasswords(adminSecret);
-      setPasswords(passwordsData);
-    } catch (err) {
-      setPasswordsError(err instanceof Error ? err.message : t("api.dataFetchError"));
-    } finally {
-      setIsLoadingPasswords(false);
-    }
-  }, [adminSecret, t]);
-
-  const fetchUsageData = useCallback(async () => {
-    setIsLoadingUsage(true);
-    setUsageError(null);
-    try {
-      const usageData = await api.getUsageStats(adminSecret);
-      setUsage(usageData);
-    } catch (err) {
-      setUsageError(err instanceof Error ? err.message : t("api.dataFetchError"));
-    } finally {
-      setIsLoadingUsage(false);
-    }
-  }, [adminSecret, t]);
-
-  const fetchActivityData = useCallback(async () => {
-    setIsLoadingActivity(true);
-    setActivityError(null);
     try {
       const limitMap: Record<ActivityPeriod, number> = {
         "24h": 50,
         "7d": 100,
         "30d": 200,
       };
-      const logs = await api.getRecentRequests(adminSecret, limitMap[activityPeriod]);
-      setRecentRequests(logs);
+
+      // Load everything in parallel
+      const [statsData, passwordsData, usageData, logsData] = await Promise.all([
+        api.getSystemStats(adminSecret),
+        api.getPasswords(adminSecret),
+        api.getUsageStats(adminSecret),
+        api.getRecentRequests(adminSecret, limitMap[activityPeriod]),
+      ]);
+
+      // Update all state at once
+      setSystemStats(statsData);
+      setPasswords(passwordsData);
+      setUsage(usageData);
+      setRecentRequests(logsData);
     } catch (err) {
-      setActivityError(err instanceof Error ? err.message : t("api.dataFetchError"));
+      setLoadError(err instanceof Error ? err.message : t("api.dataFetchError"));
     } finally {
-      setIsLoadingActivity(false);
+      setIsInitialLoading(false);
     }
   }, [adminSecret, activityPeriod, t]);
 
@@ -969,25 +888,17 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
     [adminSecret],
   );
 
-  // Initial data fetch based on active tab
+  // Initial data fetch on mount
   useEffect(() => {
-    if (activeTab === "overview") {
-      fetchOverviewData();
-    } else if (activeTab === "passwords") {
-      fetchPasswordsData();
-    } else if (activeTab === "usage") {
-      fetchUsageData();
-    } else if (activeTab === "activity") {
-      fetchActivityData();
-    }
-  }, [activeTab, fetchOverviewData, fetchPasswordsData, fetchUsageData, fetchActivityData]);
+    fetchAllData();
+  }, [fetchAllData]);
 
-  // Refetch activity when period changes
+  // Refetch when activity period changes
   useEffect(() => {
-    if (activeTab === "activity") {
-      fetchActivityData();
+    if (!isInitialLoading) {
+      fetchAllData();
     }
-  }, [activityPeriod, activeTab, fetchActivityData]);
+  }, [activityPeriod]);
 
   // ============================================================================
   // HANDLERS
@@ -1009,29 +920,26 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         setNewMaxUses(10);
         setNewExpiresAt("");
         setShowCreateForm(false);
-        await fetchPasswordsData();
-        // Refresh overview to update active passwords count
-        fetchOverviewData();
+        await fetchAllData();
       } catch (err) {
-        setPasswordsError(err instanceof Error ? err.message : t("api.passwordCreateError"));
+        setLoadError(err instanceof Error ? err.message : t("api.passwordCreateError"));
       } finally {
         setIsCreating(false);
       }
     },
-    [adminSecret, newCode, newExpiresAt, newMaxUses, t, fetchPasswordsData, fetchOverviewData],
+    [adminSecret, newCode, newExpiresAt, newMaxUses, t, fetchAllData],
   );
 
   const handleTogglePassword = useCallback(
     async (id: string, isActive: boolean) => {
       try {
         await api.togglePassword(adminSecret, id, !isActive);
-        await fetchPasswordsData();
-        fetchOverviewData();
+        await fetchAllData();
       } catch (err) {
-        setPasswordsError(err instanceof Error ? err.message : t("api.passwordToggleError"));
+        setLoadError(err instanceof Error ? err.message : t("api.passwordToggleError"));
       }
     },
-    [adminSecret, t, fetchPasswordsData, fetchOverviewData],
+    [adminSecret, t, fetchAllData],
   );
 
   const handleDeletePassword = useCallback(
@@ -1040,8 +948,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
       try {
         await api.deletePassword(adminSecret, id);
-        await fetchPasswordsData();
-        fetchOverviewData();
+        await fetchAllData();
         // Clean up cached stats
         setPasswordStats((prev) => {
           const newMap = new Map(prev);
@@ -1049,10 +956,10 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
           return newMap;
         });
       } catch (err) {
-        setPasswordsError(err instanceof Error ? err.message : t("api.passwordDeleteError"));
+        setLoadError(err instanceof Error ? err.message : t("api.passwordDeleteError"));
       }
     },
-    [adminSecret, t, fetchPasswordsData, fetchOverviewData],
+    [adminSecret, t, fetchAllData],
   );
 
   const handleViewPasswordDetails = useCallback(
@@ -1075,16 +982,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   );
 
   const handleRefresh = useCallback(() => {
-    if (activeTab === "overview") {
-      fetchOverviewData();
-    } else if (activeTab === "passwords") {
-      fetchPasswordsData();
-    } else if (activeTab === "usage") {
-      fetchUsageData();
-    } else if (activeTab === "activity") {
-      fetchActivityData();
-    }
-  }, [activeTab, fetchOverviewData, fetchPasswordsData, fetchUsageData, fetchActivityData]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // ============================================================================
   // TAB CONFIGURATION
@@ -1105,7 +1004,20 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   // ============================================================================
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Global loading overlay */}
+      {isInitialLoading && (
+        <div className="absolute inset-0 z-50 bg-void/80 backdrop-blur-sm flex items-center justify-center rounded-xl">
+          <div className="text-center">
+            <Spinner size="lg" />
+            <p className="mt-4 text-sm font-mono text-gray-400">{t("common.loading")}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Global error banner */}
+      {loadError && <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger font-mono text-sm animate-fade-in">{loadError}</div>}
+
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-carbon rounded-xl border border-steel/50 overflow-x-auto">
         {tabs.map((tab) => (
@@ -1126,14 +1038,12 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
       {/* Tab content */}
       <div className="min-h-100">
-        {activeTab === "overview" && <OverviewTab systemStats={systemStats} isLoading={isLoadingOverview} error={overviewError} t={t} />}
+        {activeTab === "overview" && <OverviewTab systemStats={systemStats} t={t} />}
 
         {activeTab === "passwords" && (
           <PasswordsTab
             passwords={passwords}
             passwordStats={passwordStats}
-            isLoading={isLoadingPasswords}
-            error={passwordsError}
             onCreatePassword={handleCreatePassword}
             onTogglePassword={handleTogglePassword}
             onDeletePassword={handleDeletePassword}
@@ -1157,8 +1067,6 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
           <UsageTab
             usage={usage}
             passwordStats={passwordStats}
-            isLoading={isLoadingUsage}
-            error={usageError}
             onViewDetails={handleViewUsageDetails}
             expandedUsageId={expandedUsageId}
             setExpandedUsageId={setExpandedUsageId}
@@ -1166,14 +1074,12 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
           />
         )}
 
-        {activeTab === "activity" && (
-          <ActivityTab recentRequests={recentRequests} isLoading={isLoadingActivity} error={activityError} period={activityPeriod} setPeriod={setActivityPeriod} t={t} />
-        )}
+        {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={setActivityPeriod} t={t} />}
       </div>
 
       {/* Refresh button */}
       <div className="flex justify-center pt-4 border-t border-steel/30">
-        <Button onClick={handleRefresh} variant="ghost" size="sm">
+        <Button onClick={handleRefresh} variant="ghost" size="sm" isLoading={isInitialLoading}>
           <RefreshIcon />
           {t("passwordManager.refreshData")}
         </Button>
