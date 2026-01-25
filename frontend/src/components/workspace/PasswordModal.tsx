@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -11,18 +11,38 @@ interface PasswordModalProps {
   isValidating: boolean;
   error?: string;
   initialPassword?: string;
+  onClose: () => void;
 }
 
-export function PasswordModal({ onAuthenticate, isValidating, error, initialPassword }: PasswordModalProps) {
+export function PasswordModal({ onAuthenticate, isValidating, error, initialPassword, onClose }: PasswordModalProps) {
   const [password, setPassword] = useState(initialPassword || "");
   const { t } = useLanguage();
+  const modalRef = useRef<HTMLDivElement>(null);
 
-  // Auto-submit if initialPassword is provided
+  // Update password field when initialPassword changes (e.g., from URL param)
   useEffect(() => {
-    if (initialPassword && initialPassword.trim() && !isValidating) {
-      //onAuthenticate(initialPassword.trim());
+    if (initialPassword) {
+      setPassword(initialPassword);
     }
-  }, [initialPassword, onAuthenticate, isValidating]);
+  }, [initialPassword]);
+
+  // Handle click outside modal to close
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+      onClose();
+    }
+  };
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isValidating) {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, isValidating]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -32,18 +52,30 @@ export function PasswordModal({ onAuthenticate, isValidating, error, initialPass
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop with noise texture */}
-      <div className="absolute inset-0 bg-void/95 backdrop-blur-sm">
-        <div className="absolute inset-0 opacity-[0.03] bg-noise mix-blend-overlay" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={handleBackdropClick}>
+      {/* Transparent blurry backdrop */}
+      <div className="absolute inset-0 bg-void/60 backdrop-blur-md">
+        <div className="absolute inset-0 opacity-[0.02] bg-noise mix-blend-overlay" />
       </div>
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 animate-slide-up">
+      <div ref={modalRef} className="relative w-full max-w-md mx-4 animate-slide-up">
         {/* Glow effect */}
         <div className="absolute -inset-px rounded-2xl bg-linear-to-b from-electric/20 to-transparent blur-sm" />
 
         <div className="relative bg-obsidian border border-steel/50 rounded-2xl p-8 shadow-2xl">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            disabled={isValidating}
+            className="absolute top-4 right-4 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-graphite transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={t("common.close")}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-electric/10 border border-electric/20 mb-4">

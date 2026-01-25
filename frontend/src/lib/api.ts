@@ -196,21 +196,27 @@ class ApiClient {
     }
   }
 
-  // Validate password
-  async validatePassword(password: string, visitorId: string): Promise<boolean> {
-    try {
-      await this.request("/api/validate", {
-        method: "POST",
-        body: JSON.stringify({
-          password,
-          visitorId,
-        }),
-      });
-      return true;
-    } catch (error) {
-      // Re-throw the error so the caller can handle specific error messages
-      throw error;
-    }
+  // Validate password - returns validation result with usage info
+  async validatePassword(password: string, visitorId: string): Promise<{ valid: boolean; remainingUses: number; maxUses: number; isRateLimited: boolean }> {
+    const { data } = await this.request<{
+      valid: boolean;
+      message: string;
+      remainingUses: number;
+      maxUses: number;
+      isRateLimited: boolean;
+    }>("/api/validate", {
+      method: "POST",
+      body: JSON.stringify({
+        password,
+        visitorId,
+      }),
+    });
+    return {
+      valid: data.valid,
+      remainingUses: data.remainingUses,
+      maxUses: data.maxUses,
+      isRateLimited: data.isRateLimited,
+    };
   }
 
   // Admin endpoints

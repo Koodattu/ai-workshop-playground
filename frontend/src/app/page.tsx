@@ -41,6 +41,7 @@ export default function WorkspacePage() {
   const [authError, setAuthError] = useState<string | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   // Custom templates management
   const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
@@ -150,13 +151,15 @@ export default function WorkspacePage() {
       setAuthError(undefined);
 
       try {
-        // Try to validate by making a simple request
-        // We'll consider it valid if the API doesn't reject the password
-        const isValid = await api.validatePassword(enteredPassword, visitorId);
+        // Validate password and get usage info
+        const result = await api.validatePassword(enteredPassword, visitorId);
 
-        if (isValid) {
+        if (result.valid) {
           setPassword(enteredPassword);
           setIsAuthenticated(true);
+          setIsPasswordModalOpen(false);
+          // Set remaining uses from validation response
+          setRemainingUses(result.remainingUses);
           showToast(t("workspace.welcomeBack"), "success");
         } else {
           // Clear invalid password from localStorage
@@ -439,9 +442,13 @@ export default function WorkspacePage() {
                 formattedErrorDetails = `${error}\n\nDetails:\n${details.map((d) => `• ${d}`).join("\n")}`;
               }
 
-              // Update remaining uses if provided
+              // Handle remaining uses based on error type
               if (remainingUsesOnError !== undefined) {
+                // Backend provided remaining uses explicitly
                 setRemainingUses(remainingUsesOnError);
+              } else if (errorCode === "RATE_LIMIT_EXCEEDED") {
+                // Rate limit exceeded means remaining uses is 0
+                setRemainingUses(0);
               }
 
               // Add error message to chat with translated message
@@ -632,16 +639,22 @@ export default function WorkspacePage() {
     showToast(t("chat.clearChat"), "success");
   }, [showToast, t]);
 
-  // Show password modal if not authenticated
-  if (!isAuthenticated) {
-    const urlPassword = searchParams.get("p");
-    return (
-      <>
-        <PasswordModal onAuthenticate={handleAuthenticate} isValidating={isValidating} error={authError} initialPassword={urlPassword || undefined} />
-        <ToastContainer />
-      </>
-    );
-  }
+  // Handle opening the password modal
+  const handleOpenPasswordModal = useCallback(() => {
+    setAuthError(undefined);
+    setIsPasswordModalOpen(true);
+  }, []);
+
+  // Handle closing the password modal
+  const handleClosePasswordModal = useCallback(() => {
+    if (!isValidating) {
+      setIsPasswordModalOpen(false);
+      setAuthError(undefined);
+    }
+  }, [isValidating]);
+
+  // Get URL password for prefilling
+  const urlPassword = searchParams.get("p");
 
   return (
     <>
@@ -661,35 +674,42 @@ export default function WorkspacePage() {
 
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
-            {/* Mobile: Icon-only logout button */}
-            <button
-              onClick={() => {
-                setIsAuthenticated(false);
-                setPassword("");
-                setChatHistory([]);
-                setContextMessages([]);
-              }}
-              className="md:hidden p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
-              title={t("common.logout")}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9" />
-                <polyline points="17 17 22 12 17 7" />
-                <line x1="10" y1="12" x2="22" y2="12" />
-              </svg>
-            </button>
-            {/* Desktop: Text logout button */}
-            <button
-              onClick={() => {
-                setIsAuthenticated(false);
-                setPassword("");
-                setChatHistory([]);
-                setContextMessages([]);
-              }}
-              className="hidden md:inline text-xs font-mono text-gray-400 hover:text-white transition-colors"
-            >
-              {t("common.logout")}
-            </button>
+            {/* Only show logout buttons when authenticated */}
+            {isAuthenticated && (
+              <>
+                {/* Mobile: Icon-only logout button */}
+                <button
+                  onClick={() => {
+                    setIsAuthenticated(false);
+                    setPassword("");
+                    setChatHistory([]);
+                    setContextMessages([]);
+                    setRemainingUses(undefined);
+                  }}
+                  className="md:hidden p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
+                  title={t("common.logout")}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9" />
+                    <polyline points="17 17 22 12 17 7" />
+                    <line x1="10" y1="12" x2="22" y2="12" />
+                  </svg>
+                </button>
+                {/* Desktop: Text logout button */}
+                <button
+                  onClick={() => {
+                    setIsAuthenticated(false);
+                    setPassword("");
+                    setChatHistory([]);
+                    setContextMessages([]);
+                    setRemainingUses(undefined);
+                  }}
+                  className="hidden md:inline text-xs font-mono text-gray-400 hover:text-white transition-colors"
+                >
+                  {t("common.logout")}
+                </button>
+              </>
+            )}
           </div>
         </header>
 
@@ -708,6 +728,8 @@ export default function WorkspacePage() {
                 onClearMessages={handleClearMessages}
                 autoSwitchEnabled={autoSwitchEnabled}
                 onAutoSwitchChange={setAutoSwitchEnabled}
+                isAuthenticated={isAuthenticated}
+                onUnlockClick={handleOpenPasswordModal}
               />
             </Panel>
 
@@ -757,6 +779,8 @@ export default function WorkspacePage() {
                 onClearMessages={handleClearMessages}
                 autoSwitchEnabled={autoSwitchEnabled}
                 onAutoSwitchChange={setAutoSwitchEnabled}
+                isAuthenticated={isAuthenticated}
+                onUnlockClick={handleOpenPasswordModal}
               />
             )}
             {mobileActivePanel === "editor" && (
@@ -832,6 +856,17 @@ export default function WorkspacePage() {
           </nav>
         </div>
       </div>
+
+      {/* Password Modal - Overlay on top of main content */}
+      {isPasswordModalOpen && (
+        <PasswordModal
+          onAuthenticate={handleAuthenticate}
+          isValidating={isValidating}
+          error={authError}
+          initialPassword={urlPassword || undefined}
+          onClose={handleClosePasswordModal}
+        />
+      )}
 
       <ToastContainer />
     </>

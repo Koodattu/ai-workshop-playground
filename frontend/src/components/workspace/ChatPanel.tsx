@@ -16,6 +16,8 @@ interface ChatPanelProps {
   onClearMessages?: () => void;
   autoSwitchEnabled?: boolean;
   onAutoSwitchChange?: (enabled: boolean) => void;
+  isAuthenticated: boolean;
+  onUnlockClick: () => void;
 }
 
 export function ChatPanel({
@@ -28,6 +30,8 @@ export function ChatPanel({
   onClearMessages,
   autoSwitchEnabled = true,
   onAutoSwitchChange,
+  isAuthenticated,
+  onUnlockClick,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -192,78 +196,139 @@ export function ChatPanel({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
+      {/* Input Area - Conditional based on authentication and rate limit */}
       <div className="p-4 border-t border-steel/50">
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="relative">
-            <textarea
-              ref={textareaRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={remainingUses === 0 ? t("chat.noUsesLeft") : t("chat.sendPlaceholder")}
-              rows={1}
-              disabled={remainingUses === 0 || isLoading}
-              className="
-                w-full px-4 py-3 pr-12
-                bg-carbon border border-steel rounded-xl
-                font-body text-sm text-white placeholder-gray-500
-                focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
-                resize-none transition-all duration-200
-                scrollbar-thin
-                disabled:opacity-50 disabled:cursor-not-allowed
-              "
-            />
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            {/* Desktop: Show shift+enter hint */}
-            <span className="hidden md:block text-[10px] font-mono text-gray-500 uppercase">{t("chat.shiftEnterHint")}</span>
-
-            {/* Mobile: Show auto-switch checkbox */}
-            {onAutoSwitchChange && (
-              <label className="md:hidden flex items-center gap-2 cursor-pointer group">
-                <div className="relative flex items-center justify-center">
-                  <input
-                    type="checkbox"
-                    checked={autoSwitchEnabled}
-                    onChange={(e) => onAutoSwitchChange(e.target.checked)}
-                    className="
-                      peer w-4 h-4 appearance-none rounded
-                      border-2 border-steel/50 bg-carbon
-                      checked:border-electric checked:bg-electric/20
-                      hover:border-electric/50
-                      focus:outline-none focus:ring-2 focus:ring-electric/30
-                      transition-all duration-200 cursor-pointer
-                    "
+        {!isAuthenticated ? (
+          /* Locked state - Not authenticated */
+          <div className="flex flex-col items-center justify-center py-4 space-y-4">
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 rounded-xl bg-electric/10 border border-electric/20 flex items-center justify-center mb-2">
+                <svg className="w-6 h-6 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                   />
-                  <svg
-                    className="
-                      absolute w-3 h-3 text-electric pointer-events-none
-                      opacity-0 scale-50
-                      peer-checked:opacity-100 peer-checked:scale-100
-                      transition-all duration-200
-                    "
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={3}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="text-[10px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
-              </label>
-            )}
-
-            <Button type="submit" size="md" disabled={!prompt.trim() || isLoading || remainingUses === 0} isLoading={isLoading}>
+                </svg>
+              </div>
+              <h3 className="font-display text-base font-semibold text-white">{t("chat.unlockTitle")}</h3>
+              <p className="text-xs text-gray-400 font-body max-w-xs">{t("chat.unlockDescription")}</p>
+            </div>
+            <Button onClick={onUnlockClick} size="lg" className="w-full max-w-xs">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
               </svg>
-              {t("chat.generateButton")}
+              {t("chat.unlockButton")}
             </Button>
           </div>
-        </form>
+        ) : remainingUses === 0 ? (
+          /* Rate limited state - Show button to enter new password */
+          <div className="flex flex-col items-center justify-center py-4 space-y-4">
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-12 h-12 rounded-xl bg-ember/10 border border-ember/20 flex items-center justify-center mb-2">
+                <svg className="w-6 h-6 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h3 className="font-display text-base font-semibold text-white">{t("chat.rateLimitTitle")}</h3>
+              <p className="text-xs text-gray-400 font-body max-w-xs">{t("chat.rateLimitDescription")}</p>
+            </div>
+            <Button onClick={onUnlockClick} size="lg" className="w-full max-w-xs" variant="secondary">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+              {t("chat.rateLimitButton")}
+            </Button>
+          </div>
+        ) : (
+          /* Normal authenticated state - Show input form */
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={t("chat.sendPlaceholder")}
+                rows={1}
+                disabled={isLoading}
+                className="
+                  w-full px-4 py-3 pr-12
+                  bg-carbon border border-steel rounded-xl
+                  font-body text-sm text-white placeholder-gray-500
+                  focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
+                  resize-none transition-all duration-200
+                  scrollbar-thin
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                "
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              {/* Desktop: Show shift+enter hint */}
+              <span className="hidden md:block text-[10px] font-mono text-gray-500 uppercase">{t("chat.shiftEnterHint")}</span>
+
+              {/* Mobile: Show auto-switch checkbox */}
+              {onAutoSwitchChange && (
+                <label className="md:hidden flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={autoSwitchEnabled}
+                      onChange={(e) => onAutoSwitchChange(e.target.checked)}
+                      className="
+                        peer w-4 h-4 appearance-none rounded
+                        border-2 border-steel/50 bg-carbon
+                        checked:border-electric checked:bg-electric/20
+                        hover:border-electric/50
+                        focus:outline-none focus:ring-2 focus:ring-electric/30
+                        transition-all duration-200 cursor-pointer
+                      "
+                    />
+                    <svg
+                      className="
+                        absolute w-3 h-3 text-electric pointer-events-none
+                        opacity-0 scale-50
+                        peer-checked:opacity-100 peer-checked:scale-100
+                        transition-all duration-200
+                      "
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={3}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
+                </label>
+              )}
+
+              <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                {t("chat.generateButton")}
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
