@@ -386,20 +386,20 @@ export function EditorPanel({
                       </div>
 
                       {/* Column 2: Custom Templates */}
-                      <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
-                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                            />
-                          </svg>
-                          <span>{t("templates.customSection")}</span>
-                        </div>
-                        {customTemplates.length > 0 ? (
-                          customTemplates.map((template) => (
+                      {customTemplates.length > 0 && (
+                        <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                          <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                              />
+                            </svg>
+                            <span>{t("templates.customSection")}</span>
+                          </div>
+                          {customTemplates.map((template) => (
                             <div key={template.id} className="flex items-center group">
                               <button
                                 onClick={() => handleTemplateSelect(template.id)}
@@ -432,27 +432,25 @@ export function EditorPanel({
                                 </svg>
                               </button>
                             </div>
-                          ))
-                        ) : (
-                          <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noCustomTemplates")}</div>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Column 3: Shared Templates */}
-                      <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
-                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                            />
-                          </svg>
-                          <span>{t("templates.sharedSection")}</span>
-                        </div>
-                        {sharedTemplates.length > 0 ? (
-                          sharedTemplates.map((template) => (
+                      {sharedTemplates.length > 0 && (
+                        <div className="w-40 py-1 max-h-[70vh] overflow-y-auto">
+                          <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-obsidian">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                              />
+                            </svg>
+                            <span>{t("templates.sharedSection")}</span>
+                          </div>
+                          {sharedTemplates.map((template) => (
                             <div key={template.id} className="flex items-center group">
                               <button
                                 onClick={() => handleTemplateSelect(template.id)}
@@ -487,11 +485,9 @@ export function EditorPanel({
                                 </button>
                               )}
                             </div>
-                          ))
-                        ) : (
-                          <div className="px-4 py-6 text-sm text-gray-500 text-center italic">{t("templates.noSharedTemplates")}</div>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>,
