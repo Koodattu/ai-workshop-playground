@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
@@ -97,6 +97,7 @@ export default function WorkspacePage() {
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Check if code is dirty (different from original snapshot)
   const isCodeDirty = useCallback(() => {
@@ -273,6 +274,21 @@ export default function WorkspacePage() {
       handleAuthenticate(password);
     }
   }, [password, visitorId, isAuthenticated, handleAuthenticate]);
+
+  // Open password modal automatically if ?p= parameter is present in URL
+  useEffect(() => {
+    const urlPassword = searchParams.get("p");
+    if (urlPassword) {
+      // Open the password modal with prefilled password
+      setIsPasswordModalOpen(true);
+
+      // Remove the ?p= parameter from the URL
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("p");
+      const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
+      router.replace(newUrl);
+    }
+  }, [searchParams, router]);
 
   // Check for pending shared template from share link
   useEffect(() => {
