@@ -544,7 +544,7 @@ const PasswordsTab = ({
                 {isExpanded && stats && (
                   <div className="border-t border-steel/30 p-4 bg-graphite/30 animate-slide-up">
                     <h5 className="text-xs font-mono text-gray-400 uppercase tracking-wider mb-3">{t("passwordManager.usersForPassword", { password: password.code })}</h5>
-                    {stats.users.length === 0 ? (
+                    {!stats.users || stats.users.length === 0 ? (
                       <p className="text-sm text-gray-500 font-body">{t("passwordManager.noUsers")}</p>
                     ) : (
                       <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">

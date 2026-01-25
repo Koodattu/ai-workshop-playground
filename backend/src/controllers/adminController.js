@@ -295,16 +295,16 @@ const getSystemStats = asyncHandler(async (req, res) => {
  * Get detailed stats for a specific password
  */
 const getPasswordDetailedStats = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { passwordId } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!mongoose.Types.ObjectId.isValid(passwordId)) {
     throw new AppError("Invalid password ID", 400);
   }
 
-  const passwordId = new mongoose.Types.ObjectId(id);
+  const passwordIdObj = new mongoose.Types.ObjectId(passwordId);
 
   // Get password info
-  const password = await Password.findById(passwordId).lean();
+  const password = await Password.findById(passwordIdObj).lean();
 
   if (!password) {
     throw new AppError("Password not found", 404);
@@ -312,7 +312,7 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
 
   // Get aggregated stats for this password
   const requestStats = await RequestLog.aggregate([
-    { $match: { passwordId } },
+    { $match: { passwordId: passwordIdObj } },
     {
       $group: {
         _id: null,
@@ -327,7 +327,7 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
   ]);
 
   // Get unique visitors with their individual stats
-  const visitorStats = await Usage.find({ passwordId }).select("visitorId useCount totalTokens estimatedCost updatedAt").sort({ totalTokens: -1 }).lean();
+  const visitorStats = await Usage.find({ passwordId: passwordIdObj }).select("visitorId useCount totalTokens estimatedCost updatedAt").sort({ totalTokens: -1 }).lean();
 
   const stats = requestStats[0] || {
     totalRequests: 0,
@@ -357,7 +357,7 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
       },
       estimatedCost: Math.round(stats.totalEstimatedCost * 1000000) / 1000000,
     },
-    visitors: visitorStats.map((v) => ({
+    users: visitorStats.map((v) => ({
       visitorId: v.visitorId,
       requestCount: v.useCount,
       totalTokens: v.totalTokens,
@@ -372,18 +372,18 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
  * Get paginated list of users for a specific password
  */
 const getUsersForPassword = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { passwordId } = req.params;
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 20;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!mongoose.Types.ObjectId.isValid(passwordId)) {
     throw new AppError("Invalid password ID", 400);
   }
 
-  const passwordId = new mongoose.Types.ObjectId(id);
+  const passwordIdObj = new mongoose.Types.ObjectId(passwordId);
 
   // Verify password exists
-  const password = await Password.findById(passwordId).select("code").lean();
+  const password = await Password.findById(passwordIdObj).select("code").lean();
 
   if (!password) {
     throw new AppError("Password not found", 404);
@@ -392,10 +392,10 @@ const getUsersForPassword = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   // Get total count for pagination
-  const totalUsers = await Usage.countDocuments({ passwordId });
+  const totalUsers = await Usage.countDocuments({ passwordId: passwordIdObj });
 
   // Get paginated users
-  const users = await Usage.find({ passwordId })
+  const users = await Usage.find({ passwordId: passwordIdObj })
     .select("visitorId useCount totalPromptTokens totalCandidatesTokens totalThoughtsTokens totalTokens estimatedCost createdAt updatedAt")
     .sort({ totalTokens: -1 })
     .skip(skip)
