@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
@@ -79,6 +80,7 @@ export default function WorkspacePage() {
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t, language } = useLanguage();
+  const searchParams = useSearchParams();
 
   // Check if code is dirty (different from original snapshot)
   const isCodeDirty = useCallback(() => {
@@ -591,9 +593,10 @@ export default function WorkspacePage() {
 
   // Show password modal if not authenticated
   if (!isAuthenticated) {
+    const urlPassword = searchParams.get("p");
     return (
       <>
-        <PasswordModal onAuthenticate={handleAuthenticate} isValidating={isValidating} error={authError} />
+        <PasswordModal onAuthenticate={handleAuthenticate} isValidating={isValidating} error={authError} initialPassword={urlPassword || undefined} />
         <ToastContainer />
       </>
     );

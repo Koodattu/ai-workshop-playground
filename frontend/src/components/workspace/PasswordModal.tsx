@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -10,11 +10,19 @@ interface PasswordModalProps {
   onAuthenticate: (password: string) => void;
   isValidating: boolean;
   error?: string;
+  initialPassword?: string;
 }
 
-export function PasswordModal({ onAuthenticate, isValidating, error }: PasswordModalProps) {
-  const [password, setPassword] = useState("");
+export function PasswordModal({ onAuthenticate, isValidating, error, initialPassword }: PasswordModalProps) {
+  const [password, setPassword] = useState(initialPassword || "");
   const { t } = useLanguage();
+
+  // Auto-submit if initialPassword is provided
+  useEffect(() => {
+    if (initialPassword && initialPassword.trim() && !isValidating) {
+      //onAuthenticate(initialPassword.trim());
+    }
+  }, [initialPassword, onAuthenticate, isValidating]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
