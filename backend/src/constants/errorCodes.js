@@ -41,6 +41,9 @@ const ERROR_CODES = {
 
   // Service Unavailable (503)
   API_QUOTA_EXCEEDED: "API_QUOTA_EXCEEDED",
+
+  // Share Errors (404)
+  SHARE_NOT_FOUND: "SHARE_NOT_FOUND",
 };
 
 /**

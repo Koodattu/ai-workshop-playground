@@ -129,6 +129,8 @@
     "simple-tailwind": "Tailwind",
     "builtInSection": "Templates",
     "customSection": "My Creations",
+    "sharedSection": "Shared With Me",
+    "sharedCode": "Shared Code",
     "customTemplateName": "Creation #{number}",
     "deleteCustomTemplate": "Delete"
   },
@@ -217,7 +219,20 @@
     "exitFullscreenTitle": "Exit Fullscreen",
     "openNewTab": "Open in New Tab",
     "emptyTitle": "No Preview",
-    "emptyDescription": "Generate or write code to see it rendered here"
+    "emptyDescription": "Generate or write code to see it rendered here",
+    "share": "Share",
+    "shareTitle": "Share this code",
+    "shareCopied": "Copied!",
+    "shareCreating": "Creating share link..."
+  },
+  "share": {
+    "loading": "Loading shared code...",
+    "notFound": "This share link was not found or has been removed.",
+    "invalidLink": "Invalid share link format.",
+    "loadError": "Failed to load shared code. Please try again.",
+    "errorTitle": "Share Link Error",
+    "goHome": "Go to Playground",
+    "createError": "Failed to create share link. Please try again."
   },
   "admin": {
     "title": "Admin Access",

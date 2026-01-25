@@ -129,6 +129,8 @@
     "simple-tailwind": "Tailwind",
     "builtInSection": "Pohjat",
     "customSection": "Omat Luomukset",
+    "sharedSection": "Jaetut Minulle",
+    "sharedCode": "Jaettu Koodi",
     "customTemplateName": "Luomus #{number}",
     "deleteCustomTemplate": "Poista"
   },
@@ -217,7 +219,20 @@
     "exitFullscreenTitle": "Poistu koko näytöstä",
     "openNewTab": "Avaa uudessa välilehdessä",
     "emptyTitle": "Ei esikatselua",
-    "emptyDescription": "Luo tai kirjoita koodi nähdäksesi sen tässä"
+    "emptyDescription": "Luo tai kirjoita koodi nähdäksesi sen tässä",
+    "share": "Jaa",
+    "shareTitle": "Jaa tämä koodi",
+    "shareCopied": "Kopioitu!",
+    "shareCreating": "Luodaan jakamislinkkiä..."
+  },
+  "share": {
+    "loading": "Ladataan jaettua koodia...",
+    "notFound": "Tätä jakamislinkkiä ei löytynyt tai se on poistettu.",
+    "invalidLink": "Virheellinen jakamislinkin muoto.",
+    "loadError": "Jaetun koodin lataaminen epäonnistui. Yritä uudelleen.",
+    "errorTitle": "Jakamislinkin Virhe",
+    "goHome": "Siirry Leikkikenttään",
+    "createError": "Jakamislinkin luominen epäonnistui. Yritä uudelleen."
   },
   "admin": {
     "title": "Admin-paneeli",

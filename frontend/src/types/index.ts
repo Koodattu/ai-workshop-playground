@@ -249,3 +249,32 @@ export interface TimeSeriesResponse {
   endDate: string;
   dataPoints: TimeSeriesDataPoint[];
 }
+
+// Shared template interface for templates loaded from share links
+export interface SharedTemplate {
+  id: string; // local id (shared-{timestamp})
+  shareId: string; // the 4-letter share code from the server
+  code: string;
+  title: string | null;
+  loadedAt: number; // timestamp when loaded
+}
+
+// Configuration for shared template management
+export const SHARED_TEMPLATE_CONFIG = {
+  MAX_TEMPLATES: 10,
+  ID_PREFIX: "shared-",
+  STORAGE_KEY: "shared-templates",
+} as const;
+
+// Share API response types
+export interface CreateShareResponse {
+  shareId: string;
+  createdAt: string;
+}
+
+export interface GetShareResponse {
+  shareId: string;
+  code: string;
+  title: string | null;
+  createdAt: string;
+}

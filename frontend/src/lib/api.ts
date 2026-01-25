@@ -11,6 +11,8 @@ import type {
   PaginatedUsersResponse,
   RequestLogEntry,
   TimeSeriesResponse,
+  CreateShareResponse,
+  GetShareResponse,
 } from "@/types";
 
 class ApiClient {
@@ -354,6 +356,21 @@ class ApiClient {
         "X-Admin-Secret": adminSecret,
       },
     });
+    return data;
+  }
+
+  // Create a share link
+  async createShareLink(code: string, title?: string): Promise<CreateShareResponse> {
+    const { data } = await this.request<CreateShareResponse>("/api/share", {
+      method: "POST",
+      body: JSON.stringify({ code, title }),
+    });
+    return data;
+  }
+
+  // Get shared code by share ID
+  async getSharedCode(shareId: string): Promise<GetShareResponse> {
+    const { data } = await this.request<GetShareResponse>(`/api/share/${shareId}`);
     return data;
   }
 }

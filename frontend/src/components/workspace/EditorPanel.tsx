@@ -6,7 +6,7 @@ import type { editor } from "monaco-editor";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TEMPLATES, type Template } from "@/lib/templates";
-import type { CustomTemplate } from "@/types";
+import type { CustomTemplate, SharedTemplate } from "@/types";
 
 interface EditorPanelProps {
   code: string;
@@ -15,6 +15,8 @@ interface EditorPanelProps {
   onTemplateChange: (templateId: string) => void;
   customTemplates: CustomTemplate[];
   onRemoveCustomTemplate: (id: string) => void;
+  sharedTemplates?: SharedTemplate[];
+  onRemoveSharedTemplate?: (id: string) => void;
   onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
   isStreaming?: boolean;
 }
@@ -26,6 +28,8 @@ export function EditorPanel({
   onTemplateChange,
   customTemplates,
   onRemoveCustomTemplate,
+  sharedTemplates = [],
+  onRemoveSharedTemplate,
   onEditorReady,
   isStreaming = false,
 }: EditorPanelProps) {
@@ -114,13 +118,18 @@ export function EditorPanel({
     if (customTemplate) {
       return customTemplate.name;
     }
+    // Check if it's a shared template
+    const sharedTemplate = sharedTemplates.find((t) => t.id === currentTemplateId);
+    if (sharedTemplate) {
+      return sharedTemplate.title || `${t("templates.sharedCode")} (${sharedTemplate.shareId})`;
+    }
     // Check if it's a built-in template
     const builtInTemplate = TEMPLATES.find((t) => t.id === currentTemplateId);
     if (builtInTemplate) {
       return t(builtInTemplate.nameKey);
     }
     return t("templates.customCode");
-  }, [currentTemplateId, customTemplates, t]);
+  }, [currentTemplateId, customTemplates, sharedTemplates, t]);
 
   return (
     <div className="flex flex-col h-full bg-void">
@@ -216,6 +225,58 @@ export function EditorPanel({
                                 />
                               </svg>
                             </button>
+                          </div>
+                        ))}
+                      </>
+                    )}
+
+                    {/* Shared Templates (from share links) */}
+                    {sharedTemplates.length > 0 && (
+                      <>
+                        <div className="my-1 border-t border-steel/30" />
+                        <div className="px-4 py-1.5 text-xs font-mono text-gray-500 uppercase tracking-wider">{t("templates.sharedSection")}</div>
+                        {sharedTemplates.map((template) => (
+                          <div key={template.id} className="flex items-center group">
+                            <button
+                              onClick={() => handleTemplateSelect(template.id)}
+                              className={`flex-1 text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                                currentTemplateId === template.id ? "bg-electric/20 text-electric font-medium" : "text-gray-300 hover:bg-graphite hover:text-white"
+                              }`}
+                            >
+                              {currentTemplateId === template.id && (
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              <svg className="w-3 h-3 text-electric/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                                />
+                              </svg>
+                              <span className="truncate">{template.title || template.shareId}</span>
+                            </button>
+                            {onRemoveSharedTemplate && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRemoveSharedTemplate(template.id);
+                                }}
+                                className="px-2 py-2.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={t("common.delete")}
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         ))}
                       </>

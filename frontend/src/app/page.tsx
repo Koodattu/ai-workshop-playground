@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useCustomTemplates } from "@/hooks/useCustomTemplates";
+import { useSharedTemplates } from "@/hooks/useSharedTemplates";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
@@ -46,6 +47,9 @@ export default function WorkspacePage() {
   // Custom templates management
   const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
 
+  // Shared templates management
+  const { templates: sharedTemplates, addSharedTemplate, removeTemplate: removeSharedTemplate, isSharedTemplateId, getTemplate: getSharedTemplate } = useSharedTemplates();
+
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
 
@@ -62,6 +66,9 @@ export default function WorkspacePage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingCode, setStreamingCode] = useState<string>("");
+
+  // Sharing state
+  const [isSharing, setIsSharing] = useState(false);
   const abortStreamRef = useRef<(() => void) | null>(null);
 
   // Preview control ref
@@ -202,6 +209,29 @@ export default function WorkspacePage() {
       handleAuthenticate(password);
     }
   }, [password, visitorId, isAuthenticated, handleAuthenticate]);
+
+  // Check for pending shared template from share link
+  useEffect(() => {
+    const pendingShareStr = sessionStorage.getItem("pending-shared-template");
+    if (pendingShareStr) {
+      try {
+        const pendingShare = JSON.parse(pendingShareStr);
+        sessionStorage.removeItem("pending-shared-template");
+
+        // Add to shared templates and switch to it
+        const newTemplate = addSharedTemplate(pendingShare.shareId, pendingShare.code, pendingShare.title);
+
+        // Switch to the shared template
+        setCurrentTemplateId(newTemplate.id);
+        setCode(pendingShare.code);
+        originalCodeSnapshotRef.current = pendingShare.code;
+
+        showToast(t("workspace.welcomeBack"), "success");
+      } catch (e) {
+        console.error("Failed to load pending shared template:", e);
+      }
+    }
+  }, [addSharedTemplate, showToast, t]);
 
   const handleSendMessage = useCallback(
     async (prompt: string) => {
@@ -579,6 +609,19 @@ export default function WorkspacePage() {
       }
 
       // Load the new template's code
+      // Check if it's a shared template
+      const sharedTemplate = getSharedTemplate(templateId);
+      if (sharedTemplate) {
+        setCode(sharedTemplate.code);
+        originalCodeSnapshotRef.current = sharedTemplate.code;
+        setCurrentTemplateId(templateId);
+        // Clear context messages when switching templates
+        setContextMessages([]);
+        // Force instant preview update with the new code
+        previewControlRef.current?.forceRefresh(sharedTemplate.code);
+        return;
+      }
+
       if (isCustomTemplateId(templateId)) {
         // Switch to a custom template
         const customTemplate = customTemplates.find((t) => t.id === templateId);
@@ -609,7 +652,7 @@ export default function WorkspacePage() {
         }
       }
     },
-    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates],
+    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates, getSharedTemplate],
   );
 
   const handleRemoveCustomTemplate = useCallback(
@@ -638,6 +681,27 @@ export default function WorkspacePage() {
     setContextMessages([]);
     showToast(t("chat.clearChat"), "success");
   }, [showToast, t]);
+
+  const handleShare = useCallback(async (): Promise<string | null> => {
+    if (!code.trim()) return null;
+
+    setIsSharing(true);
+    try {
+      const response = await api.createShareLink(code);
+      const shareUrl = `${window.location.origin}/share/${response.shareId}`;
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareUrl);
+
+      return shareUrl;
+    } catch (error) {
+      console.error("Failed to create share link:", error);
+      showToast(t("share.createError"), "error");
+      return null;
+    } finally {
+      setIsSharing(false);
+    }
+  }, [code, showToast, t]);
 
   // Handle opening the password modal
   const handleOpenPasswordModal = useCallback(() => {
@@ -744,6 +808,8 @@ export default function WorkspacePage() {
                 onTemplateChange={handleTemplateChange}
                 customTemplates={customTemplates}
                 onRemoveCustomTemplate={handleRemoveCustomTemplate}
+                sharedTemplates={sharedTemplates}
+                onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
@@ -760,6 +826,8 @@ export default function WorkspacePage() {
                 onControlReady={(control) => {
                   previewControlRef.current = control;
                 }}
+                onShare={handleShare}
+                isSharing={isSharing}
               />
             </Panel>
           </Group>
@@ -792,6 +860,8 @@ export default function WorkspacePage() {
                 onTemplateChange={handleTemplateChange}
                 customTemplates={customTemplates}
                 onRemoveCustomTemplate={handleRemoveCustomTemplate}
+                sharedTemplates={sharedTemplates}
+                onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
@@ -804,6 +874,8 @@ export default function WorkspacePage() {
                 onControlReady={(control) => {
                   previewControlRef.current = control;
                 }}
+                onShare={handleShare}
+                isSharing={isSharing}
               />
             )}
           </div>

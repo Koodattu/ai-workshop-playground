@@ -19,5 +19,6 @@ router.get("/health", (req, res) => {
 router.use("/validate", require("./validate"));
 router.use("/generate", require("./generate"));
 router.use("/admin", require("./admin"));
+router.use("/share", require("./share"));
 
 module.exports = router;
