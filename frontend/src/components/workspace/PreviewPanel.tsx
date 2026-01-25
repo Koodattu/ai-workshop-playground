@@ -57,6 +57,61 @@ export function PreviewPanel({ code, onControlReady }: PreviewPanelProps) {
 
   const hasCode = displayCode.trim().length > 0;
 
+  // Inject script to handle external links and hash navigation
+  const injectLinkHandler = (html: string) => {
+    const script = `
+      <script>
+        (function() {
+          // Wait for DOM to be ready
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initLinkHandler);
+          } else {
+            initLinkHandler();
+          }
+
+          function initLinkHandler() {
+            // Intercept all clicks on links
+            document.addEventListener('click', function(e) {
+              const target = e.target.closest('a');
+              if (!target || !target.href) return;
+
+              const href = target.getAttribute('href');
+
+              // Handle hash navigation manually (same page anchors)
+              if (href && href.startsWith('#')) {
+                e.preventDefault();
+                const targetId = href.substring(1);
+                const targetElement = document.getElementById(targetId);
+                if (targetElement) {
+                  targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                return;
+              }
+
+              // For external links or any absolute URLs, open in new tab
+              if (href && (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//'))) {
+                e.preventDefault();
+                window.open(target.href, '_blank', 'noopener,noreferrer');
+                return;
+              }
+            }, true);
+          }
+        })();
+      </script>
+    `;
+
+    // Inject before closing body tag, or at the end if no body tag
+    if (html.includes("</body>")) {
+      return html.replace("</body>", script + "</body>");
+    } else if (html.includes("</html>")) {
+      return html.replace("</html>", script + "</html>");
+    } else {
+      return html + script;
+    }
+  };
+
+  const processedCode = hasCode ? injectLinkHandler(displayCode) : "";
+
   return (
     <>
       <div className={`flex flex-col h-full bg-white ${isFullscreen ? "fixed inset-0 z-50" : ""}`}>
@@ -128,7 +183,13 @@ export function PreviewPanel({ code, onControlReady }: PreviewPanelProps) {
         {/* Preview Area */}
         <div className="flex-1 overflow-hidden bg-white">
           {hasCode ? (
-            <iframe key={key} srcDoc={displayCode} sandbox="allow-scripts" className="w-full h-full border-0" title="Preview" />
+            <iframe
+              key={key}
+              srcDoc={processedCode}
+              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              className="w-full h-full border-0"
+              title="Preview"
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-full bg-obsidian">
               <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-graphite to-carbon flex items-center justify-center mb-4 border border-steel/30">
