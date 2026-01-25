@@ -16,9 +16,19 @@ interface EditorPanelProps {
   customTemplates: CustomTemplate[];
   onRemoveCustomTemplate: (id: string) => void;
   onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
+  isStreaming?: boolean;
 }
 
-export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChange, customTemplates, onRemoveCustomTemplate, onEditorReady }: EditorPanelProps) {
+export function EditorPanel({
+  code,
+  onChange,
+  currentTemplateId,
+  onTemplateChange,
+  customTemplates,
+  onRemoveCustomTemplate,
+  onEditorReady,
+  isStreaming = false,
+}: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
@@ -375,6 +385,7 @@ export function EditorPanel({ code, onChange, currentTemplateId, onTemplateChang
             automaticLayout: true,
             tabSize: 2,
             wordWrap: "on",
+            readOnly: isStreaming,
           }}
         />
       </div>

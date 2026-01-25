@@ -721,7 +721,7 @@ export default function WorkspacePage() {
               <ChatPanel
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
-                isLoading={isGenerating}
+                isLoading={isStreaming}
                 remainingUses={remainingUses}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
@@ -744,6 +744,7 @@ export default function WorkspacePage() {
                 onTemplateChange={handleTemplateChange}
                 customTemplates={customTemplates}
                 onRemoveCustomTemplate={handleRemoveCustomTemplate}
+                isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                 }}
@@ -772,7 +773,7 @@ export default function WorkspacePage() {
               <ChatPanel
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
-                isLoading={isGenerating}
+                isLoading={isStreaming}
                 remainingUses={remainingUses}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
@@ -791,6 +792,7 @@ export default function WorkspacePage() {
                 onTemplateChange={handleTemplateChange}
                 customTemplates={customTemplates}
                 onRemoveCustomTemplate={handleRemoveCustomTemplate}
+                isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                 }}

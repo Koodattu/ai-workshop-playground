@@ -200,20 +200,20 @@ export const TEMPLATES: Template[] = [
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 600px;
+      max-width: 500px;
       margin: 50px auto;
       padding: 20px;
-      background: #f0f0f0;
+      background: #f5f5f5;
     }
     .container {
       background: white;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 25px;
+      border-radius: 8px;
     }
     h1 {
       color: #333;
       text-align: center;
+      margin-bottom: 20px;
     }
     .input-group {
       display: flex;
@@ -223,8 +223,8 @@ export const TEMPLATES: Template[] = [
     input {
       flex: 1;
       padding: 10px;
-      border: 2px solid #ddd;
-      border-radius: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
       font-size: 16px;
     }
     button {
@@ -232,22 +232,18 @@ export const TEMPLATES: Template[] = [
       background: #2196F3;
       color: white;
       border: none;
-      border-radius: 5px;
+      border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
-    }
-    button:hover {
-      background: #0b7dda;
     }
     ul {
       list-style: none;
       padding: 0;
     }
     li {
-      padding: 12px;
+      padding: 10px;
       background: #f9f9f9;
       margin-bottom: 8px;
-      border-radius: 5px;
+      border-radius: 4px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -256,9 +252,6 @@ export const TEMPLATES: Template[] = [
       background: #f44336;
       padding: 5px 10px;
       font-size: 14px;
-    }
-    .delete-btn:hover {
-      background: #da190b;
     }
   </style>
 </head>
@@ -495,10 +488,9 @@ export const TEMPLATES: Template[] = [
     body {
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+      background: #1a1a2e;
       font-family: 'Courier New', monospace;
       color: white;
       padding: 20px;
@@ -509,12 +501,9 @@ export const TEMPLATES: Template[] = [
     }
 
     h1 {
-      font-size: 2.5rem;
+      font-size: 2rem;
       margin-bottom: 1rem;
-      background: linear-gradient(90deg, #00ff88, #00d4ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: #00ff88;
     }
 
     .stats {
@@ -522,19 +511,11 @@ export const TEMPLATES: Template[] = [
       gap: 2rem;
       justify-content: center;
       margin-bottom: 1rem;
-      font-size: 1.2rem;
-    }
-
-    .stat {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
     }
 
     .stat-label {
-      color: #666;
+      color: #888;
       font-size: 0.8rem;
-      text-transform: uppercase;
     }
 
     .stat-value {
@@ -543,10 +524,9 @@ export const TEMPLATES: Template[] = [
     }
 
     canvas {
-      border: 2px solid #00d4ff;
-      border-radius: 8px;
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-      background: #1a1a2e;
+      border: 2px solid #00ff88;
+      border-radius: 4px;
+      background: #0a0a0f;
     }
 
     .controls {
@@ -564,19 +544,13 @@ export const TEMPLATES: Template[] = [
 
     .game-btn {
       padding: 0.75rem 2rem;
-      background: linear-gradient(90deg, #00ff88, #00d4ff);
+      background: #00ff88;
       border: none;
-      border-radius: 6px;
+      border-radius: 4px;
       color: #0a0a0f;
       font-weight: bold;
       cursor: pointer;
-      font-size: 1rem;
-      transition: transform 0.2s, opacity 0.2s;
       font-family: 'Courier New', monospace;
-    }
-
-    .game-btn:hover:not(:disabled) {
-      transform: scale(1.05);
     }
 
     .game-btn:disabled {
@@ -589,9 +563,9 @@ export const TEMPLATES: Template[] = [
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.9);
+      background: #0a0a0f;
       padding: 2rem;
-      border-radius: 12px;
+      border-radius: 8px;
       border: 2px solid #ff6b35;
       display: none;
       text-align: center;
@@ -609,18 +583,12 @@ export const TEMPLATES: Template[] = [
     .game-over button {
       margin-top: 1rem;
       padding: 0.75rem 2rem;
-      background: linear-gradient(90deg, #00ff88, #00d4ff);
+      background: #00ff88;
       border: none;
-      border-radius: 6px;
+      border-radius: 4px;
       color: #0a0a0f;
       font-weight: bold;
       cursor: pointer;
-      font-size: 1rem;
-      transition: transform 0.2s;
-    }
-
-    .game-over button:hover {
-      transform: scale(1.05);
     }
   </style>
 </head>
@@ -752,28 +720,13 @@ export const TEMPLATES: Template[] = [
     }
 
     function clearCanvas() {
-      ctx.fillStyle = '#1a1a2e';
+      ctx.fillStyle = '#0a0a0f';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     function drawSnake() {
       snake.forEach((segment, index) => {
-        const gradient = ctx.createLinearGradient(
-          segment.x * gridSize,
-          segment.y * gridSize,
-          (segment.x + 1) * gridSize,
-          (segment.y + 1) * gridSize
-        );
-
-        if (index === 0) {
-          gradient.addColorStop(0, '#00ff88');
-          gradient.addColorStop(1, '#00d4ff');
-        } else {
-          gradient.addColorStop(0, '#00d4ff');
-          gradient.addColorStop(1, '#0088ff');
-        }
-
-        ctx.fillStyle = gradient;
+        ctx.fillStyle = index === 0 ? '#00ff88' : '#00cc6a';
         ctx.fillRect(
           segment.x * gridSize + 1,
           segment.y * gridSize + 1,
@@ -957,10 +910,9 @@ export const TEMPLATES: Template[] = [
     body {
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+      background: #1a1a2e;
       font-family: system-ui, sans-serif;
       color: white;
       padding: 20px;
@@ -968,57 +920,46 @@ export const TEMPLATES: Template[] = [
 
     .game-container {
       text-align: center;
-      max-width: 500px;
     }
 
     h1 {
-      font-size: 2.5rem;
+      font-size: 2rem;
       margin-bottom: 0.5rem;
-      background: linear-gradient(90deg, #ff6b35, #f7931e);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: #ff6b35;
     }
 
     .status {
-      font-size: 1.3rem;
+      font-size: 1.2rem;
       margin-bottom: 1.5rem;
-      min-height: 2rem;
       color: #00d4ff;
     }
 
     .board {
       display: grid;
-      grid-template-columns: repeat(3, 120px);
-      grid-template-rows: repeat(3, 120px);
-      gap: 10px;
-      margin: 0 auto 2rem;
-      padding: 20px;
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 212, 255, 0.2);
+      grid-template-columns: repeat(3, 100px);
+      gap: 8px;
+      margin: 0 auto 1.5rem;
+      padding: 15px;
+      background: #252540;
+      border-radius: 8px;
     }
 
     .cell {
-      background: linear-gradient(145deg, #1a1a2e, #0f0f1a);
-      border: 2px solid #333;
-      border-radius: 8px;
-      font-size: 3rem;
+      width: 100px;
+      height: 100px;
+      background: #1a1a2e;
+      border: 2px solid #444;
+      border-radius: 6px;
+      font-size: 2.5rem;
       font-weight: bold;
       cursor: pointer;
-      transition: all 0.3s ease;
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
-      overflow: hidden;
     }
 
     .cell:hover:not(.taken) {
-      background: linear-gradient(145deg, #2a2a3e, #1a1a2e);
       border-color: #00d4ff;
-      transform: scale(1.05);
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
     }
 
     .cell.taken {
@@ -1027,77 +968,37 @@ export const TEMPLATES: Template[] = [
 
     .cell.x {
       color: #00d4ff;
-      animation: pop 0.3s ease;
     }
 
     .cell.o {
       color: #ff6b35;
-      animation: pop 0.3s ease;
     }
 
     .cell.winner {
-      background: linear-gradient(145deg, #00d4ff22, #00d4ff11);
-      animation: pulse 0.5s ease-in-out infinite;
-    }
-
-    @keyframes pop {
-      0% {
-        transform: scale(0);
-        opacity: 0;
-      }
-      50% {
-        transform: scale(1.2);
-      }
-      100% {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
-      }
-      50% {
-        box-shadow: 0 0 40px rgba(0, 212, 255, 0.8);
-      }
+      background: #2a3a4a;
     }
 
     .controls {
-      display: flex;
-      gap: 1rem;
-      justify-content: center;
-      margin-bottom: 2rem;
-    }
-
-    button {
-      padding: 0.75rem 2rem;
-      font-size: 1rem;
-      font-weight: 600;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+      margin-bottom: 1.5rem;
     }
 
     .reset-btn {
-      background: linear-gradient(90deg, #00d4ff, #0088ff);
-      color: white;
-    }
-
-    .reset-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+      padding: 0.75rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      background: #00d4ff;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
     }
 
     .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
       padding: 1rem;
-      background: rgba(255, 255, 255, 0.05);
+      background: #252540;
       border-radius: 8px;
     }
 
@@ -1106,26 +1007,17 @@ export const TEMPLATES: Template[] = [
     }
 
     .stat-value {
-      font-size: 2rem;
+      font-size: 1.5rem;
       font-weight: bold;
-      margin-bottom: 0.25rem;
     }
 
-    .stat-value.x {
-      color: #00d4ff;
-    }
-
-    .stat-value.o {
-      color: #ff6b35;
-    }
-
-    .stat-value.draw {
-      color: #888;
-    }
+    .stat-value.x { color: #00d4ff; }
+    .stat-value.o { color: #ff6b35; }
+    .stat-value.draw { color: #888; }
 
     .stat-label {
-      font-size: 0.8rem;
-      color: #666;
+      font-size: 0.75rem;
+      color: #888;
       text-transform: uppercase;
     }
   </style>
