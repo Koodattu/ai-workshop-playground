@@ -1,6 +1,6 @@
 /**
  * Usage Model
- * Tracks per-machine usage for rate limiting
+ * Tracks per-machine usage for rate limiting and aggregate token usage
  */
 
 const mongoose = require("mongoose");
@@ -23,6 +23,32 @@ const usageSchema = new mongoose.Schema(
       default: 0,
       min: [0, "Use count cannot be negative"],
     },
+    // Aggregate token tracking
+    totalPromptTokens: {
+      type: Number,
+      default: 0,
+      min: [0, "Total prompt tokens cannot be negative"],
+    },
+    totalCandidatesTokens: {
+      type: Number,
+      default: 0,
+      min: [0, "Total candidates tokens cannot be negative"],
+    },
+    totalThoughtsTokens: {
+      type: Number,
+      default: 0,
+      min: [0, "Total thoughts tokens cannot be negative"],
+    },
+    totalTokens: {
+      type: Number,
+      default: 0,
+      min: [0, "Total tokens cannot be negative"],
+    },
+    estimatedCost: {
+      type: Number,
+      default: 0,
+      min: [0, "Estimated cost cannot be negative"],
+    },
   },
   {
     timestamps: true,
@@ -32,9 +58,30 @@ const usageSchema = new mongoose.Schema(
 // Compound index for efficient lookups and uniqueness
 usageSchema.index({ passwordId: 1, visitorId: 1 }, { unique: true });
 
-// Static method to increment usage and check limit
-usageSchema.statics.incrementUsage = async function (passwordId, visitorId, maxUses) {
-  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, { $inc: { useCount: 1 } }, { new: true, upsert: true, setDefaultsOnInsert: true });
+// Static method to increment usage and check limit, optionally with token data
+usageSchema.statics.incrementUsage = async function (passwordId, visitorId, maxUses, tokenData = null) {
+  const updateOps = { $inc: { useCount: 1 } };
+
+  // Add token tracking if provided
+  if (tokenData) {
+    if (tokenData.promptTokens) {
+      updateOps.$inc.totalPromptTokens = tokenData.promptTokens;
+    }
+    if (tokenData.candidatesTokens) {
+      updateOps.$inc.totalCandidatesTokens = tokenData.candidatesTokens;
+    }
+    if (tokenData.thoughtsTokens) {
+      updateOps.$inc.totalThoughtsTokens = tokenData.thoughtsTokens;
+    }
+    if (tokenData.totalTokens) {
+      updateOps.$inc.totalTokens = tokenData.totalTokens;
+    }
+    if (tokenData.estimatedCost) {
+      updateOps.$inc.estimatedCost = tokenData.estimatedCost;
+    }
+  }
+
+  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, updateOps, { new: true, upsert: true, setDefaultsOnInsert: true });
 
   return {
     usage,
@@ -47,6 +94,31 @@ usageSchema.statics.incrementUsage = async function (passwordId, visitorId, maxU
 usageSchema.statics.getUsage = async function (passwordId, visitorId) {
   const usage = await this.findOne({ passwordId, visitorId });
   return usage?.useCount || 0;
+};
+
+// Static method to track token usage without incrementing use count
+usageSchema.statics.trackTokenUsage = async function (passwordId, visitorId, tokenData) {
+  const updateOps = { $inc: {} };
+
+  if (tokenData.promptTokens) {
+    updateOps.$inc.totalPromptTokens = tokenData.promptTokens;
+  }
+  if (tokenData.candidatesTokens) {
+    updateOps.$inc.totalCandidatesTokens = tokenData.candidatesTokens;
+  }
+  if (tokenData.thoughtsTokens) {
+    updateOps.$inc.totalThoughtsTokens = tokenData.thoughtsTokens;
+  }
+  if (tokenData.totalTokens) {
+    updateOps.$inc.totalTokens = tokenData.totalTokens;
+  }
+  if (tokenData.estimatedCost) {
+    updateOps.$inc.estimatedCost = tokenData.estimatedCost;
+  }
+
+  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, updateOps, { new: true, upsert: true, setDefaultsOnInsert: true });
+
+  return usage;
 };
 
 module.exports = mongoose.model("Usage", usageSchema);

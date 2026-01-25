@@ -1,5 +1,17 @@
 import { config } from "./config";
-import type { GenerateRequest, GenerateResponse, PasswordEntry, CreatePasswordRequest, UsageStats, StreamCallbacks } from "@/types";
+import type {
+  GenerateRequest,
+  GenerateResponse,
+  PasswordEntry,
+  CreatePasswordRequest,
+  UsageStats,
+  StreamCallbacks,
+  SystemStats,
+  PasswordDetailedStats,
+  PaginatedUsersResponse,
+  RequestLogEntry,
+  TimeSeriesResponse,
+} from "@/types";
 
 class ApiClient {
   private baseUrl: string;
@@ -281,6 +293,68 @@ class ApiClient {
       },
     });
     return data.byPassword;
+  }
+
+  // Get system-wide stats
+  async getSystemStats(adminSecret: string): Promise<SystemStats> {
+    const { data } = await this.request<SystemStats>("/api/admin/stats/system", {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data;
+  }
+
+  // Get detailed stats for a specific password
+  async getPasswordDetailedStats(adminSecret: string, passwordId: string): Promise<PasswordDetailedStats> {
+    const { data } = await this.request<PasswordDetailedStats>(`/api/admin/stats/password/${passwordId}`, {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data;
+  }
+
+  // Get paginated users for a password
+  async getUsersForPassword(adminSecret: string, passwordId: string, page: number = 1, limit: number = 20): Promise<PaginatedUsersResponse> {
+    const { data } = await this.request<PaginatedUsersResponse>(`/api/admin/stats/password/${passwordId}/users?page=${page}&limit=${limit}`, {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data;
+  }
+
+  // Get recent request logs
+  async getRecentRequests(adminSecret: string, limit: number = 50, passwordId?: string): Promise<RequestLogEntry[]> {
+    const params = new URLSearchParams();
+    params.set("limit", limit.toString());
+    if (passwordId) {
+      params.set("passwordId", passwordId);
+    }
+
+    const { data } = await this.request<{ count: number; requests: RequestLogEntry[] }>(`/api/admin/stats/requests?${params.toString()}`, {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data.requests;
+  }
+
+  // Get time series data
+  async getTokenTimeSeries(adminSecret: string, period: "day" | "week" | "month", passwordId?: string): Promise<TimeSeriesResponse> {
+    const params = new URLSearchParams();
+    params.set("period", period);
+    if (passwordId) {
+      params.set("passwordId", passwordId);
+    }
+
+    const { data } = await this.request<TimeSeriesResponse>(`/api/admin/stats/timeseries?${params.toString()}`, {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data;
   }
 }
 

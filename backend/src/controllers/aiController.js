@@ -7,6 +7,26 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const { ERROR_CODES } = require("../constants/errorCodes");
+const RequestLog = require("../models/RequestLog");
+const Usage = require("../models/Usage");
+
+// Gemini 2.0 Flash pricing (per token)
+// Input: $0.10 per 1M tokens = $0.0000001 per token
+// Output: $0.40 per 1M tokens = $0.0000004 per token
+const GEMINI_PRICING = {
+  inputPerToken: 0.0000001,
+  outputPerToken: 0.0000004,
+};
+
+/**
+ * Calculate estimated cost in cents based on token usage
+ */
+function calculateCostInCents(promptTokens, candidatesTokens) {
+  const inputCost = promptTokens * GEMINI_PRICING.inputPerToken;
+  const outputCost = candidatesTokens * GEMINI_PRICING.outputPerToken;
+  const totalCostDollars = inputCost + outputCost;
+  return totalCostDollars * 100; // Convert to cents
+}
 
 // Initialize Gemini AI client
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
@@ -131,6 +151,7 @@ Modify or extend the existing code based on the user's request.`;
 
     // Generate content with streaming
     const result = await model.generateContentStream(userPrompt);
+    let streamResult = result; // Store for accessing response metadata after streaming
 
     // Process the stream
     for await (const chunk of result.stream) {
@@ -248,6 +269,59 @@ Modify or extend the existing code based on the user's request.`;
     // Send message-complete event (message field is complete)
     const finalMessage = structuredResponse.message;
     res.write(`data: ${JSON.stringify({ type: "message-complete", message: finalMessage })}\n\n`);
+
+    // Get token usage metadata from the aggregated response
+    try {
+      const aggregatedResponse = await streamResult.response;
+      const usageMetadata = aggregatedResponse.usageMetadata || {};
+
+      // Extract token counts with fallbacks
+      const promptTokens = usageMetadata.promptTokenCount || 0;
+      const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
+      const thoughtsTokens = usageMetadata.thoughtsTokenCount || 0;
+      const cachedTokens = usageMetadata.cachedContentTokenCount || 0;
+      const totalTokens = usageMetadata.totalTokenCount || promptTokens + candidatesTokens;
+
+      // Calculate estimated cost in cents
+      const estimatedCost = calculateCostInCents(promptTokens, candidatesTokens);
+
+      console.log(
+        `[Token Usage] Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,
+      );
+
+      // Log request to RequestLog and update Usage if we have usage data from workshopGuard
+      if (req.workshop && req.workshop.passwordId && req.workshop.visitorId) {
+        const tokenData = {
+          promptTokens,
+          candidatesTokens,
+          thoughtsTokens,
+          totalTokens,
+          estimatedCost,
+        };
+
+        // Log the request details
+        await RequestLog.logRequest({
+          passwordId: req.workshop.passwordId,
+          visitorId: req.workshop.visitorId,
+          promptTokens,
+          candidatesTokens,
+          thoughtsTokens,
+          cachedTokens,
+          totalTokens,
+          estimatedCost,
+          model: "gemini-2.5-flash",
+          generationType: "code-generation",
+        });
+
+        // Update aggregate usage tracking
+        await Usage.trackTokenUsage(req.workshop.passwordId, req.workshop.visitorId, tokenData);
+
+        console.log(`[Token Tracking] Logged request for visitor ${req.workshop.visitorId}`);
+      }
+    } catch (tokenError) {
+      // Log the error but don't fail the request - token tracking is non-critical
+      console.error("[Token Tracking Error] Failed to log token usage:", tokenError.message);
+    }
 
     // Send the final complete response
     const finalData = {

@@ -147,3 +147,105 @@ export const CUSTOM_TEMPLATE_CONFIG = {
   MAX_TEMPLATES: 10,
   ID_PREFIX: "custom-",
 } as const;
+
+// System-wide statistics
+export interface SystemStats {
+  totalRequests: number;
+  totalPromptTokens: number;
+  totalCandidatesTokens: number;
+  totalThoughtsTokens: number;
+  totalTokens: number;
+  totalEstimatedCost: number; // in cents
+  uniqueUsers: number;
+  avgTokensPerRequest: number;
+  requestsToday: number;
+  requestsThisWeek: number;
+  requestsThisMonth: number;
+  activePasswords: number;
+}
+
+// Token breakdown (reusable)
+export interface TokenBreakdown {
+  promptTokens: number;
+  candidatesTokens: number;
+  thoughtsTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+}
+
+// User stats within a password
+export interface PasswordUserStats {
+  visitorId: string;
+  requestCount: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  thoughtsTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  lastUsed: string;
+  firstUsed: string;
+}
+
+// Detailed password stats
+export interface PasswordDetailedStats {
+  password: {
+    _id: string;
+    code: string;
+    isActive: boolean;
+    expiresAt: string;
+    isExpired: boolean;
+    maxUsesPerUser: number;
+  };
+  stats: TokenBreakdown & {
+    totalRequests: number;
+  };
+  users: PasswordUserStats[];
+}
+
+// Paginated users response
+export interface PaginatedUsersResponse {
+  users: PasswordUserStats[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalUsers: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    limit: number;
+  };
+}
+
+// Request log entry
+export interface RequestLogEntry {
+  _id: string;
+  passwordId: string;
+  passwordCode?: string;
+  visitorId: string;
+  promptTokens: number;
+  candidatesTokens: number;
+  thoughtsTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  model: string;
+  generationType: string;
+  createdAt: string;
+}
+
+// Time series data point
+export interface TimeSeriesDataPoint {
+  timestamp: string;
+  requests: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+}
+
+// Time series response
+export interface TimeSeriesResponse {
+  period: "day" | "week" | "month";
+  startDate: string;
+  endDate: string;
+  dataPoints: TimeSeriesDataPoint[];
+}
