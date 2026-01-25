@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     alternateLocale: ["fi_FI"],
-    url: process.env.NEXT_PUBLIC_SITE_URL || "https://ai-workshop-playground.com",
+    url: process.env.NEXT_PUBLIC_SITE_URL || "https://playground.koodattu.dev",
     title: "AI Workshop Playground",
     description: "Generate and preview HTML/CSS/JS code using AI. Create interactive web experiences powered by AI in real-time.",
     siteName: "AI Workshop Playground",
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     images: ["/web-app-manifest-512x512.png"],
     creator: "@aiworkshop",
   },
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://ai-workshop-playground.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://playground.koodattu.dev"),
   alternates: {
     canonical: "/",
   },
