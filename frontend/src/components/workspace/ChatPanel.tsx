@@ -52,6 +52,13 @@ export function ChatPanel({
     }
   }, [prompt]);
 
+  // Focus textarea when generation finishes
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && remainingUses !== 0) {
+      textareaRef.current?.focus();
+    }
+  }, [isLoading, isAuthenticated, remainingUses]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (prompt.trim() && !isLoading) {
