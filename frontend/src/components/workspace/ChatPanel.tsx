@@ -298,12 +298,12 @@ export function ChatPanel({
               {/* Left side: Mode toggle + auto-switch (mobile only) */}
               <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
                 {/* ASK/EDIT Mode Toggle */}
-                <div className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
+                <div className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5 md:p-1">
                   <button
                     onClick={() => onModeChange("ask")}
                     disabled={isLoading}
                     className={`
-                      px-2 py-0.5 rounded text-[10px] font-mono transition-all duration-200
+                      px-2 py-0.5 md:px-4 md:py-1.5 rounded text-[10px] md:text-xs font-mono transition-all duration-200
                       ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
                       disabled:opacity-50 disabled:cursor-not-allowed
                     `}
@@ -315,7 +315,7 @@ export function ChatPanel({
                     onClick={() => onModeChange("edit")}
                     disabled={isLoading}
                     className={`
-                      px-2 py-0.5 rounded text-[10px] font-mono transition-all duration-200
+                      px-2 py-0.5 md:px-4 md:py-1.5 rounded text-[10px] md:text-xs font-mono transition-all duration-200
                       ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
                       disabled:opacity-50 disabled:cursor-not-allowed
                     `}
