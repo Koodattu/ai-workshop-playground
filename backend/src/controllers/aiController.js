@@ -211,11 +211,39 @@ const CODE_GENERATION_SCHEMA = {
   required: ["message", "projectName", "code"],
 };
 
+// System instruction for ASK mode - answering questions without generating code
+const ASK_SYSTEM_INSTRUCTION = `You are a helpful web development assistant. Your task is to answer questions about HTML, CSS, JavaScript, and web development in general.
+
+Reply in the same language as the user. Be SHORT, CONCISE, and TO THE POINT. No long explanations.
+
+CRITICAL OUTPUT RULES:
+1. Return ONLY a "message" field in JSON format
+2. The message should be a short, helpful response (2-4 sentences max)
+3. Do NOT generate any code - just explain, suggest, or answer
+4. If the user asks how to do something, explain the concept briefly
+5. If they ask about the existing code, analyze and give feedback
+6. Stay focused on the question - no unnecessary elaboration
+
+REMEMBER: You are in ASK mode - your job is to help and advise, NOT to write or modify code. Keep responses SHORT.`;
+
+// JSON schema for ASK mode structured output
+const ASK_SCHEMA = {
+  type: "object",
+  properties: {
+    message: {
+      type: "string",
+      description: "A short, helpful response in the same language as the user (2-4 sentences max)",
+    },
+  },
+  required: ["message"],
+};
+
 /**
  * Generate code using Gemini API with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
-  const { prompt, existingCode, messageHistory } = req.body;
+  const { prompt, existingCode, messageHistory, mode = "edit" } = req.body;
+  const isAskMode = mode === "ask";
 
   if (!prompt) {
     throw new AppError("Prompt is required", 400, ERROR_CODES.PROMPT_REQUIRED);
@@ -239,13 +267,13 @@ const generateCode = asyncHandler(async (req, res) => {
   const codeDecoder = createJsonStringDecoder();
 
   try {
-    // Initialize the model with system instruction
+    // Initialize the model with system instruction based on mode
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION,
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: CODE_GENERATION_SCHEMA,
+        responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
       },
     });
 
@@ -294,6 +322,12 @@ Modify or extend the existing code based on the user's request.`;
         if (chunkText) {
           // Accumulate the text
           accumulatedText += chunkText;
+
+          // In ASK mode, skip code streaming entirely - we just accumulate the response
+          if (isAskMode) {
+            // Just continue accumulating, we'll parse and send at the end
+            continue;
+          }
 
           // If code field hasn't started yet, look for it
           if (!codeStarted) {
@@ -358,13 +392,19 @@ Modify or extend the existing code based on the user's request.`;
       throw new AppError("Failed to parse AI response", 500, ERROR_CODES.AI_RESPONSE_PARSE_FAILED);
     }
 
-    // Validate response has required fields
-    if (!structuredResponse.code || !structuredResponse.message) {
-      throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+    // Validate response has required fields based on mode
+    if (isAskMode) {
+      if (!structuredResponse.message) {
+        throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+      }
+    } else {
+      if (!structuredResponse.code || !structuredResponse.message) {
+        throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+      }
     }
 
-    // Ensure code-complete was sent (handles edge case where stream ends abruptly)
-    if (codeStarted && !codeComplete) {
+    // Ensure code-complete was sent for EDIT mode (handles edge case where stream ends abruptly)
+    if (!isAskMode && codeStarted && !codeComplete) {
       res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
     }
 
@@ -412,7 +452,8 @@ Modify or extend the existing code based on the user's request.`;
           totalTokens,
           estimatedCost,
           model: "gemini-2.5-flash",
-          generationType: "code-generation",
+          generationType: isAskMode ? "ask" : "code-generation",
+          mode: mode,
         });
 
         // Update aggregate usage tracking
@@ -429,8 +470,8 @@ Modify or extend the existing code based on the user's request.`;
     const finalData = {
       type: "done",
       message: structuredResponse.message,
-      code: structuredResponse.code,
-      projectName: structuredResponse.projectName,
+      code: isAskMode ? "" : structuredResponse.code,
+      projectName: isAskMode ? undefined : structuredResponse.projectName,
       remaining: req.workshop?.remaining,
     };
 

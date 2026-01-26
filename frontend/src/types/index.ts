@@ -7,12 +7,16 @@ export interface ChatMessage {
   errorCode?: string;
 }
 
+// Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)
+export type ChatMode = "edit" | "ask";
+
 export interface GenerateRequest {
   password: string;
   visitorId: string;
   prompt: string;
   existingCode?: string;
   messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  mode?: ChatMode;
 }
 
 export interface GenerateResponse {
@@ -232,6 +236,7 @@ export interface RequestLogEntry {
   estimatedCost: number;
   model: string;
   generationType: string;
+  mode?: "edit" | "ask";
   createdAt: string;
 }
 
@@ -281,5 +286,15 @@ export interface GetShareResponse {
   code: string;
   title: string | null;
   projectName?: string;
+  createdAt: string;
+}
+
+// Share link entry for admin tracking
+export interface ShareLinkEntry {
+  _id: string;
+  shareId: string;
+  code: string;
+  title: string | null;
+  projectName: string | null;
   createdAt: string;
 }

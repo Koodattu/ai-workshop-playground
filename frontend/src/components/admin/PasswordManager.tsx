@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry } from "@/types";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type TabId = "overview" | "passwords" | "usage" | "activity";
+type TabId = "overview" | "passwords" | "usage" | "activity" | "shares";
 type ActivityPeriod = "24h" | "7d" | "30d";
 
 interface PasswordManagerProps {
@@ -146,6 +146,17 @@ const UsersIcon = () => (
 const ActivityIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+  </svg>
+);
+
+const ShareIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+    />
   </svg>
 );
 
@@ -804,6 +815,85 @@ const ActivityTab = ({ recentRequests, period, setPeriod, t }: ActivityTabProps)
 };
 
 // ============================================================================
+// SHARE LINKS TAB
+// ============================================================================
+
+interface ShareLinksTabProps {
+  shareLinks: ShareLinkEntry[];
+  t: (key: string, params?: Record<string, unknown>) => string;
+}
+
+const ShareLinksTab = ({ shareLinks, t }: ShareLinksTabProps) => {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyShareId = async (shareId: string) => {
+    const shareUrl = `${window.location.origin}/share/${shareId}`;
+    await navigator.clipboard.writeText(shareUrl);
+    setCopiedId(shareId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  if (!shareLinks || shareLinks.length === 0) {
+    return (
+      <div className="text-center py-12 animate-fade-in">
+        <ShareIcon />
+        <p className="mt-2 text-gray-400 font-body">{t("passwordManager.noShareLinks")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-lg font-semibold text-white">{t("passwordManager.shareLinksTitle")}</h3>
+        <span className="text-xs font-mono text-gray-400">
+          {shareLinks.length} {t("passwordManager.shareLinksCount")}
+        </span>
+      </div>
+
+      <div className="space-y-2 max-h-150 overflow-y-auto scrollbar-thin pr-2">
+        {shareLinks.map((link, index) => (
+          <div
+            key={link._id}
+            className="p-4 rounded-xl bg-carbon border border-steel/50 hover:border-electric/30 transition-all animate-fade-in"
+            style={{ animationDelay: `${index * 20}ms` }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 rounded bg-electric/20 text-electric font-mono text-sm font-bold">{link.shareId}</span>
+                  {link.projectName && <span className="text-sm text-gray-300 font-body truncate">{link.projectName}</span>}
+                </div>
+                {link.title && <p className="text-xs text-gray-500 font-body mb-1">{link.title}</p>}
+                <p className="text-xs font-mono text-gray-500">
+                  {t("passwordManager.created")}: {formatDate(link.createdAt)}
+                </p>
+                <p className="text-xs font-mono text-gray-600 mt-1 truncate" title={link.code.slice(0, 100)}>
+                  {link.code.slice(0, 80)}...
+                </p>
+              </div>
+              <button
+                onClick={() => handleCopyShareId(link.shareId)}
+                className={`
+                  px-3 py-1.5 rounded text-xs font-mono transition-all
+                  ${
+                    copiedId === link.shareId
+                      ? "bg-success/20 text-success border border-success/30"
+                      : "bg-graphite text-gray-300 hover:text-white hover:bg-electric/20 border border-steel/50"
+                  }
+                `}
+              >
+                {copiedId === link.shareId ? t("shareDialog.copied") : t("shareDialog.copy")}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -818,6 +908,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [usage, setUsage] = useState<UsageStats[]>([]);
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [recentRequests, setRecentRequests] = useState<RequestLogEntry[]>([]);
+  const [shareLinks, setShareLinks] = useState<ShareLinkEntry[]>([]);
   const [passwordStats, setPasswordStats] = useState<Map<string, PasswordDetailedStats>>(new Map());
 
   // Single unified loading state for initial data load
@@ -857,11 +948,12 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       };
 
       // Load everything in parallel
-      const [statsData, passwordsData, usageData, logsData] = await Promise.all([
+      const [statsData, passwordsData, usageData, logsData, shareLinksData] = await Promise.all([
         api.getSystemStats(adminSecret),
         api.getPasswords(adminSecret),
         api.getUsageStats(adminSecret),
         api.getRecentRequests(adminSecret, limitMap[activityPeriod]),
+        api.getShareLinks(adminSecret),
       ]);
 
       // Update all state at once
@@ -869,6 +961,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       setPasswords(passwordsData);
       setUsage(usageData);
       setRecentRequests(logsData);
+      setShareLinks(shareLinksData);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t("api.dataFetchError"));
     } finally {
@@ -995,8 +1088,9 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       { id: "passwords" as TabId, label: t("passwordManager.passwordsTab", { count: passwords.length }), icon: <KeyIcon /> },
       { id: "usage" as TabId, label: t("passwordManager.usageTab", { count: usage.length }), icon: <UsersIcon /> },
       { id: "activity" as TabId, label: t("passwordManager.activityTab"), icon: <ActivityIcon /> },
+      { id: "shares" as TabId, label: t("passwordManager.sharesTab", { count: shareLinks.length }), icon: <ShareIcon /> },
     ],
-    [t, passwords.length, usage.length],
+    [t, passwords.length, usage.length, shareLinks.length],
   );
 
   // ============================================================================
@@ -1075,6 +1169,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         )}
 
         {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={setActivityPeriod} t={t} />}
+
+        {activeTab === "shares" && <ShareLinksTab shareLinks={shareLinks} t={t} />}
       </div>
 
       {/* Refresh button */}

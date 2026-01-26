@@ -18,6 +18,7 @@ const {
   getUsersForPassword,
   getRecentRequests,
   getTokenTimeSeries,
+  getShareLinks,
 } = require("../controllers/adminController");
 const validateRequest = require("../middleware/validateRequest");
 
@@ -146,5 +147,11 @@ router.get(
   ],
   getTokenTimeSeries,
 );
+
+/**
+ * GET /api/admin/share-links
+ * Get all share links
+ */
+router.get("/share-links", getShareLinks);
 
 module.exports = router;

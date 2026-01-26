@@ -13,6 +13,7 @@ import type {
   TimeSeriesResponse,
   CreateShareResponse,
   GetShareResponse,
+  ShareLinkEntry,
 } from "@/types";
 
 class ApiClient {
@@ -373,6 +374,16 @@ class ApiClient {
   async getSharedCode(shareId: string): Promise<GetShareResponse> {
     const { data } = await this.request<{ message: string; data: GetShareResponse }>(`/api/share/${shareId}`);
     return data.data;
+  }
+
+  // Get all share links (admin)
+  async getShareLinks(adminSecret: string): Promise<ShareLinkEntry[]> {
+    const { data } = await this.request<{ count: number; shareLinks: ShareLinkEntry[] }>("/api/admin/share-links", {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data.shareLinks;
   }
 }
 

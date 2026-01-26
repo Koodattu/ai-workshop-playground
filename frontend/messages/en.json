@@ -67,6 +67,12 @@
     "streaming": "streaming...",
     "clearChat": "Clear chat",
     "clearChatTitle": "Clear all messages",
+    "usageTooltip": "{count} uses remaining",
+    "askMode": "ASK",
+    "editMode": "EDIT",
+    "askModeTooltip": "Ask questions about code without modifying it",
+    "editModeTooltip": "Generate or modify code with AI",
+    "askButton": "Ask",
     "errors": {
       "VALIDATION_FAILED": "Validation failed",
       "PASSWORD_REQUIRED": "Workshop password is required",
@@ -374,7 +380,14 @@
     "na": "N/A",
     "unknown": "Unknown",
     "anonymous": "Anonymous",
-    "noData": "No data available"
+    "noData": "No data available",
+    "sharesTab": "Shares ({count})",
+    "shareLinksTitle": "Share Links",
+    "shareLinksCount": "links",
+    "noShareLinks": "No share links created yet",
+    "modeBreakdown": "Mode Breakdown",
+    "editRequests": "Edit Requests",
+    "askRequests": "Ask Requests"
   },
   "notifications": {
     "title": "Notifications",

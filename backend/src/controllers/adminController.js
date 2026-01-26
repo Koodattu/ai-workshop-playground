@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 const Password = require("../models/Password");
 const Usage = require("../models/Usage");
 const RequestLog = require("../models/RequestLog");
+const SharedCode = require("../models/SharedCode");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
 
@@ -258,6 +259,27 @@ const getSystemStats = asyncHandler(async (req, res) => {
     },
   ]);
 
+  // Get mode breakdown
+  const modeStats = await RequestLog.aggregate([
+    {
+      $group: {
+        _id: { $ifNull: ["$mode", "edit"] },
+        count: { $sum: 1 },
+        tokens: { $sum: "$totalTokens" },
+        cost: { $sum: "$estimatedCost" },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        mode: "$_id",
+        count: 1,
+        tokens: 1,
+        cost: { $round: ["$cost", 6] },
+      },
+    },
+  ]);
+
   // Get time-based request counts
   const [requestsToday, requestsThisWeek, requestsThisMonth] = await Promise.all([
     RequestLog.countDocuments({ createdAt: { $gte: startOfToday } }),
@@ -288,6 +310,7 @@ const getSystemStats = asyncHandler(async (req, res) => {
     requestsThisWeek,
     requestsThisMonth,
     activePasswords: activePasswordsCount,
+    modeStats,
   });
 });
 
@@ -472,6 +495,7 @@ const getRecentRequests = asyncHandler(async (req, res) => {
         estimatedCost: 1,
         model: 1,
         generationType: 1,
+        mode: { $ifNull: ["$mode", "edit"] },
         createdAt: 1,
       },
     },
@@ -590,6 +614,18 @@ const getTokenTimeSeries = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get all share links
+ */
+const getShareLinks = asyncHandler(async (req, res) => {
+  const shareLinks = await SharedCode.find().select("shareId code title projectName createdAt").sort({ createdAt: -1 }).lean();
+
+  res.json({
+    count: shareLinks.length,
+    shareLinks,
+  });
+});
+
 module.exports = {
   verifyAdmin,
   verifyAdminCredentials,
@@ -603,4 +639,5 @@ module.exports = {
   getUsersForPassword,
   getRecentRequests,
   getTokenTimeSeries,
+  getShareLinks,
 };

@@ -67,6 +67,12 @@
     "streaming": "suoratoisto...",
     "clearChat": "Tyhjennä keskustelu",
     "clearChatTitle": "Tyhjennä kaikki viestit",
+    "usageTooltip": "{count} käyttöä jäljellä",
+    "askMode": "KYSY",
+    "editMode": "MUOKKAA",
+    "askModeTooltip": "Kysy kysymyksiä koodista muokkaamatta sitä",
+    "editModeTooltip": "Luo tai muokkaa koodia tekoälyn avulla",
+    "askButton": "Kysy",
     "errors": {
       "VALIDATION_FAILED": "Validointi epäonnistui",
       "PASSWORD_REQUIRED": "Työpajan salasana vaaditaan",
@@ -374,7 +380,14 @@
     "na": "Ei saatavilla",
     "unknown": "Tuntematon",
     "anonymous": "Anonyymi",
-    "noData": "Ei tietoja saatavilla"
+    "noData": "Ei tietoja saatavilla",
+    "sharesTab": "Jaot ({count})",
+    "shareLinksTitle": "Jakolinkit",
+    "shareLinksCount": "linkkiä",
+    "noShareLinks": "Jakolinkkejä ei ole vielä luotu",
+    "modeBreakdown": "Tila-erittely",
+    "editRequests": "Muokkauspyynnöt",
+    "askRequests": "Kysymyspyynnöt"
   },
   "notifications": {
     "title": "Ilmoitukset",

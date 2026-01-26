@@ -58,6 +58,11 @@ const requestLogSchema = new mongoose.Schema(
       required: [true, "Generation type is required"],
       trim: true,
     },
+    mode: {
+      type: String,
+      enum: ["edit", "ask"],
+      default: "edit",
+    },
   },
   {
     timestamps: true,

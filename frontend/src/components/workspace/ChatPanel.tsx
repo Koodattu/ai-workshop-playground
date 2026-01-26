@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, ChatMode } from "@/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -18,6 +18,8 @@ interface ChatPanelProps {
   onAutoSwitchChange?: (enabled: boolean) => void;
   isAuthenticated: boolean;
   onUnlockClick: () => void;
+  mode: ChatMode;
+  onModeChange: (mode: ChatMode) => void;
 }
 
 export function ChatPanel({
@@ -32,6 +34,8 @@ export function ChatPanel({
   onAutoSwitchChange,
   isAuthenticated,
   onUnlockClick,
+  mode,
+  onModeChange,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -95,14 +99,17 @@ export function ChatPanel({
           <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("chat.header")}</h2>
         </div>
         <div className="flex items-center gap-2">
+          {/* Usage counter - simplified with tooltip */}
           {remainingUses !== undefined && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-carbon border border-steel/50">
+            <div className="flex items-center gap-1 px-1.5 py-1 rounded bg-carbon border border-steel/50" title={t("chat.usageTooltip", { count: remainingUses })}>
               <svg className="w-3.5 h-3.5 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <span className="font-mono text-xs text-gray-300">{t("chat.usageLeft", { count: remainingUses })}</span>
+              <span className="font-mono text-xs text-gray-300">{remainingUses}</span>
             </div>
           )}
+
+          {/* Clear chat button */}
           {onClearMessages && (
             <button
               onClick={onClearMessages}
@@ -287,51 +294,95 @@ export function ChatPanel({
               />
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              {/* Desktop: Show shift+enter hint */}
-              <span className="hidden md:block text-[10px] font-mono text-gray-500 uppercase">{t("chat.shiftEnterHint")}</span>
+            <div className="flex items-center justify-between gap-2">
+              {/* Left side: Mode toggle + auto-switch (mobile only) */}
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
+                {/* ASK/EDIT Mode Toggle */}
+                <div className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
+                  <button
+                    onClick={() => onModeChange("ask")}
+                    disabled={isLoading}
+                    className={`
+                      px-2 py-0.5 rounded text-[10px] font-mono transition-all duration-200
+                      ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                    `}
+                    title={t("chat.askModeTooltip")}
+                  >
+                    {t("chat.askMode")}
+                  </button>
+                  <button
+                    onClick={() => onModeChange("edit")}
+                    disabled={isLoading}
+                    className={`
+                      px-2 py-0.5 rounded text-[10px] font-mono transition-all duration-200
+                      ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                    `}
+                    title={t("chat.editModeTooltip")}
+                  >
+                    {t("chat.editMode")}
+                  </button>
+                </div>
 
-              {/* Mobile: Show auto-switch checkbox */}
-              {onAutoSwitchChange && (
-                <label className="md:hidden flex items-center gap-2 cursor-pointer group">
-                  <div className="relative flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={autoSwitchEnabled}
-                      onChange={(e) => onAutoSwitchChange(e.target.checked)}
-                      className="
-                        peer w-4 h-4 appearance-none rounded
-                        border-2 border-steel/50 bg-carbon
-                        checked:border-electric checked:bg-electric/20
-                        hover:border-electric/50
-                        focus:outline-none focus:ring-2 focus:ring-electric/30
-                        transition-all duration-200 cursor-pointer
-                      "
-                    />
-                    <svg
-                      className="
-                        absolute w-3 h-3 text-electric pointer-events-none
-                        opacity-0 scale-50
-                        peer-checked:opacity-100 peer-checked:scale-100
-                        transition-all duration-200
-                      "
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={3}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
-                </label>
-              )}
+                {/* Mobile only: Auto-switch checkbox */}
+                {onAutoSwitchChange && (
+                  <label className="md:hidden flex items-center gap-1.5 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={autoSwitchEnabled}
+                        onChange={(e) => onAutoSwitchChange(e.target.checked)}
+                        className="
+                          peer w-3.5 h-3.5 appearance-none rounded
+                          border-2 border-steel/50 bg-carbon
+                          checked:border-electric checked:bg-electric/20
+                          hover:border-electric/50
+                          focus:outline-none focus:ring-2 focus:ring-electric/30
+                          transition-all duration-200 cursor-pointer
+                        "
+                      />
+                      <svg
+                        className="
+                          absolute w-2.5 h-2.5 text-electric pointer-events-none
+                          opacity-0 scale-50
+                          peer-checked:opacity-100 peer-checked:scale-100
+                          transition-all duration-200
+                        "
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-[9px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
+                  </label>
+                )}
+              </div>
 
               <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                {t("chat.generateButton")}
+                {mode === "edit" ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    {t("chat.generateButton")}
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
+                    {t("chat.askButton")}
+                  </>
+                )}
               </Button>
             </div>
           </form>

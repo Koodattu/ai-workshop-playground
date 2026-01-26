@@ -17,7 +17,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage } from "@/lib/errorTranslation";
-import type { ChatMessage, PreviewControl, CustomTemplate } from "@/types";
+import type { ChatMessage, PreviewControl, CustomTemplate, ChatMode } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -56,6 +56,9 @@ export default function WorkspacePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  // Chat mode state - determines if AI generates code (edit) or just answers (ask)
+  const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
@@ -352,10 +355,14 @@ export default function WorkspacePage() {
             prompt,
             existingCode: code,
             messageHistory,
+            mode: chatMode,
           },
           {
             // Step 0: Code starts - disable preview and clear editor
             onCodeStart: () => {
+              // In ASK mode, we don't modify code, so skip all editor operations
+              if (chatMode === "ask") return;
+
               // Disable preview auto-refresh
               previewControlRef.current?.disableAutoRefresh();
 
@@ -411,6 +418,9 @@ export default function WorkspacePage() {
 
             // Step 1-2: Stream code chunks line by line to editor
             onCodeChunk: (chunk: string) => {
+              // In ASK mode, we don't modify code
+              if (chatMode === "ask") return;
+
               // Accumulate code chunks in the buffer
               codeBufferRef.current += chunk;
 
@@ -481,6 +491,9 @@ export default function WorkspacePage() {
 
             // Step 3: Code complete
             onCodeComplete: () => {
+              // In ASK mode, we don't modify code
+              if (chatMode === "ask") return;
+
               // Clear any pending animation frames
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
@@ -580,33 +593,38 @@ export default function WorkspacePage() {
               const finalCode = data.code;
               const projectName = data.projectName;
 
-              // If user is in a custom template, update it instead of creating a new one
-              if (isCustomTemplateId(currentTemplateId)) {
-                // Update the existing custom template with new code (and optionally projectName)
-                updateTemplate(currentTemplateId, finalCode, projectName);
-                // Keep the same template ID
-                setCurrentTemplateId(currentTemplateId);
-              } else {
-                // User is in a built-in template, create a new custom template
-                // Use LLM-provided projectName if available, otherwise fall back to sequential naming
-                let templateName: string;
-                if (projectName) {
-                  templateName = projectName;
+              // In EDIT mode, update templates and code
+              if (chatMode === "edit") {
+                // If user is in a custom template, update it instead of creating a new one
+                if (isCustomTemplateId(currentTemplateId)) {
+                  // Update the existing custom template with new code (and optionally projectName)
+                  updateTemplate(currentTemplateId, finalCode, projectName);
+                  // Keep the same template ID
+                  setCurrentTemplateId(currentTemplateId);
                 } else {
-                  templateCounterRef.current += 1;
-                  const messages = getMessages(language);
-                  templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
+                  // User is in a built-in template, create a new custom template
+                  // Use LLM-provided projectName if available, otherwise fall back to sequential naming
+                  let templateName: string;
+                  if (projectName) {
+                    templateName = projectName;
+                  } else {
+                    templateCounterRef.current += 1;
+                    const messages = getMessages(language);
+                    templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
+                  }
+                  const newTemplate = addTemplate(templateName, finalCode, projectName);
+                  // Switch to the new custom template
+                  setCurrentTemplateId(newTemplate.id);
                 }
-                const newTemplate = addTemplate(templateName, finalCode, projectName);
-                // Switch to the new custom template
-                setCurrentTemplateId(newTemplate.id);
               }
 
-              // Update states
-              setCode(finalCode);
+              // Update states based on mode
+              if (chatMode === "edit") {
+                setCode(finalCode);
+                // Set the snapshot to the new code so it's not dirty
+                originalCodeSnapshotRef.current = finalCode;
+              }
               setRemainingUses(data.remaining);
-              // Set the snapshot to the new code so it's not dirty
-              originalCodeSnapshotRef.current = finalCode;
 
               // Add assistant message to chat history
               const assistantMessage: ChatMessage = {
@@ -625,11 +643,13 @@ export default function WorkspacePage() {
               setStreamingCode("");
               setIsStreaming(false);
 
-              // Enable preview and update it
-              previewControlRef.current?.enableAutoRefresh();
-              // Mobile: Switch to preview panel to see the final result (if auto-switch enabled)
-              if (autoSwitchEnabled) {
-                setMobileActivePanel("preview");
+              // Enable preview and update it (only in EDIT mode)
+              if (chatMode === "edit") {
+                previewControlRef.current?.enableAutoRefresh();
+                // Mobile: Switch to preview panel to see the final result (if auto-switch enabled)
+                if (autoSwitchEnabled) {
+                  setMobileActivePanel("preview");
+                }
               }
 
               showToast(t("chat.codeGenerated"), "success");
@@ -688,7 +708,7 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code, t, contextMessages, language, currentTemplateId, isCustomTemplateId, updateTemplate, addTemplate],
+    [visitorId, password, showToast, code, t, contextMessages, language, currentTemplateId, isCustomTemplateId, updateTemplate, addTemplate, chatMode],
   );
 
   // Cleanup abort on unmount
@@ -994,6 +1014,8 @@ export default function WorkspacePage() {
                 onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
                 onUnlockClick={handleOpenPasswordModal}
+                mode={chatMode}
+                onModeChange={setChatMode}
               />
             </Panel>
 
@@ -1050,6 +1072,8 @@ export default function WorkspacePage() {
                 onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
                 onUnlockClick={handleOpenPasswordModal}
+                mode={chatMode}
+                onModeChange={setChatMode}
               />
             )}
             {mobileActivePanel === "editor" && (
