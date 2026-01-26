@@ -98,14 +98,9 @@ export function EditorPanel({
 
   const handleChange: OnChange = useCallback(
     (value) => {
-      // During streaming, Monaco is controlled via direct model manipulation (pushEditOperations)
-      // Don't propagate changes to React state to prevent race conditions where
-      // Monaco's onChange fires with intermediate values and overwrites the streaming buffer
-      if (isStreaming) return;
-
       onChange(value || "");
     },
-    [onChange, isStreaming],
+    [onChange],
   );
 
   const handleFormat = useCallback(() => {

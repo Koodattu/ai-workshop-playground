@@ -102,6 +102,10 @@ export default function WorkspacePage() {
   // Scroll animation frame ref (separate from edit updates to ensure scroll always happens)
   const scrollFrameRef = useRef<number | null>(null);
 
+  // Guard to prevent template loading effect from reverting code after streaming completes
+  // When streaming ends, onDone sets the final code - we don't want the template effect to override it
+  const skipTemplateLoadRef = useRef<boolean>(false);
+
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
@@ -163,6 +167,13 @@ export default function WorkspacePage() {
 
   // Load saved template from localStorage once templates are loaded
   useEffect(() => {
+    // Skip if streaming just completed - onDone handles the code state
+    // This prevents the effect from reverting to old template code after AI generation
+    if (skipTemplateLoadRef.current) {
+      skipTemplateLoadRef.current = false;
+      return;
+    }
+
     if (!savedTemplateId || savedTemplateId === DEFAULT_TEMPLATE_ID) return;
 
     // Check if current template is already the saved one
@@ -595,6 +606,11 @@ export default function WorkspacePage() {
 
               // In EDIT mode, update templates and code
               if (chatMode === "edit") {
+                // IMPORTANT: Set the guard BEFORE any template updates
+                // This prevents the "load saved template" effect from reverting the code
+                // when it sees customTemplates change from addTemplate() below
+                skipTemplateLoadRef.current = true;
+
                 // If user is in a custom template, update it instead of creating a new one
                 if (isCustomTemplateId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
@@ -613,7 +629,8 @@ export default function WorkspacePage() {
                     templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
                   }
                   const newTemplate = addTemplate(templateName, finalCode, projectName);
-                  // Switch to the new custom template
+                  // Switch to the new custom template and update savedTemplateId to match
+                  setSavedTemplateId(newTemplate.id);
                   setCurrentTemplateId(newTemplate.id);
                 }
               }
