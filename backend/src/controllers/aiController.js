@@ -175,9 +175,10 @@ CODE MODIFICATION RULES:
 - Preserve working functionality unless asked to remove it
 
 IF YOU NEED IMAGES:
-- Use https://static.photos/ for placeholder images, https://static.photos/CATEGORY/RESOLUTION
+- Use https://static.photos/ for placeholder images, https://static.photos/CATEGORY/RESOLUTION/SEED
 - Possible categories: nature, office, people, technology, minimal, abstract, cityscape, workspace, food, travel, finance, medical, wellness, education, industry, gaming, automotive
-- Example https://static.photos/nature/640x360
+- Seed can be any integer to get different images
+- Example https://static.photos/nature/640x360/1
 
 CODE GENERATION RULES:
 1. Generate complete, self-contained HTML files
