@@ -58,7 +58,7 @@ export default function WorkspacePage() {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
-  const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
+  const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "ask");
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
