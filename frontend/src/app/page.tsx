@@ -90,8 +90,14 @@ export default function WorkspacePage() {
   // Code buffer for streaming
   const codeBufferRef = useRef<string>("");
 
+  // Track how much of the buffer has been written to editor (for delta appends)
+  const lastWrittenLengthRef = useRef<number>(0);
+
   // Throttling ref for editor updates (using requestAnimationFrame)
   const editorUpdateFrameRef = useRef<number | null>(null);
+
+  // Scroll animation frame ref (separate from edit updates to ensure scroll always happens)
+  const scrollFrameRef = useRef<number | null>(null);
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
@@ -352,8 +358,21 @@ export default function WorkspacePage() {
             onCodeStart: () => {
               // Disable preview auto-refresh
               previewControlRef.current?.disableAutoRefresh();
-              // Clear the editor buffer
+
+              // Clear the editor buffer and reset write tracking
               codeBufferRef.current = "";
+              lastWrittenLengthRef.current = 0;
+
+              // Cancel any pending animation frames from previous streaming
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
+              }
+              if (scrollFrameRef.current) {
+                cancelAnimationFrame(scrollFrameRef.current);
+                scrollFrameRef.current = null;
+              }
+
               // Mobile: Switch to editor panel to watch code stream in (if auto-switch enabled)
               if (autoSwitchEnabled) {
                 setMobileActivePanel("editor");
@@ -370,7 +389,11 @@ export default function WorkspacePage() {
                 }
               }
 
-              // Clear Monaco editor directly (do NOT call setCode during streaming to avoid conflicts)
+              // CRITICAL: Clear React state FIRST to prevent controlled component conflicts
+              // This ensures that if React re-renders during streaming, it won't restore old code
+              setCode("");
+
+              // Then clear Monaco editor directly for immediate visual feedback
               if (monacoEditorRef.current) {
                 try {
                   const model = monacoEditorRef.current.getModel();
@@ -388,10 +411,10 @@ export default function WorkspacePage() {
 
             // Step 1-2: Stream code chunks line by line to editor
             onCodeChunk: (chunk: string) => {
-              // Accumulate code chunks
+              // Accumulate code chunks in the buffer
               codeBufferRef.current += chunk;
 
-              // Cancel any pending frame
+              // Cancel any pending edit frame (we'll batch multiple chunks into one frame)
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
               }
@@ -399,13 +422,84 @@ export default function WorkspacePage() {
               // Use requestAnimationFrame for smooth 60fps updates
               editorUpdateFrameRef.current = requestAnimationFrame(() => {
                 if (monacoEditorRef.current) {
-                  // Direct Monaco manipulation (O(1) append operation)
+                  const model = monacoEditorRef.current.getModel();
+                  if (model) {
+                    // Calculate the delta: what hasn't been written to the editor yet
+                    // This ensures we don't lose chunks when multiple arrive within one frame
+                    const fullBuffer = codeBufferRef.current;
+                    const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
+
+                    // Only append if there's new content
+                    if (newContent.length > 0) {
+                      const lineCount = model.getLineCount();
+                      const lastLineLength = model.getLineContent(lineCount).length;
+
+                      // Append the delta content at the end of the document
+                      model.pushEditOperations(
+                        [],
+                        [
+                          {
+                            range: {
+                              startLineNumber: lineCount,
+                              startColumn: lastLineLength + 1,
+                              endLineNumber: lineCount,
+                              endColumn: lastLineLength + 1,
+                            },
+                            text: newContent,
+                            forceMoveMarkers: true,
+                          },
+                        ],
+                        () => null,
+                      );
+
+                      // Update tracking: mark all buffer content as written
+                      lastWrittenLengthRef.current = fullBuffer.length;
+                    }
+                  }
+                }
+                // Clear the frame ref since this frame has executed
+                editorUpdateFrameRef.current = null;
+              });
+
+              // Schedule scroll separately to ensure it always executes
+              // (scroll is independent of edit batching)
+              if (scrollFrameRef.current) {
+                cancelAnimationFrame(scrollFrameRef.current);
+              }
+              scrollFrameRef.current = requestAnimationFrame(() => {
+                if (monacoEditorRef.current) {
                   const model = monacoEditorRef.current.getModel();
                   if (model) {
                     const lineCount = model.getLineCount();
-                    const lastLineLength = model.getLineContent(lineCount).length;
+                    // Use immediate scroll (1) for responsive following during streaming
+                    monacoEditorRef.current.revealLine(lineCount, 1);
+                  }
+                }
+                scrollFrameRef.current = null;
+              });
+            },
 
-                    // Append chunk at the end of the document
+            // Step 3: Code complete
+            onCodeComplete: () => {
+              // Clear any pending animation frames
+              if (editorUpdateFrameRef.current) {
+                cancelAnimationFrame(editorUpdateFrameRef.current);
+                editorUpdateFrameRef.current = null;
+              }
+              if (scrollFrameRef.current) {
+                cancelAnimationFrame(scrollFrameRef.current);
+                scrollFrameRef.current = null;
+              }
+
+              // Ensure any remaining buffer content is written to the editor
+              // (in case the last animation frame was cancelled)
+              if (monacoEditorRef.current && lastWrittenLengthRef.current < codeBufferRef.current.length) {
+                const model = monacoEditorRef.current.getModel();
+                if (model) {
+                  const remainingContent = codeBufferRef.current.slice(lastWrittenLengthRef.current);
+                  if (remainingContent.length > 0) {
+                    const lineCount = model.getLineCount();
+                    const lastLineLength = model.getLineContent(lineCount).length;
                     model.pushEditOperations(
                       [],
                       [
@@ -416,32 +510,17 @@ export default function WorkspacePage() {
                             endLineNumber: lineCount,
                             endColumn: lastLineLength + 1,
                           },
-                          text: chunk,
+                          text: remainingContent,
                           forceMoveMarkers: true,
                         },
                       ],
                       () => null,
                     );
-
-                    // Auto-scroll to bottom as code streams in
-                    const newLineCount = model.getLineCount();
-                    // Use revealLine for smooth scrolling to keep bottom visible
-                    // ScrollType 0 = Smooth animation
-                    monacoEditorRef.current.revealLine(newLineCount, 0);
+                    lastWrittenLengthRef.current = codeBufferRef.current.length;
                   }
                 }
-                // Clear the frame ref since this frame has executed
-                editorUpdateFrameRef.current = null;
-              });
-            },
-
-            // Step 3: Code complete
-            onCodeComplete: () => {
-              // Clear any pending animation frame
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
               }
+
               // Apply final code buffer to React state (for template switching, etc.)
               setCode(codeBufferRef.current);
 
@@ -487,10 +566,14 @@ export default function WorkspacePage() {
 
             // Step 5: All done - enable preview and update
             onDone: (data) => {
-              // Clear any pending animation frame
+              // Clear any pending animation frames
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
+              }
+              if (scrollFrameRef.current) {
+                cancelAnimationFrame(scrollFrameRef.current);
+                scrollFrameRef.current = null;
               }
 
               const finalMessage = data.message || t("chat.codeGenerated");
@@ -552,10 +635,14 @@ export default function WorkspacePage() {
               showToast(t("chat.codeGenerated"), "success");
             },
             onError: (error, remainingUsesOnError, errorCode, details) => {
-              // Clear any pending animation frame
+              // Clear any pending animation frames
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
+              }
+              if (scrollFrameRef.current) {
+                cancelAnimationFrame(scrollFrameRef.current);
+                scrollFrameRef.current = null;
               }
 
               // Get translated error message based on error code
@@ -613,6 +700,9 @@ export default function WorkspacePage() {
       // Clean up any pending animation frames
       if (editorUpdateFrameRef.current) {
         cancelAnimationFrame(editorUpdateFrameRef.current);
+      }
+      if (scrollFrameRef.current) {
+        cancelAnimationFrame(scrollFrameRef.current);
       }
     };
   }, []);
