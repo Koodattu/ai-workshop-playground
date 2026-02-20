@@ -87,6 +87,9 @@ export default function WorkspacePage() {
   // Monaco editor ref for direct manipulation
   const monacoEditorRef = useRef<any>(null);
 
+  // Focus intent flag for streaming start (handles delayed editor mount/ready)
+  const shouldFocusEditorForStreamingRef = useRef<boolean>(false);
+
   // Cursor position storage for restoration after streaming
   const savedCursorPositionRef = useRef<{ lineNumber: number; column: number } | null>(null);
 
@@ -370,6 +373,15 @@ export default function WorkspacePage() {
             onCodeStart: () => {
               // In ASK mode, we don't modify code, so skip all editor operations
               if (chatMode === "ask") return;
+
+              // Mark that editor should be focused for streaming follow behavior
+              shouldFocusEditorForStreamingRef.current = true;
+
+              // Try immediate focus if editor is already ready
+              if (monacoEditorRef.current) {
+                monacoEditorRef.current.focus();
+                shouldFocusEditorForStreamingRef.current = false;
+              }
 
               // Disable preview auto-refresh
               previewControlRef.current?.disableAutoRefresh();
@@ -709,6 +721,16 @@ export default function WorkspacePage() {
     };
   }, []);
 
+  // Fallback: if streaming starts before editor is ready/mounted, focus once it becomes available
+  useEffect(() => {
+    if (!isStreaming) return;
+    if (!shouldFocusEditorForStreamingRef.current) return;
+    if (!monacoEditorRef.current) return;
+
+    monacoEditorRef.current.focus();
+    shouldFocusEditorForStreamingRef.current = false;
+  }, [isStreaming, mobileActivePanel]);
+
   /* FALLBACK: Old non-streaming implementation (kept as backup)
   const handleSendMessageNonStreaming = useCallback(
     async (prompt: string) => {
@@ -1017,6 +1039,10 @@ export default function WorkspacePage() {
                 isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming && shouldFocusEditorForStreamingRef.current) {
+                    editor.focus();
+                    shouldFocusEditorForStreamingRef.current = false;
+                  }
                 }}
               />
             </Panel>
@@ -1071,6 +1097,10 @@ export default function WorkspacePage() {
                 isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming && shouldFocusEditorForStreamingRef.current) {
+                    editor.focus();
+                    shouldFocusEditorForStreamingRef.current = false;
+                  }
                 }}
               />
             )}
