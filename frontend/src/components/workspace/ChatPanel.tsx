@@ -300,6 +300,7 @@ export function ChatPanel({
                 {/* ASK/EDIT Mode Toggle */}
                 <div className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5 md:p-1">
                   <button
+                    type="button"
                     onClick={() => onModeChange("ask")}
                     disabled={isLoading}
                     className={`
@@ -312,6 +313,7 @@ export function ChatPanel({
                     {t("chat.askMode")}
                   </button>
                   <button
+                    type="button"
                     onClick={() => onModeChange("edit")}
                     disabled={isLoading}
                     className={`
