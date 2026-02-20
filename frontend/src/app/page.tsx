@@ -99,9 +99,6 @@ export default function WorkspacePage() {
   // Throttling ref for editor updates (using requestAnimationFrame)
   const editorUpdateFrameRef = useRef<number | null>(null);
 
-  // Scroll animation frame ref (separate from edit updates to ensure scroll always happens)
-  const scrollFrameRef = useRef<number | null>(null);
-
   // Guard to prevent template loading effect from reverting code after streaming completes
   // When streaming ends, onDone sets the final code - we don't want the template effect to override it
   const skipTemplateLoadRef = useRef<boolean>(false);
@@ -386,10 +383,6 @@ export default function WorkspacePage() {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
               }
-              if (scrollFrameRef.current) {
-                cancelAnimationFrame(scrollFrameRef.current);
-                scrollFrameRef.current = null;
-              }
 
               // Mobile: Switch to editor panel to watch code stream in (if auto-switch enabled)
               if (autoSwitchEnabled) {
@@ -475,28 +468,15 @@ export default function WorkspacePage() {
 
                       // Update tracking: mark all buffer content as written
                       lastWrittenLengthRef.current = fullBuffer.length;
+
+                      // Auto-follow to end of model during streaming
+                      const endPosition = model.getFullModelRange().getEndPosition();
+                      monacoEditorRef.current.revealPosition(endPosition, 1);
                     }
                   }
                 }
                 // Clear the frame ref since this frame has executed
                 editorUpdateFrameRef.current = null;
-              });
-
-              // Schedule scroll separately to ensure it always executes
-              // (scroll is independent of edit batching)
-              if (scrollFrameRef.current) {
-                cancelAnimationFrame(scrollFrameRef.current);
-              }
-              scrollFrameRef.current = requestAnimationFrame(() => {
-                if (monacoEditorRef.current) {
-                  const model = monacoEditorRef.current.getModel();
-                  if (model) {
-                    const lineCount = model.getLineCount();
-                    // Use immediate scroll (1) for responsive following during streaming
-                    monacoEditorRef.current.revealLine(lineCount, 1);
-                  }
-                }
-                scrollFrameRef.current = null;
               });
             },
 
@@ -509,10 +489,6 @@ export default function WorkspacePage() {
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
-              }
-              if (scrollFrameRef.current) {
-                cancelAnimationFrame(scrollFrameRef.current);
-                scrollFrameRef.current = null;
               }
 
               // Ensure any remaining buffer content is written to the editor
@@ -595,10 +571,6 @@ export default function WorkspacePage() {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
               }
-              if (scrollFrameRef.current) {
-                cancelAnimationFrame(scrollFrameRef.current);
-                scrollFrameRef.current = null;
-              }
 
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
@@ -677,10 +649,6 @@ export default function WorkspacePage() {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
               }
-              if (scrollFrameRef.current) {
-                cancelAnimationFrame(scrollFrameRef.current);
-                scrollFrameRef.current = null;
-              }
 
               // Get translated error message based on error code
               const translatedErrorMessage = getErrorMessage(errorCode, t, error);
@@ -737,9 +705,6 @@ export default function WorkspacePage() {
       // Clean up any pending animation frames
       if (editorUpdateFrameRef.current) {
         cancelAnimationFrame(editorUpdateFrameRef.current);
-      }
-      if (scrollFrameRef.current) {
-        cancelAnimationFrame(scrollFrameRef.current);
       }
     };
   }, []);
