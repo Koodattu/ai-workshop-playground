@@ -504,6 +504,12 @@ export default function WorkspacePage() {
 
                       // Update tracking: mark all buffer content as written
                       lastWrittenLengthRef.current = fullBuffer.length;
+
+                      // Scroll to bottom after appending content
+                      monacoEditorRef.current.setScrollTop(
+                        monacoEditorRef.current.getContentHeight(),
+                        1, // ScrollType.Immediate
+                      );
                     }
                   }
                 }
