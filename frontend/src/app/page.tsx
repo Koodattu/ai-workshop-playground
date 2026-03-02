@@ -129,12 +129,9 @@ export default function WorkspacePage() {
   // Handle code changes and auto-convert built-in templates to custom on first edit
   const handleCodeChange = useCallback(
     (newCode: string) => {
-      // During streaming, keep React state in sync but skip auto-conversion logic.
-      // The setValue override (installed in onCodeStart) prevents scroll reset.
-      if (isStreaming) {
-        setCode(newCode);
-        return;
-      }
+      // During streaming, the Monaco model is updated directly in onCodeChunk.
+      // Ignore onChange updates to avoid React controlled-value sync fighting the stream.
+      if (isStreaming) return;
 
       // Check if we need to auto-convert from built-in to custom template
       const wasBuiltInTemplate = !isCustomTemplateId(currentTemplateId);
