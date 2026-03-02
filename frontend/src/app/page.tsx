@@ -109,6 +109,9 @@ export default function WorkspacePage() {
   // Disposable for the auto-scroll-to-bottom listener during streaming
   const scrollFollowDisposableRef = useRef<{ dispose: () => void } | null>(null);
 
+  // Original editor.setValue backup — patched during streaming to prevent scroll reset
+  const originalSetValueRef = useRef<((value: string) => void) | null>(null);
+
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
@@ -123,10 +126,12 @@ export default function WorkspacePage() {
   // Handle code changes and auto-convert built-in templates to custom on first edit
   const handleCodeChange = useCallback(
     (newCode: string) => {
-      // During streaming, don't update React state - content is managed directly
-      // via pushEditOperations on the Monaco model. Final state is set in onCodeComplete/onDone.
-      // This prevents the controlled component from fighting direct model writes and resetting scroll.
-      if (isStreaming) return;
+      // During streaming, keep React state in sync but skip auto-conversion logic.
+      // The setValue override (installed in onCodeStart) prevents scroll reset.
+      if (isStreaming) {
+        setCode(newCode);
+        return;
+      }
 
       // Check if we need to auto-convert from built-in to custom template
       const wasBuiltInTemplate = !isCustomTemplateId(currentTemplateId);
@@ -548,11 +553,15 @@ export default function WorkspacePage() {
                 }
               }
 
-              // Stop auto-scroll-to-bottom and restore smooth scrolling
+              // Stop auto-scroll-to-bottom, restore smooth scrolling, and restore setValue
               scrollFollowDisposableRef.current?.dispose();
               scrollFollowDisposableRef.current = null;
               if (monacoEditorRef.current) {
                 monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+                if (originalSetValueRef.current) {
+                  monacoEditorRef.current.setValue = originalSetValueRef.current;
+                  originalSetValueRef.current = null;
+                }
               }
 
               // Apply final code buffer to React state (for template switching, etc.)
@@ -606,11 +615,15 @@ export default function WorkspacePage() {
                 editorUpdateFrameRef.current = null;
               }
 
-              // Clean up scroll following (safety — should already be disposed in onCodeComplete)
+              // Clean up scroll following and restore setValue (safety — should already be done in onCodeComplete)
               scrollFollowDisposableRef.current?.dispose();
               scrollFollowDisposableRef.current = null;
               if (monacoEditorRef.current) {
                 monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+                if (originalSetValueRef.current) {
+                  monacoEditorRef.current.setValue = originalSetValueRef.current;
+                  originalSetValueRef.current = null;
+                }
               }
 
               const finalMessage = data.message || t("chat.codeGenerated");
@@ -691,11 +704,15 @@ export default function WorkspacePage() {
                 editorUpdateFrameRef.current = null;
               }
 
-              // Clean up scroll following
+              // Clean up scroll following and restore setValue
               scrollFollowDisposableRef.current?.dispose();
               scrollFollowDisposableRef.current = null;
               if (monacoEditorRef.current) {
                 monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+                if (originalSetValueRef.current) {
+                  monacoEditorRef.current.setValue = originalSetValueRef.current;
+                  originalSetValueRef.current = null;
+                }
               }
 
               // Get translated error message based on error code
@@ -757,6 +774,11 @@ export default function WorkspacePage() {
       // Clean up scroll following listener
       scrollFollowDisposableRef.current?.dispose();
       scrollFollowDisposableRef.current = null;
+      // Restore original setValue if still patched
+      if (monacoEditorRef.current && originalSetValueRef.current) {
+        monacoEditorRef.current.setValue = originalSetValueRef.current;
+        originalSetValueRef.current = null;
+      }
     };
   }, []);
 
