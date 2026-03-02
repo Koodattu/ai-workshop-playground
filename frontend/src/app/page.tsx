@@ -106,6 +106,9 @@ export default function WorkspacePage() {
   // When streaming ends, onDone sets the final code - we don't want the template effect to override it
   const skipTemplateLoadRef = useRef<boolean>(false);
 
+  // Disposable for the auto-scroll-to-bottom listener during streaming
+  const scrollFollowDisposableRef = useRef<{ dispose: () => void } | null>(null);
+
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
@@ -120,11 +123,10 @@ export default function WorkspacePage() {
   // Handle code changes and auto-convert built-in templates to custom on first edit
   const handleCodeChange = useCallback(
     (newCode: string) => {
-      // Don't auto-convert during AI streaming - let the onDone handler create the template
-      if (isStreaming) {
-        setCode(newCode);
-        return;
-      }
+      // During streaming, don't update React state - content is managed directly
+      // via pushEditOperations on the Monaco model. Final state is set in onCodeComplete/onDone.
+      // This prevents the controlled component from fighting direct model writes and resetting scroll.
+      if (isStreaming) return;
 
       // Check if we need to auto-convert from built-in to custom template
       const wasBuiltInTemplate = !isCustomTemplateId(currentTemplateId);
@@ -429,6 +431,23 @@ export default function WorkspacePage() {
                 } catch (error) {
                   console.warn("Failed to clear editor:", error);
                 }
+
+                // Disable smooth scrolling for reliable programmatic scroll during streaming
+                monacoEditorRef.current.updateOptions({ smoothScrolling: false });
+
+                // Set up auto-scroll-to-bottom: listen for content size changes
+                // This fires after Monaco recalculates layout (including word wrap),
+                // so the scroll height is always accurate.
+                scrollFollowDisposableRef.current?.dispose();
+                scrollFollowDisposableRef.current = monacoEditorRef.current.onDidContentSizeChange((e: { contentHeightChanged: boolean }) => {
+                  if (e.contentHeightChanged && monacoEditorRef.current) {
+                    // Scroll to absolute bottom — Monaco clamps to the maximum valid offset
+                    monacoEditorRef.current.setScrollTop(
+                      monacoEditorRef.current.getContentHeight(),
+                      1, // ScrollType.Immediate
+                    );
+                  }
+                });
               }
             },
 
@@ -480,10 +499,6 @@ export default function WorkspacePage() {
 
                       // Update tracking: mark all buffer content as written
                       lastWrittenLengthRef.current = fullBuffer.length;
-
-                      // Auto-follow to end of model during streaming
-                      const endPosition = model.getFullModelRange().getEndPosition();
-                      monacoEditorRef.current.revealPosition(endPosition, 1);
                     }
                   }
                 }
@@ -531,6 +546,13 @@ export default function WorkspacePage() {
                     lastWrittenLengthRef.current = codeBufferRef.current.length;
                   }
                 }
+              }
+
+              // Stop auto-scroll-to-bottom and restore smooth scrolling
+              scrollFollowDisposableRef.current?.dispose();
+              scrollFollowDisposableRef.current = null;
+              if (monacoEditorRef.current) {
+                monacoEditorRef.current.updateOptions({ smoothScrolling: true });
               }
 
               // Apply final code buffer to React state (for template switching, etc.)
@@ -582,6 +604,13 @@ export default function WorkspacePage() {
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
+              }
+
+              // Clean up scroll following (safety — should already be disposed in onCodeComplete)
+              scrollFollowDisposableRef.current?.dispose();
+              scrollFollowDisposableRef.current = null;
+              if (monacoEditorRef.current) {
+                monacoEditorRef.current.updateOptions({ smoothScrolling: true });
               }
 
               const finalMessage = data.message || t("chat.codeGenerated");
@@ -662,6 +691,13 @@ export default function WorkspacePage() {
                 editorUpdateFrameRef.current = null;
               }
 
+              // Clean up scroll following
+              scrollFollowDisposableRef.current?.dispose();
+              scrollFollowDisposableRef.current = null;
+              if (monacoEditorRef.current) {
+                monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+              }
+
               // Get translated error message based on error code
               const translatedErrorMessage = getErrorMessage(errorCode, t, error);
 
@@ -718,6 +754,9 @@ export default function WorkspacePage() {
       if (editorUpdateFrameRef.current) {
         cancelAnimationFrame(editorUpdateFrameRef.current);
       }
+      // Clean up scroll following listener
+      scrollFollowDisposableRef.current?.dispose();
+      scrollFollowDisposableRef.current = null;
     };
   }, []);
 
