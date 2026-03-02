@@ -106,6 +106,9 @@ export default function WorkspacePage() {
   // When streaming ends, onDone sets the final code - we don't want the template effect to override it
   const skipTemplateLoadRef = useRef<boolean>(false);
 
+  // Interval ref for forceful continuous polling scroll to bottom during streaming
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   // Disposable for the auto-scroll-to-bottom listener during streaming
   const scrollFollowDisposableRef = useRef<{ dispose: () => void } | null>(null);
 
@@ -439,6 +442,27 @@ export default function WorkspacePage() {
 
                 // Disable smooth scrolling for reliable programmatic scroll during streaming
                 monacoEditorRef.current.updateOptions({ smoothScrolling: false });
+
+                // Forcefully scroll to bottom every 50ms during the entire stream
+                // This bypasses any react rendering cycles and monaco event loop skips
+                if (scrollIntervalRef.current) {
+                  clearInterval(scrollIntervalRef.current);
+                }
+
+                scrollIntervalRef.current = setInterval(() => {
+                  if (!monacoEditorRef.current) return;
+
+                  const model = monacoEditorRef.current.getModel();
+                  if (!model) return;
+
+                  // Method 1: Reveal last line
+                  const lineCount = model.getLineCount();
+                  monacoEditorRef.current.revealLine(lineCount, 1); // ScrollType.Immediate
+
+                  // Method 2 (Backup): Set raw scroll top to maximum height
+                  const contentHeight = monacoEditorRef.current.getContentHeight();
+                  monacoEditorRef.current.setScrollTop(contentHeight, 1);
+                }, 50);
               }
             },
 
@@ -490,12 +514,6 @@ export default function WorkspacePage() {
 
                       // Update tracking: mark all buffer content as written
                       lastWrittenLengthRef.current = fullBuffer.length;
-
-                      // Scroll to bottom using revealLine, which safely queues the
-                      // reveal until after word-wrap and layout recalculations complete
-                      const newLineCount = model.getLineCount();
-                      // ScrollType.Immediate = 1
-                      monacoEditorRef.current.revealLine(newLineCount, 1);
                     }
                   }
                 }
@@ -543,6 +561,12 @@ export default function WorkspacePage() {
                     lastWrittenLengthRef.current = codeBufferRef.current.length;
                   }
                 }
+              }
+
+              // Clean up scroll interval
+              if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
               }
 
               // Stop auto-scroll-to-bottom, restore smooth scrolling, and restore setValue
@@ -605,6 +629,12 @@ export default function WorkspacePage() {
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
+              }
+
+              // Clean up scroll interval
+              if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
               }
 
               // Clean up scroll following and restore setValue (safety — should already be done in onCodeComplete)
@@ -696,6 +726,12 @@ export default function WorkspacePage() {
                 editorUpdateFrameRef.current = null;
               }
 
+              // Clean up scroll interval
+              if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
+              }
+
               // Clean up scroll following and restore setValue
               scrollFollowDisposableRef.current?.dispose();
               scrollFollowDisposableRef.current = null;
@@ -762,6 +798,11 @@ export default function WorkspacePage() {
       // Clean up any pending animation frames
       if (editorUpdateFrameRef.current) {
         cancelAnimationFrame(editorUpdateFrameRef.current);
+      }
+      // Clean up scroll interval
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
       }
       // Clean up scroll following listener
       scrollFollowDisposableRef.current?.dispose();
