@@ -636,7 +636,7 @@ export function EditorPanel({
       <div className="flex-1 overflow-hidden">
         <Editor
           defaultLanguage="html"
-          value={isStreaming ? undefined : code}
+          value={code}
           onChange={handleChange}
           onMount={handleEditorMount}
           theme="vs-dark"
@@ -661,7 +661,8 @@ export function EditorPanel({
             automaticLayout: true,
             tabSize: 2,
             wordWrap: "on",
-            readOnly: isStreaming,
+            readOnly: false,
+            domReadOnly: isStreaming,
           }}
         />
       </div>

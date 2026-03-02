@@ -478,41 +478,17 @@ export default function WorkspacePage() {
 
               // Use requestAnimationFrame for smooth 60fps updates
               editorUpdateFrameRef.current = requestAnimationFrame(() => {
-                if (monacoEditorRef.current) {
-                  const model = monacoEditorRef.current.getModel();
-                  if (model) {
-                    // Calculate the delta: what hasn't been written to the editor yet
-                    // This ensures we don't lose chunks when multiple arrive within one frame
-                    const fullBuffer = codeBufferRef.current;
-                    const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
+                // Calculate the delta: what hasn't been published to React state yet
+                // This ensures we don't lose chunks when multiple arrive within one frame
+                const fullBuffer = codeBufferRef.current;
+                const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
 
-                    // Only append if there's new content
-                    if (newContent.length > 0) {
-                      const lineCount = model.getLineCount();
-                      const lastLineLength = model.getLineContent(lineCount).length;
-
-                      // Append the delta content at the end of the document
-                      model.pushEditOperations(
-                        [],
-                        [
-                          {
-                            range: {
-                              startLineNumber: lineCount,
-                              startColumn: lastLineLength + 1,
-                              endLineNumber: lineCount,
-                              endColumn: lastLineLength + 1,
-                            },
-                            text: newContent,
-                            forceMoveMarkers: true,
-                          },
-                        ],
-                        () => null,
-                      );
-
-                      // Update tracking: mark all buffer content as written
-                      lastWrittenLengthRef.current = fullBuffer.length;
-                    }
-                  }
+                // Only publish if there's new content
+                if (newContent.length > 0) {
+                  // Update tracking: mark all buffer content as published
+                  lastWrittenLengthRef.current = fullBuffer.length;
+                  // Single-writer approach: React state drives editor content
+                  setCode(fullBuffer);
                 }
                 // Clear the frame ref since this frame has executed
                 editorUpdateFrameRef.current = null;
@@ -530,34 +506,10 @@ export default function WorkspacePage() {
                 editorUpdateFrameRef.current = null;
               }
 
-              // Ensure any remaining buffer content is written to the editor
-              // (in case the last animation frame was cancelled)
-              if (monacoEditorRef.current && lastWrittenLengthRef.current < codeBufferRef.current.length) {
-                const model = monacoEditorRef.current.getModel();
-                if (model) {
-                  const remainingContent = codeBufferRef.current.slice(lastWrittenLengthRef.current);
-                  if (remainingContent.length > 0) {
-                    const lineCount = model.getLineCount();
-                    const lastLineLength = model.getLineContent(lineCount).length;
-                    model.pushEditOperations(
-                      [],
-                      [
-                        {
-                          range: {
-                            startLineNumber: lineCount,
-                            startColumn: lastLineLength + 1,
-                            endLineNumber: lineCount,
-                            endColumn: lastLineLength + 1,
-                          },
-                          text: remainingContent,
-                          forceMoveMarkers: true,
-                        },
-                      ],
-                      () => null,
-                    );
-                    lastWrittenLengthRef.current = codeBufferRef.current.length;
-                  }
-                }
+              // Ensure any remaining buffered content is published
+              if (lastWrittenLengthRef.current < codeBufferRef.current.length) {
+                lastWrittenLengthRef.current = codeBufferRef.current.length;
+                setCode(codeBufferRef.current);
               }
 
               // Clean up scroll interval
