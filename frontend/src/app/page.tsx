@@ -138,6 +138,7 @@ export default function WorkspacePage() {
         const newTemplate = addTemplate(templateName, newCode);
 
         // Switch to the newly created custom template
+        setSavedTemplateId(newTemplate.id);
         setCurrentTemplateId(newTemplate.id);
         originalCodeSnapshotRef.current = newCode;
         setCode(newCode);
@@ -146,7 +147,7 @@ export default function WorkspacePage() {
         setCode(newCode);
       }
     },
-    [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming],
+    [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming, setSavedTemplateId],
   );
 
   // Auto-save code changes to custom templates (debounced)
