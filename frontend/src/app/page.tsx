@@ -439,20 +439,6 @@ export default function WorkspacePage() {
 
                 // Disable smooth scrolling for reliable programmatic scroll during streaming
                 monacoEditorRef.current.updateOptions({ smoothScrolling: false });
-
-                // Set up auto-scroll-to-bottom: listen for content size changes
-                // This fires after Monaco recalculates layout (including word wrap),
-                // so the scroll height is always accurate.
-                scrollFollowDisposableRef.current?.dispose();
-                scrollFollowDisposableRef.current = monacoEditorRef.current.onDidContentSizeChange((e: { contentHeightChanged: boolean }) => {
-                  if (e.contentHeightChanged && monacoEditorRef.current) {
-                    // Scroll to absolute bottom — Monaco clamps to the maximum valid offset
-                    monacoEditorRef.current.setScrollTop(
-                      monacoEditorRef.current.getContentHeight(),
-                      1, // ScrollType.Immediate
-                    );
-                  }
-                });
               }
             },
 
@@ -505,11 +491,11 @@ export default function WorkspacePage() {
                       // Update tracking: mark all buffer content as written
                       lastWrittenLengthRef.current = fullBuffer.length;
 
-                      // Scroll to bottom after appending content
-                      monacoEditorRef.current.setScrollTop(
-                        monacoEditorRef.current.getContentHeight(),
-                        1, // ScrollType.Immediate
-                      );
+                      // Scroll to bottom using revealLine, which safely queues the
+                      // reveal until after word-wrap and layout recalculations complete
+                      const newLineCount = model.getLineCount();
+                      // ScrollType.Immediate = 1
+                      monacoEditorRef.current.revealLine(newLineCount, 1);
                     }
                   }
                 }
