@@ -106,6 +106,15 @@ export default function WorkspacePage() {
   // When streaming ends, onDone sets the final code - we don't want the template effect to override it
   const skipTemplateLoadRef = useRef<boolean>(false);
 
+  // Interval ref for forceful continuous polling scroll to bottom during streaming
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Disposable for the auto-scroll-to-bottom listener during streaming
+  const scrollFollowDisposableRef = useRef<{ dispose: () => void } | null>(null);
+
+  // Original editor.setValue backup — patched during streaming to prevent scroll reset
+  const originalSetValueRef = useRef<((value: string) => void) | null>(null);
+
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
@@ -120,11 +129,9 @@ export default function WorkspacePage() {
   // Handle code changes and auto-convert built-in templates to custom on first edit
   const handleCodeChange = useCallback(
     (newCode: string) => {
-      // Don't auto-convert during AI streaming - let the onDone handler create the template
-      if (isStreaming) {
-        setCode(newCode);
-        return;
-      }
+      // During streaming, the Monaco model is updated directly in onCodeChunk.
+      // Ignore onChange updates to avoid React controlled-value sync fighting the stream.
+      if (isStreaming) return;
 
       // Check if we need to auto-convert from built-in to custom template
       const wasBuiltInTemplate = !isCustomTemplateId(currentTemplateId);
@@ -430,6 +437,30 @@ export default function WorkspacePage() {
                 } catch (error) {
                   console.warn("Failed to clear editor:", error);
                 }
+
+                // Disable smooth scrolling for reliable programmatic scroll during streaming
+                monacoEditorRef.current.updateOptions({ smoothScrolling: false });
+
+                // Forcefully scroll to bottom every 50ms during the entire stream
+                // This bypasses any react rendering cycles and monaco event loop skips
+                if (scrollIntervalRef.current) {
+                  clearInterval(scrollIntervalRef.current);
+                }
+
+                scrollIntervalRef.current = setInterval(() => {
+                  if (!monacoEditorRef.current) return;
+
+                  const model = monacoEditorRef.current.getModel();
+                  if (!model) return;
+
+                  // Method 1: Reveal last line
+                  const lineCount = model.getLineCount();
+                  monacoEditorRef.current.revealLine(lineCount, 1); // ScrollType.Immediate
+
+                  // Method 2 (Backup): Set raw scroll top to maximum height
+                  const contentHeight = monacoEditorRef.current.getContentHeight();
+                  monacoEditorRef.current.setScrollTop(contentHeight, 1);
+                }, 50);
               }
             },
 
@@ -448,45 +479,17 @@ export default function WorkspacePage() {
 
               // Use requestAnimationFrame for smooth 60fps updates
               editorUpdateFrameRef.current = requestAnimationFrame(() => {
-                if (monacoEditorRef.current) {
-                  const model = monacoEditorRef.current.getModel();
-                  if (model) {
-                    // Calculate the delta: what hasn't been written to the editor yet
-                    // This ensures we don't lose chunks when multiple arrive within one frame
-                    const fullBuffer = codeBufferRef.current;
-                    const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
+                // Calculate the delta: what hasn't been published to React state yet
+                // This ensures we don't lose chunks when multiple arrive within one frame
+                const fullBuffer = codeBufferRef.current;
+                const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
 
-                    // Only append if there's new content
-                    if (newContent.length > 0) {
-                      const lineCount = model.getLineCount();
-                      const lastLineLength = model.getLineContent(lineCount).length;
-
-                      // Append the delta content at the end of the document
-                      model.pushEditOperations(
-                        [],
-                        [
-                          {
-                            range: {
-                              startLineNumber: lineCount,
-                              startColumn: lastLineLength + 1,
-                              endLineNumber: lineCount,
-                              endColumn: lastLineLength + 1,
-                            },
-                            text: newContent,
-                            forceMoveMarkers: true,
-                          },
-                        ],
-                        () => null,
-                      );
-
-                      // Update tracking: mark all buffer content as written
-                      lastWrittenLengthRef.current = fullBuffer.length;
-
-                      // Auto-follow to end of model during streaming
-                      const endPosition = model.getFullModelRange().getEndPosition();
-                      monacoEditorRef.current.revealPosition(endPosition, 1);
-                    }
-                  }
+                // Only publish if there's new content
+                if (newContent.length > 0) {
+                  // Update tracking: mark all buffer content as published
+                  lastWrittenLengthRef.current = fullBuffer.length;
+                  // Single-writer approach: React state drives editor content
+                  setCode(fullBuffer);
                 }
                 // Clear the frame ref since this frame has executed
                 editorUpdateFrameRef.current = null;
@@ -504,33 +507,26 @@ export default function WorkspacePage() {
                 editorUpdateFrameRef.current = null;
               }
 
-              // Ensure any remaining buffer content is written to the editor
-              // (in case the last animation frame was cancelled)
-              if (monacoEditorRef.current && lastWrittenLengthRef.current < codeBufferRef.current.length) {
-                const model = monacoEditorRef.current.getModel();
-                if (model) {
-                  const remainingContent = codeBufferRef.current.slice(lastWrittenLengthRef.current);
-                  if (remainingContent.length > 0) {
-                    const lineCount = model.getLineCount();
-                    const lastLineLength = model.getLineContent(lineCount).length;
-                    model.pushEditOperations(
-                      [],
-                      [
-                        {
-                          range: {
-                            startLineNumber: lineCount,
-                            startColumn: lastLineLength + 1,
-                            endLineNumber: lineCount,
-                            endColumn: lastLineLength + 1,
-                          },
-                          text: remainingContent,
-                          forceMoveMarkers: true,
-                        },
-                      ],
-                      () => null,
-                    );
-                    lastWrittenLengthRef.current = codeBufferRef.current.length;
-                  }
+              // Ensure any remaining buffered content is published
+              if (lastWrittenLengthRef.current < codeBufferRef.current.length) {
+                lastWrittenLengthRef.current = codeBufferRef.current.length;
+                setCode(codeBufferRef.current);
+              }
+
+              // Clean up scroll interval
+              if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
+              }
+
+              // Stop auto-scroll-to-bottom, restore smooth scrolling, and restore setValue
+              scrollFollowDisposableRef.current?.dispose();
+              scrollFollowDisposableRef.current = null;
+              if (monacoEditorRef.current) {
+                monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+                if (originalSetValueRef.current) {
+                  monacoEditorRef.current.setValue = originalSetValueRef.current;
+                  originalSetValueRef.current = null;
                 }
               }
 
@@ -583,6 +579,23 @@ export default function WorkspacePage() {
               if (editorUpdateFrameRef.current) {
                 cancelAnimationFrame(editorUpdateFrameRef.current);
                 editorUpdateFrameRef.current = null;
+              }
+
+              // Clean up scroll interval
+              if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
+              }
+
+              // Clean up scroll following and restore setValue (safety — should already be done in onCodeComplete)
+              scrollFollowDisposableRef.current?.dispose();
+              scrollFollowDisposableRef.current = null;
+              if (monacoEditorRef.current) {
+                monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+                if (originalSetValueRef.current) {
+                  monacoEditorRef.current.setValue = originalSetValueRef.current;
+                  originalSetValueRef.current = null;
+                }
               }
 
               const finalMessage = data.message || t("chat.codeGenerated");
@@ -663,6 +676,23 @@ export default function WorkspacePage() {
                 editorUpdateFrameRef.current = null;
               }
 
+              // Clean up scroll interval
+              if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
+              }
+
+              // Clean up scroll following and restore setValue
+              scrollFollowDisposableRef.current?.dispose();
+              scrollFollowDisposableRef.current = null;
+              if (monacoEditorRef.current) {
+                monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+                if (originalSetValueRef.current) {
+                  monacoEditorRef.current.setValue = originalSetValueRef.current;
+                  originalSetValueRef.current = null;
+                }
+              }
+
               // Get translated error message based on error code
               const translatedErrorMessage = getErrorMessage(errorCode, t, error);
 
@@ -718,6 +748,19 @@ export default function WorkspacePage() {
       // Clean up any pending animation frames
       if (editorUpdateFrameRef.current) {
         cancelAnimationFrame(editorUpdateFrameRef.current);
+      }
+      // Clean up scroll interval
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+      // Clean up scroll following listener
+      scrollFollowDisposableRef.current?.dispose();
+      scrollFollowDisposableRef.current = null;
+      // Restore original setValue if still patched
+      if (monacoEditorRef.current && originalSetValueRef.current) {
+        monacoEditorRef.current.setValue = originalSetValueRef.current;
+        originalSetValueRef.current = null;
       }
     };
   }, []);

@@ -661,7 +661,8 @@ export function EditorPanel({
             automaticLayout: true,
             tabSize: 2,
             wordWrap: "on",
-            readOnly: isStreaming,
+            readOnly: false,
+            domReadOnly: isStreaming,
           }}
         />
       </div>
