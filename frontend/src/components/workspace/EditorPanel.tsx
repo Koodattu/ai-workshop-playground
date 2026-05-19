@@ -636,7 +636,7 @@ export function EditorPanel({
       <div className="flex-1 overflow-hidden">
         <Editor
           defaultLanguage="html"
-          value={code}
+          value={isStreaming ? undefined : code}
           onChange={handleChange}
           onMount={handleEditorMount}
           theme="vs-dark"

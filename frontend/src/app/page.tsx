@@ -115,6 +115,30 @@ export default function WorkspacePage() {
   // Original editor.setValue backup — patched during streaming to prevent scroll reset
   const originalSetValueRef = useRef<((value: string) => void) | null>(null);
 
+  const appendToEditorModel = useCallback((text: string) => {
+    if (!text || !monacoEditorRef.current) return false;
+
+    const model = monacoEditorRef.current.getModel();
+    if (!model) return false;
+
+    const lineCount = model.getLineCount();
+    const column = model.getLineMaxColumn(lineCount);
+    model.applyEdits([
+      {
+        range: {
+          startLineNumber: lineCount,
+          startColumn: column,
+          endLineNumber: lineCount,
+          endColumn: column,
+        },
+        text,
+        forceMoveMarkers: true,
+      },
+    ]);
+
+    return true;
+  }, []);
+
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
@@ -481,17 +505,17 @@ export default function WorkspacePage() {
 
               // Use requestAnimationFrame for smooth 60fps updates
               editorUpdateFrameRef.current = requestAnimationFrame(() => {
-                // Calculate the delta: what hasn't been published to React state yet
+                // Calculate the delta: what hasn't been written to Monaco yet
                 // This ensures we don't lose chunks when multiple arrive within one frame
                 const fullBuffer = codeBufferRef.current;
                 const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
 
-                // Only publish if there's new content
+                // Only write if there's new content
                 if (newContent.length > 0) {
-                  // Update tracking: mark all buffer content as published
-                  lastWrittenLengthRef.current = fullBuffer.length;
-                  // Single-writer approach: React state drives editor content
-                  setCode(fullBuffer);
+                  const wroteToEditor = appendToEditorModel(newContent);
+                  if (wroteToEditor) {
+                    lastWrittenLengthRef.current = fullBuffer.length;
+                  }
                 }
                 // Clear the frame ref since this frame has executed
                 editorUpdateFrameRef.current = null;
@@ -511,8 +535,10 @@ export default function WorkspacePage() {
 
               // Ensure any remaining buffered content is published
               if (lastWrittenLengthRef.current < codeBufferRef.current.length) {
-                lastWrittenLengthRef.current = codeBufferRef.current.length;
-                setCode(codeBufferRef.current);
+                const remainingContent = codeBufferRef.current.slice(lastWrittenLengthRef.current);
+                if (appendToEditorModel(remainingContent)) {
+                  lastWrittenLengthRef.current = codeBufferRef.current.length;
+                }
               }
 
               // Clean up scroll interval
@@ -768,6 +794,7 @@ export default function WorkspacePage() {
       addTemplate,
       chatMode,
       autoSwitchEnabled,
+      appendToEditorModel,
       setSavedTemplateId,
     ],
   );
@@ -1117,6 +1144,10 @@ export default function WorkspacePage() {
                 isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming) {
+                    editor.getModel()?.setValue(codeBufferRef.current);
+                    lastWrittenLengthRef.current = codeBufferRef.current.length;
+                  }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
                     editor.focus();
                     shouldFocusEditorForStreamingRef.current = false;
@@ -1176,6 +1207,10 @@ export default function WorkspacePage() {
                 isStreaming={isStreaming}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming) {
+                    editor.getModel()?.setValue(codeBufferRef.current);
+                    lastWrittenLengthRef.current = codeBufferRef.current.length;
+                  }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
                     editor.focus();
                     shouldFocusEditorForStreamingRef.current = false;
