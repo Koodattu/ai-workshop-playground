@@ -33,6 +33,7 @@ const withCode = (validationChain, errorCode) => {
  * - visitorId: Unique identifier for the visitor/machine
  * - prompt: The code generation prompt
  * - messageHistory: (optional) Array of previous messages for context
+ * - modelPreference: (optional) "fast" or "accurate"
  *
  * Response:
  * - code: Generated HTML/CSS/JS code
@@ -72,6 +73,10 @@ router.post(
       .isLength({ max: 5000 })
       .withMessage({ msg: "Message content must not exceed 5000 characters", errorCode: ERROR_CODES.MESSAGE_CONTENT_TOO_LONG }),
     body("mode").optional().isIn(["edit", "ask"]).withMessage({ msg: "Mode must be either 'edit' or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("modelPreference")
+      .optional()
+      .isIn(["fast", "accurate"])
+      .withMessage({ msg: "Model preference must be either 'fast' or 'accurate'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     validateRequest,
   ],
   workshopGuard,

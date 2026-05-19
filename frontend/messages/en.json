@@ -74,6 +74,9 @@
     "editMode": "EDIT",
     "askModeTooltip": "Ask questions about code without modifying it",
     "editModeTooltip": "Generate or modify code with AI",
+    "modelSelectLabel": "AI model",
+    "modelFast": "Fast and efficient",
+    "modelAccurate": "Slow and accurate",
     "askButton": "Ask",
     "errors": {
       "VALIDATION_FAILED": "Validation failed",

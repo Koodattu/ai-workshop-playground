@@ -10,14 +10,27 @@ const { ERROR_CODES } = require("../constants/errorCodes");
 const RequestLog = require("../models/RequestLog");
 const Usage = require("../models/Usage");
 
-// Gemini 3 Flash Preview pricing (per token)
-// Input: $0.50 per 1M tokens = $0.0000005 per token
-// Output: $3.00 per 1M tokens = $0.000003 per token
-// Output billing includes generated tokens and thinking tokens.
-const GEMINI_PRICING = {
-  inputPerToken: 0.0000005,
-  outputPerToken: 0.000003,
+const MODEL_PREFERENCES = {
+  fast: {
+    model: "gemini-2.5-flash",
+    pricing: {
+      inputPerToken: 0.0000003,
+      outputPerToken: 0.0000025,
+    },
+    thinkingConfig: {
+      thinkingBudget: 0,
+    },
+  },
+  accurate: {
+    model: "gemini-3-flash-preview",
+    pricing: {
+      inputPerToken: 0.0000005,
+      outputPerToken: 0.000003,
+    },
+  },
 };
+
+const DEFAULT_MODEL_PREFERENCE = "accurate";
 
 const GEMINI_THINKING_LEVELS = {
   minimal: ThinkingLevel.MINIMAL,
@@ -29,11 +42,15 @@ const GEMINI_THINKING_LEVELS = {
 /**
  * Calculate estimated cost in cents based on token usage
  */
-function calculateCostInCents(promptTokens, billableOutputTokens) {
-  const inputCost = promptTokens * GEMINI_PRICING.inputPerToken;
-  const outputCost = billableOutputTokens * GEMINI_PRICING.outputPerToken;
+function calculateCostInCents(promptTokens, billableOutputTokens, pricing) {
+  const inputCost = promptTokens * pricing.inputPerToken;
+  const outputCost = billableOutputTokens * pricing.outputPerToken;
   const totalCostDollars = inputCost + outputCost;
   return totalCostDollars * 100; // Convert to cents
+}
+
+function getModelPreference(modelPreference) {
+  return MODEL_PREFERENCES[modelPreference] || MODEL_PREFERENCES[DEFAULT_MODEL_PREFERENCE];
 }
 
 function getGeminiThinkingLevel() {
@@ -256,8 +273,9 @@ const ASK_SCHEMA = {
  * Generate code using Gemini API with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
-  const { prompt, existingCode, messageHistory, mode = "edit" } = req.body;
+  const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE } = req.body;
   const isAskMode = mode === "ask";
+  const selectedModel = getModelPreference(modelPreference);
 
   if (!prompt) {
     throw new AppError("Prompt is required", 400, ERROR_CODES.PROMPT_REQUIRED);
@@ -301,7 +319,9 @@ const generateCode = asyncHandler(async (req, res) => {
       responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
     };
 
-    if (config.geminiModel.startsWith("gemini-3")) {
+    if (selectedModel.thinkingConfig) {
+      generationConfig.thinkingConfig = selectedModel.thinkingConfig;
+    } else if (selectedModel.model.startsWith("gemini-3")) {
       generationConfig.thinkingConfig = {
         thinkingLevel: getGeminiThinkingLevel(),
       };
@@ -341,7 +361,7 @@ Modify or extend the existing code based on the user's request.`;
 
     // Generate content with streaming
     const stream = await genAI.models.generateContentStream({
-      model: config.geminiModel,
+      model: selectedModel.model,
       contents: userPrompt,
       config: generationConfig,
     });
@@ -462,10 +482,10 @@ Modify or extend the existing code based on the user's request.`;
       const billableOutputTokens = candidatesTokens + thoughtsTokens;
 
       // Calculate estimated cost in cents
-      const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens);
+      const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens, selectedModel.pricing);
 
       console.log(
-        `[Token Usage] Model: ${config.geminiModel}, Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,
+        `[Token Usage] Model: ${selectedModel.model}, Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,
       );
 
       // Log request to RequestLog and update Usage if we have usage data from workshopGuard
@@ -488,7 +508,7 @@ Modify or extend the existing code based on the user's request.`;
           cachedTokens,
           totalTokens,
           estimatedCost,
-          model: config.geminiModel,
+          model: selectedModel.model,
           generationType: isAskMode ? "ask" : "code-generation",
           mode: mode,
         });

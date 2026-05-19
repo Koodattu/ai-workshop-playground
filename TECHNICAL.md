@@ -242,13 +242,13 @@ X-RateLimit-Remaining: 15
 
 ### Gemini API Configuration
 
-The backend uses Google's Gemini 3 Flash model with structured output and low thinking:
+The backend maps a user-facing model preference to a Gemini model with structured output:
 
 ```javascript
 // backend/src/controllers/aiController.js
 
 const stream = await genAI.models.generateContentStream({
-  model: "gemini-3-flash-preview",
+  model: selectedModel.model,
   contents: prompt,
   config: {
     systemInstruction: `You are a code generator for web development workshops.
@@ -270,9 +270,7 @@ const stream = await genAI.models.generateContentStream({
         code: { type: "string" },
       },
     },
-    thinkingConfig: {
-      thinkingLevel: "low",
-    },
+    thinkingConfig: selectedModel.thinkingConfig,
   },
 });
 ```
@@ -313,7 +311,7 @@ res.write(`data: ${JSON.stringify({ type: "code_start" })}\n\n`);
 
 // Stream chunks
 const stream = await genAI.models.generateContentStream({
-  model: config.geminiModel,
+  model: selectedModel.model,
   contents: prompt,
   config: generationConfig,
 });
@@ -1090,10 +1088,8 @@ GEMINI_API_KEY=your_gemini_api_key_here
 ADMIN_SECRET=your_secure_random_secret_here
 FRONTEND_URL=https://workshop.yourdomain.com
 
-# Optional: Gemini Model and thinking level
-# GEMINI_MODEL defaults to gemini-3-flash-preview
+# Optional: Gemini 3 thinking level
 # GEMINI_THINKING_LEVEL defaults to low; supported values: minimal, low, medium, high
-GEMINI_MODEL=gemini-3-flash-preview
 GEMINI_THINKING_LEVEL=low
 ```
 

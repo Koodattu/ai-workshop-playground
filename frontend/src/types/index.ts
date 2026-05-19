@@ -11,6 +11,9 @@ export interface ChatMessage {
 // Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)
 export type ChatMode = "edit" | "ask";
 
+// AI model preference sent as a symbolic value; backend maps it to provider model IDs.
+export type ModelPreference = "fast" | "accurate";
+
 export interface GenerateRequest {
   password: string;
   visitorId: string;
@@ -18,6 +21,7 @@ export interface GenerateRequest {
   existingCode?: string;
   messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   mode?: ChatMode;
+  modelPreference?: ModelPreference;
 }
 
 export interface GenerateResponse {

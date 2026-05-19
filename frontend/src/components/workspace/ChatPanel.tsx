@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ChatMessage, ChatMode } from "@/types";
+import type { ChatMessage, ChatMode, ModelPreference } from "@/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -20,6 +20,8 @@ interface ChatPanelProps {
   onUnlockClick: () => void;
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
+  modelPreference: ModelPreference;
+  onModelPreferenceChange: (modelPreference: ModelPreference) => void;
   onRetryMessage?: (prompt: string) => Promise<void>;
 }
 
@@ -37,6 +39,8 @@ export function ChatPanel({
   onUnlockClick,
   mode,
   onModeChange,
+  modelPreference,
+  onModelPreferenceChange,
   onRetryMessage,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
@@ -320,7 +324,7 @@ export function ChatPanel({
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-end justify-between gap-2 flex-wrap">
               {/* Left side: Mode toggle + auto-switch (mobile only) */}
               <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
                 {/* ASK/EDIT Mode Toggle */}
@@ -388,6 +392,30 @@ export function ChatPanel({
                     <span className="text-[9px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
                   </label>
                 )}
+              </div>
+
+              <div className="flex-1 min-w-36 max-w-48">
+                <label htmlFor="model-preference" className="sr-only">
+                  {t("chat.modelSelectLabel")}
+                </label>
+                <select
+                  id="model-preference"
+                  value={modelPreference}
+                  onChange={(e) => onModelPreferenceChange(e.target.value as ModelPreference)}
+                  disabled={isLoading}
+                  className="
+                    w-full px-2.5 py-1.5
+                    bg-carbon border border-steel/50 rounded-lg
+                    font-mono text-[10px] md:text-xs text-gray-200
+                    focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    transition-all duration-200
+                  "
+                  title={t("chat.modelSelectLabel")}
+                >
+                  <option value="fast">{t("chat.modelFast")}</option>
+                  <option value="accurate">{t("chat.modelAccurate")}</option>
+                </select>
               </div>
 
               <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>

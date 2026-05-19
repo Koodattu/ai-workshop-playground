@@ -17,7 +17,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage } from "@/lib/errorTranslation";
-import type { ChatMessage, PreviewControl, CustomTemplate, ChatMode } from "@/types";
+import type { ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -59,6 +59,7 @@ export default function WorkspacePage() {
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
+  const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "accurate");
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
@@ -377,6 +378,7 @@ export default function WorkspacePage() {
             existingCode: code,
             messageHistory,
             mode: chatMode,
+            modelPreference,
           },
           {
             // Step 0: Code starts - disable preview and clear editor
@@ -767,6 +769,7 @@ export default function WorkspacePage() {
       updateTemplate,
       addTemplate,
       chatMode,
+      modelPreference,
       autoSwitchEnabled,
       setSavedTemplateId,
     ],
@@ -836,6 +839,7 @@ export default function WorkspacePage() {
           prompt,
           existingCode: code,
           messageHistory,
+          modelPreference,
         });
 
         setCode(response.code);
@@ -875,7 +879,7 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code, t, contextMessages],
+    [visitorId, password, showToast, code, t, contextMessages, modelPreference],
   );
   */
 
@@ -1097,6 +1101,8 @@ export default function WorkspacePage() {
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                modelPreference={modelPreference}
+                onModelPreferenceChange={setModelPreference}
                 onRetryMessage={handleSendMessage}
               />
             </Panel>
@@ -1160,6 +1166,8 @@ export default function WorkspacePage() {
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                modelPreference={modelPreference}
+                onModelPreferenceChange={setModelPreference}
                 onRetryMessage={handleSendMessage}
               />
             )}
