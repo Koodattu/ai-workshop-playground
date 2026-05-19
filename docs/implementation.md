@@ -24,7 +24,7 @@ The application follows a classic **Three-Tier Architecture** packaged in **Dock
 ### Backend
 
 - **Runtime:** Node.js with Express.
-- **AI Integration:** `@google/generative-ai` SDK.
+- **AI Integration:** `@google/genai` SDK.
 - **Database Client:** `mongoose` for structured interaction with MongoDB.
 
 ### Infrastructure
@@ -82,7 +82,7 @@ When the `POST /api/generate` endpoint is hit:
 
 - If `useCount >= password.maxUsesPerUser`, return `429 Too Many Requests`.
 
-3. **Call Gemini:** \* Initialize the Gemini model (e.g., `gemini-1.5-flash` for speed).
+3. **Call Gemini:** \* Initialize the Gemini model (e.g., `gemini-3-flash-preview` for speed).
 
 - Send the system instruction + user prompt.
 
@@ -248,13 +248,19 @@ Define this at the start of your Gemini session:
 ### The Generation Logic (`controllers/aiController.js`)
 
 ````javascript
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const { GoogleGenAI } = require("@google/genai");
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 exports.generateCode = async (req, res) => {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent([SYSTEM_INSTRUCTION, req.body.prompt]);
-  const rawText = result.response.text();
+  const result = await genAI.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: req.body.prompt,
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      thinkingConfig: { thinkingLevel: "low" },
+    },
+  });
+  const rawText = result.text;
 
   // CLEANING: Extract code between ```html and ```
   const codeRegex = /```html?([\s\S]*?)```/i;

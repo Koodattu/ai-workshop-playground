@@ -73,7 +73,7 @@ AI Workshop Playground follows a three-tier architecture with a React frontend, 
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │              Google Gemini API Client                        │  │
-│  │              (@google/generative-ai)                         │  │
+│  │              (@google/genai)                                  │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────┬───────────────────────────────────┘
                                   │
@@ -110,10 +110,10 @@ AI Workshop Playground follows a three-tier architecture with a React frontend, 
 
 | Technology                | Version | Purpose                   |
 | ------------------------- | ------- | ------------------------- |
-| **Node.js**               | 18+     | JavaScript runtime        |
+| **Node.js**               | 20+     | JavaScript runtime        |
 | **Express.js**            | 4.x     | Web framework             |
 | **Mongoose**              | 8.x     | MongoDB ODM               |
-| **@google/generative-ai** | 0.21.x  | Gemini API client         |
+| **@google/genai**         | 2.x     | Gemini API client         |
 | **dotenv**                | 16.x    | Environment configuration |
 
 ### Infrastructure
@@ -242,14 +242,16 @@ X-RateLimit-Remaining: 15
 
 ### Gemini API Configuration
 
-The backend uses Google's Gemini 2.5 Flash model with structured output:
+The backend uses Google's Gemini 3 Flash model with structured output and low thinking:
 
 ```javascript
 // backend/src/controllers/aiController.js
 
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  systemInstruction: `You are a code generator for web development workshops.
+const stream = await genAI.models.generateContentStream({
+  model: "gemini-3-flash-preview",
+  contents: prompt,
+  config: {
+    systemInstruction: `You are a code generator for web development workshops.
 
     RULES:
     - Generate clean, production-ready HTML/CSS/JavaScript
@@ -260,7 +262,6 @@ const model = genAI.getGenerativeModel({
     - Use semantic HTML5 elements
     - Ensure proper indentation`,
 
-  generationConfig: {
     responseMimeType: "application/json",
     responseSchema: {
       type: "object",
@@ -268,6 +269,9 @@ const model = genAI.getGenerativeModel({
         message: { type: "string" },
         code: { type: "string" },
       },
+    },
+    thinkingConfig: {
+      thinkingLevel: "low",
     },
   },
 });
@@ -308,9 +312,14 @@ res.setHeader("Connection", "keep-alive");
 res.write(`data: ${JSON.stringify({ type: "code_start" })}\n\n`);
 
 // Stream chunks
-const result = await model.generateContentStream(prompt);
-for await (const chunk of result.stream) {
-  const text = chunk.text();
+const stream = await genAI.models.generateContentStream({
+  model: config.geminiModel,
+  contents: prompt,
+  config: generationConfig,
+});
+
+for await (const chunk of stream) {
+  const text = chunk.text;
   res.write(
     `data: ${JSON.stringify({
       type: "code_chunk",
@@ -1036,7 +1045,7 @@ npm start
 
 **Requirements:**
 
-- Node.js 18+
+- Node.js 20+
 - MongoDB 5+
 - Reverse proxy (nginx) for HTTPS
 - Process manager (PM2) for production
@@ -1081,8 +1090,11 @@ GEMINI_API_KEY=your_gemini_api_key_here
 ADMIN_SECRET=your_secure_random_secret_here
 FRONTEND_URL=https://workshop.yourdomain.com
 
-# Optional: Gemini Model (defaults to gemini-2.5-flash)
-GEMINI_MODEL=gemini-2.5-flash
+# Optional: Gemini Model and thinking level
+# GEMINI_MODEL defaults to gemini-3-flash-preview
+# GEMINI_THINKING_LEVEL defaults to low; supported values: minimal, low, medium, high
+GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_THINKING_LEVEL=low
 ```
 
 ### Frontend (.env.local)

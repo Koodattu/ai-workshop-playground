@@ -3,29 +3,42 @@
  * Handles Gemini API integration for code generation
  */
 
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const { ERROR_CODES } = require("../constants/errorCodes");
 const RequestLog = require("../models/RequestLog");
 const Usage = require("../models/Usage");
 
-// Gemini 2.5 Flash pricing (per token)
-// Input: $0.30 per 1M tokens = $0.0000003 per token
-// Output: $2.50 per 1M tokens = $0.0000025 per token
+// Gemini 3 Flash Preview pricing (per token)
+// Input: $0.50 per 1M tokens = $0.0000005 per token
+// Output: $3.00 per 1M tokens = $0.000003 per token
+// Output billing includes generated tokens and thinking tokens.
 const GEMINI_PRICING = {
-  inputPerToken: 0.0000003,
-  outputPerToken: 0.0000025,
+  inputPerToken: 0.0000005,
+  outputPerToken: 0.000003,
+};
+
+const GEMINI_THINKING_LEVELS = {
+  minimal: ThinkingLevel.MINIMAL,
+  low: ThinkingLevel.LOW,
+  medium: ThinkingLevel.MEDIUM,
+  high: ThinkingLevel.HIGH,
 };
 
 /**
  * Calculate estimated cost in cents based on token usage
  */
-function calculateCostInCents(promptTokens, candidatesTokens) {
+function calculateCostInCents(promptTokens, billableOutputTokens) {
   const inputCost = promptTokens * GEMINI_PRICING.inputPerToken;
-  const outputCost = candidatesTokens * GEMINI_PRICING.outputPerToken;
+  const outputCost = billableOutputTokens * GEMINI_PRICING.outputPerToken;
   const totalCostDollars = inputCost + outputCost;
   return totalCostDollars * 100; // Convert to cents
+}
+
+function getGeminiThinkingLevel() {
+  const normalizedLevel = (config.geminiThinkingLevel || "low").toLowerCase();
+  return GEMINI_THINKING_LEVELS[normalizedLevel] || ThinkingLevel.LOW;
 }
 
 /**
@@ -151,7 +164,7 @@ function createJsonStringDecoder() {
 }
 
 // Initialize Gemini AI client
-const genAI = new GoogleGenerativeAI(config.geminiApiKey);
+const genAI = new GoogleGenAI({ apiKey: config.geminiApiKey });
 
 // System instruction for clean code output
 const SYSTEM_INSTRUCTION = `You are an expert web developer assistant. Your task is to generate or modify clean, production-ready HTML, CSS, and JavaScript code.
@@ -278,17 +291,21 @@ const generateCode = asyncHandler(async (req, res) => {
   let codeComplete = false;
   let codeFieldStartPos = -1; // Position after opening quote of code field
   const codeDecoder = createJsonStringDecoder();
+  let latestUsageMetadata = null;
 
   try {
-    // Initialize the model with system instruction based on mode
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+    // Configure generation with system instruction based on mode
+    const generationConfig = {
       systemInstruction: isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION,
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
-      },
-    });
+      responseMimeType: "application/json",
+      responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
+    };
+
+    if (config.geminiModel.startsWith("gemini-3")) {
+      generationConfig.thinkingConfig = {
+        thinkingLevel: getGeminiThinkingLevel(),
+      };
+    }
 
     // Build the user prompt with context
     let userPrompt = "";
@@ -323,20 +340,21 @@ Modify or extend the existing code based on the user's request.`;
     }
 
     // Generate content with streaming
-    const result = await model.generateContentStream(userPrompt);
-    // The SDK exposes an aggregate response promise in addition to the async stream.
-    // Attach a handler immediately so SDK-side stream parsing failures never become
-    // unhandled promise rejections while we are consuming the stream below.
-    const aggregatedResponsePromise = result.response.catch((responseError) => {
-      console.error("[Gemini Stream Response Error]", responseError.message);
-      return null;
+    const stream = await genAI.models.generateContentStream({
+      model: config.geminiModel,
+      contents: userPrompt,
+      config: generationConfig,
     });
 
     // Process the stream
-    for await (const chunk of result.stream) {
+    for await (const chunk of stream) {
       try {
+        if (chunk.usageMetadata) {
+          latestUsageMetadata = chunk.usageMetadata;
+        }
+
         // Extract text from the chunk
-        const chunkText = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+        const chunkText = chunk.text || chunk.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (chunkText) {
           // Accumulate the text
@@ -431,26 +449,23 @@ Modify or extend the existing code based on the user's request.`;
     const finalMessage = structuredResponse.message;
     sendSse({ type: "message-complete", message: finalMessage });
 
-    // Get token usage metadata from the aggregated response
+    // Get token usage metadata from the stream
     try {
-      const aggregatedResponse = await aggregatedResponsePromise;
-      if (!aggregatedResponse) {
-        throw new Error("Gemini aggregate response unavailable");
-      }
-      const usageMetadata = aggregatedResponse.usageMetadata || {};
+      const usageMetadata = latestUsageMetadata || {};
 
       // Extract token counts with fallbacks
       const promptTokens = usageMetadata.promptTokenCount || 0;
       const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
       const thoughtsTokens = usageMetadata.thoughtsTokenCount || 0;
       const cachedTokens = usageMetadata.cachedContentTokenCount || 0;
-      const totalTokens = usageMetadata.totalTokenCount || promptTokens + candidatesTokens;
+      const totalTokens = usageMetadata.totalTokenCount || promptTokens + candidatesTokens + thoughtsTokens;
+      const billableOutputTokens = candidatesTokens + thoughtsTokens;
 
       // Calculate estimated cost in cents
-      const estimatedCost = calculateCostInCents(promptTokens, candidatesTokens);
+      const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens);
 
       console.log(
-        `[Token Usage] Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,
+        `[Token Usage] Model: ${config.geminiModel}, Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,
       );
 
       // Log request to RequestLog and update Usage if we have usage data from workshopGuard
@@ -473,7 +488,7 @@ Modify or extend the existing code based on the user's request.`;
           cachedTokens,
           totalTokens,
           estimatedCost,
-          model: "gemini-2.5-flash",
+          model: config.geminiModel,
           generationType: isAskMode ? "ask" : "code-generation",
           mode: mode,
         });

@@ -9,6 +9,8 @@ const config = {
   port: parseInt(process.env.PORT, 10) || 5000,
   mongoUri: process.env.MONGO_URI || "mongodb://localhost:27017/workshop",
   geminiApiKey: process.env.GEMINI_API_KEY,
+  geminiModel: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
+  geminiThinkingLevel: process.env.GEMINI_THINKING_LEVEL || "low",
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
   adminSecret: process.env.ADMIN_SECRET,
   nodeEnv: process.env.NODE_ENV || "development",

@@ -57,7 +57,7 @@ If you prefer to run services individually:
 
 **Prerequisites:**
 
-- Node.js 18 or higher
+- Node.js 20 or higher
 - MongoDB running locally or in Docker
 - Google Gemini API key ([get one free](https://makersuite.google.com/app/apikey))
 
@@ -101,7 +101,7 @@ graph LR
 ### For Participants
 
 - **Three-Panel IDE**: Professional development environment with chat, code editor (Monaco), and live preview
-- **Smart AI Assistant**: Powered by Google Gemini 2.5 Flash for fast, high-quality code generation
+- **Smart AI Assistant**: Powered by Google Gemini 3 Flash for fast, high-quality code generation
 - **Template Library**: Start with pre-built templates or generate from scratch
 - **Code Editing**: Full Monaco editor with syntax highlighting, auto-formatting, and undo/redo
 - **Bilingual**: Full support for English and Finnish interfaces
@@ -168,7 +168,7 @@ ai-workshop-playground/
 
 - **Frontend**: Next.js 15, React, TypeScript, Tailwind CSS, Monaco Editor
 - **Backend**: Node.js, Express.js, MongoDB
-- **AI**: Google Gemini 2.5 Flash API
+- **AI**: Google Gemini 3 Flash API
 - **Deployment**: Docker & Docker Compose
 
 ## 🔒 Security & Safety
