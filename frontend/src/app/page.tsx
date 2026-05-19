@@ -345,6 +345,8 @@ export default function WorkspacePage() {
     async (prompt: string) => {
       if (!visitorId || !password) return;
 
+      const codeBeforeGeneration = code;
+
       // Add user message to chat
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
@@ -693,6 +695,21 @@ export default function WorkspacePage() {
                 }
               }
 
+              if (chatMode === "edit") {
+                codeBufferRef.current = codeBeforeGeneration;
+                lastWrittenLengthRef.current = codeBeforeGeneration.length;
+                setCode(codeBeforeGeneration);
+
+                try {
+                  monacoEditorRef.current?.getModel()?.setValue(codeBeforeGeneration);
+                } catch (restoreError) {
+                  console.warn("Failed to restore editor after generation error:", restoreError);
+                }
+
+                previewControlRef.current?.enableAutoRefresh();
+                previewControlRef.current?.forceRefresh(codeBeforeGeneration);
+              }
+
               // Get translated error message based on error code
               const translatedErrorMessage = getErrorMessage(errorCode, t, error);
 
@@ -719,6 +736,7 @@ export default function WorkspacePage() {
                 timestamp: new Date(),
                 errorDetails: formattedErrorDetails,
                 errorCode: errorCode,
+                failedPrompt: prompt,
               };
               setChatHistory((prev) => [...prev, errorChatMessage]);
 
@@ -736,7 +754,22 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code, t, contextMessages, language, currentTemplateId, isCustomTemplateId, updateTemplate, addTemplate, chatMode],
+    [
+      visitorId,
+      password,
+      showToast,
+      code,
+      t,
+      contextMessages,
+      language,
+      currentTemplateId,
+      isCustomTemplateId,
+      updateTemplate,
+      addTemplate,
+      chatMode,
+      autoSwitchEnabled,
+      setSavedTemplateId,
+    ],
   );
 
   // Cleanup abort on unmount
@@ -1064,6 +1097,7 @@ export default function WorkspacePage() {
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                onRetryMessage={handleSendMessage}
               />
             </Panel>
 
@@ -1126,6 +1160,7 @@ export default function WorkspacePage() {
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                onRetryMessage={handleSendMessage}
               />
             )}
             {mobileActivePanel === "editor" && (

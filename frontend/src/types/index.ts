@@ -5,6 +5,7 @@ export interface ChatMessage {
   timestamp: Date;
   errorDetails?: string;
   errorCode?: string;
+  failedPrompt?: string;
 }
 
 // Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)

@@ -261,6 +261,18 @@ const generateCode = asyncHandler(async (req, res) => {
     Connection: "keep-alive",
   });
 
+  const sendSse = (data) => {
+    if (!res.destroyed && !res.writableEnded) {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    }
+  };
+
+  const endSse = () => {
+    if (!res.destroyed && !res.writableEnded) {
+      res.end();
+    }
+  };
+
   let accumulatedText = "";
   let codeStarted = false;
   let codeComplete = false;
@@ -312,7 +324,13 @@ Modify or extend the existing code based on the user's request.`;
 
     // Generate content with streaming
     const result = await model.generateContentStream(userPrompt);
-    let streamResult = result; // Store for accessing response metadata after streaming
+    // The SDK exposes an aggregate response promise in addition to the async stream.
+    // Attach a handler immediately so SDK-side stream parsing failures never become
+    // unhandled promise rejections while we are consuming the stream below.
+    const aggregatedResponsePromise = result.response.catch((responseError) => {
+      console.error("[Gemini Stream Response Error]", responseError.message);
+      return null;
+    });
 
     // Process the stream
     for await (const chunk of result.stream) {
@@ -347,18 +365,18 @@ Modify or extend the existing code based on the user's request.`;
                 if (accumulatedText[openQuotePos] === '"') {
                   codeStarted = true;
                   codeFieldStartPos = openQuotePos + 1; // Position after opening quote
-                  res.write(`data: ${JSON.stringify({ type: "code-start" })}\n\n`);
+                  sendSse({ type: "code-start" });
 
                   // Decode any content we already have after the opening quote
                   const initialContent = accumulatedText.substring(codeFieldStartPos);
                   if (initialContent.length > 0) {
                     const { decoded, done } = codeDecoder.decode(initialContent);
                     if (decoded) {
-                      res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: decoded })}\n\n`);
+                      sendSse({ type: "code-chunk", chunk: decoded });
                     }
                     if (done) {
                       codeComplete = true;
-                      res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
+                      sendSse({ type: "code-complete" });
                     }
                   }
                 }
@@ -370,12 +388,12 @@ Modify or extend the existing code based on the user's request.`;
             const { decoded, done } = codeDecoder.decode(chunkText);
 
             if (decoded) {
-              res.write(`data: ${JSON.stringify({ type: "code-chunk", chunk: decoded })}\n\n`);
+              sendSse({ type: "code-chunk", chunk: decoded });
             }
 
             if (done) {
               codeComplete = true;
-              res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
+              sendSse({ type: "code-complete" });
             }
           }
         }
@@ -406,16 +424,19 @@ Modify or extend the existing code based on the user's request.`;
 
     // Ensure code-complete was sent for EDIT mode (handles edge case where stream ends abruptly)
     if (!isAskMode && codeStarted && !codeComplete) {
-      res.write(`data: ${JSON.stringify({ type: "code-complete" })}\n\n`);
+      sendSse({ type: "code-complete" });
     }
 
     // Send message-complete event (message field is complete)
     const finalMessage = structuredResponse.message;
-    res.write(`data: ${JSON.stringify({ type: "message-complete", message: finalMessage })}\n\n`);
+    sendSse({ type: "message-complete", message: finalMessage });
 
     // Get token usage metadata from the aggregated response
     try {
-      const aggregatedResponse = await streamResult.response;
+      const aggregatedResponse = await aggregatedResponsePromise;
+      if (!aggregatedResponse) {
+        throw new Error("Gemini aggregate response unavailable");
+      }
       const usageMetadata = aggregatedResponse.usageMetadata || {};
 
       // Extract token counts with fallbacks
@@ -476,9 +497,11 @@ Modify or extend the existing code based on the user's request.`;
       remaining: req.workshop?.remaining,
     };
 
-    res.write(`data: ${JSON.stringify(finalData)}\n\n`);
-    res.end();
+    sendSse(finalData);
+    endSse();
   } catch (error) {
+    console.error("[AI Generation Error]", error);
+
     // Handle specific Gemini API errors
     let errorMessage = "AI generation failed";
     let statusCode = 500;
@@ -495,6 +518,9 @@ Modify or extend the existing code based on the user's request.`;
       errorMessage = "Request blocked due to safety filters";
       statusCode = 400;
       errorCode = ERROR_CODES.SAFETY_FILTER_BLOCKED;
+    } else if (error.message?.includes("Failed to parse stream") || error.message?.includes("parse stream")) {
+      errorMessage = "Failed to parse AI response";
+      errorCode = ERROR_CODES.AI_RESPONSE_PARSE_FAILED;
     } else if (error instanceof AppError) {
       errorMessage = error.message;
       statusCode = error.statusCode;
@@ -511,8 +537,8 @@ Modify or extend the existing code based on the user's request.`;
       statusCode: statusCode,
     };
 
-    res.write(`data: ${JSON.stringify(errorData)}\n\n`);
-    res.end();
+    sendSse(errorData);
+    endSse();
   }
 });
 

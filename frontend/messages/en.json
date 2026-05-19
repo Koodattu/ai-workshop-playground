@@ -59,6 +59,8 @@
     "ai": "AI",
     "errorDetails": "Details",
     "errorDetailsTitle": "Show error details",
+    "retryFailed": "Retry",
+    "retryFailedTitle": "Retry this failed request",
     "codeGenerated": "Code generated!",
     "shiftEnterHint": "Shift + Enter for new line",
     "autoSwitch": "Auto-switch panels",

@@ -59,6 +59,8 @@
     "ai": "Tekoäly",
     "errorDetails": "Tiedot",
     "errorDetailsTitle": "Näytä virhetiedot",
+    "retryFailed": "Yritä uudelleen",
+    "retryFailedTitle": "Yritä epäonnistunutta pyyntöä uudelleen",
     "codeGenerated": "Koodi luotu!",
     "shiftEnterHint": "Shift + Enter uudelle riville",
     "autoSwitch": "Automaattinen paneelien vaihto",

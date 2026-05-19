@@ -20,6 +20,7 @@ interface ChatPanelProps {
   onUnlockClick: () => void;
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
+  onRetryMessage?: (prompt: string) => Promise<void>;
 }
 
 export function ChatPanel({
@@ -36,6 +37,7 @@ export function ChatPanel({
   onUnlockClick,
   mode,
   onModeChange,
+  onRetryMessage,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -88,6 +90,16 @@ export function ChatPanel({
 
   const handleShowErrorDetails = (errorDetails: string) => {
     showToast(errorDetails, "error");
+  };
+
+  const handleRetry = async (failedPrompt: string) => {
+    if (isLoading) return;
+
+    try {
+      await (onRetryMessage || onSendMessage)(failedPrompt);
+    } catch {
+      setPrompt(failedPrompt);
+    }
   };
 
   return (
@@ -166,14 +178,28 @@ export function ChatPanel({
                       hour12: false,
                     })}
                   </span>
-                  {message.errorDetails && (
-                    <button
-                      onClick={() => handleShowErrorDetails(message.errorDetails!)}
-                      className="px-2 py-0.5 rounded bg-carbon border border-steel/50 text-[10px] font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
-                      title={t("chat.errorDetailsTitle")}
-                    >
-                      {t("chat.errorDetails")}
-                    </button>
+                  {(message.failedPrompt || message.errorDetails) && (
+                    <div className="flex items-center gap-1.5">
+                      {message.failedPrompt && (
+                        <button
+                          onClick={() => handleRetry(message.failedPrompt!)}
+                          disabled={isLoading}
+                          className="px-2 py-0.5 rounded bg-electric/10 border border-electric/30 text-[10px] font-mono text-electric hover:text-white hover:border-electric/60 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                          title={t("chat.retryFailedTitle")}
+                        >
+                          {t("chat.retryFailed")}
+                        </button>
+                      )}
+                      {message.errorDetails && (
+                        <button
+                          onClick={() => handleShowErrorDetails(message.errorDetails!)}
+                          className="px-2 py-0.5 rounded bg-carbon border border-steel/50 text-[10px] font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
+                          title={t("chat.errorDetailsTitle")}
+                        >
+                          {t("chat.errorDetails")}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
