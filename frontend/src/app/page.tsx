@@ -59,7 +59,7 @@ export default function WorkspacePage() {
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
-  const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "accurate");
+  const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "balanced");
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);

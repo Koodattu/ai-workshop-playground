@@ -101,7 +101,7 @@ graph LR
 ### For Participants
 
 - **Three-Panel IDE**: Professional development environment with chat, code editor (Monaco), and live preview
-- **Smart AI Assistant**: Powered by Google Gemini 3 Flash for fast, high-quality code generation
+- **Smart AI Assistant**: Powered by selectable Google Gemini Flash models for fast, high-quality code generation
 - **Template Library**: Start with pre-built templates or generate from scratch
 - **Code Editing**: Full Monaco editor with syntax highlighting, auto-formatting, and undo/redo
 - **Bilingual**: Full support for English and Finnish interfaces
@@ -168,7 +168,7 @@ ai-workshop-playground/
 
 - **Frontend**: Next.js 15, React, TypeScript, Tailwind CSS, Monaco Editor
 - **Backend**: Node.js, Express.js, MongoDB
-- **AI**: Google Gemini 3 Flash API
+- **AI**: Google Gemini Flash API
 - **Deployment**: Docker & Docker Compose
 
 ## 🔒 Security & Safety

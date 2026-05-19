@@ -12,7 +12,7 @@ export interface ChatMessage {
 export type ChatMode = "edit" | "ask";
 
 // AI model preference sent as a symbolic value; backend maps it to provider model IDs.
-export type ModelPreference = "fast" | "accurate";
+export type ModelPreference = "fast" | "balanced" | "accurate";
 
 export interface GenerateRequest {
   password: string;

@@ -21,16 +21,23 @@ const MODEL_PREFERENCES = {
       thinkingBudget: 0,
     },
   },
-  accurate: {
+  balanced: {
     model: "gemini-3-flash-preview",
     pricing: {
       inputPerToken: 0.0000005,
       outputPerToken: 0.000003,
     },
   },
+  accurate: {
+    model: "gemini-3.5-flash",
+    pricing: {
+      inputPerToken: 0.0000015,
+      outputPerToken: 0.000009,
+    },
+  },
 };
 
-const DEFAULT_MODEL_PREFERENCE = "accurate";
+const DEFAULT_MODEL_PREFERENCE = "balanced";
 
 const GEMINI_THINKING_LEVELS = {
   minimal: ThinkingLevel.MINIMAL,

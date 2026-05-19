@@ -76,6 +76,7 @@
     "editModeTooltip": "Luo tai muokkaa koodia tekoälyn avulla",
     "modelSelectLabel": "Tekoälymalli",
     "modelFast": "Nopea ja tehokas",
+    "modelBalanced": "Tasapainoinen",
     "modelAccurate": "Hidas ja tarkka",
     "askButton": "Kysy",
     "errors": {

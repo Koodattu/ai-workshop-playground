@@ -76,6 +76,7 @@
     "editModeTooltip": "Generate or modify code with AI",
     "modelSelectLabel": "AI model",
     "modelFast": "Fast and efficient",
+    "modelBalanced": "Balanced",
     "modelAccurate": "Slow and accurate",
     "askButton": "Ask",
     "errors": {

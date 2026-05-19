@@ -244,6 +244,10 @@ X-RateLimit-Remaining: 15
 
 The backend maps a user-facing model preference to a Gemini model with structured output:
 
+- `fast`: Gemini 2.5 Flash
+- `balanced`: Gemini 3 Flash Preview
+- `accurate`: Gemini 3.5 Flash
+
 ```javascript
 // backend/src/controllers/aiController.js
 

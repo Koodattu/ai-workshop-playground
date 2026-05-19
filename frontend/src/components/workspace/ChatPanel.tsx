@@ -414,6 +414,7 @@ export function ChatPanel({
                   title={t("chat.modelSelectLabel")}
                 >
                   <option value="fast">{t("chat.modelFast")}</option>
+                  <option value="balanced">{t("chat.modelBalanced")}</option>
                   <option value="accurate">{t("chat.modelAccurate")}</option>
                 </select>
               </div>
