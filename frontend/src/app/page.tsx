@@ -130,22 +130,23 @@ export default function WorkspacePage() {
         if (!isMounted || models.length === 0) return;
 
         setEnabledModelPreferences(models);
-        if (!models.includes(modelPreference)) {
-          setModelPreference(models[0]);
-        }
       } catch (error) {
         console.warn("Failed to fetch enabled models:", error);
       }
     };
 
     fetchEnabledModels();
-    const interval = setInterval(fetchEnabledModels, 30000);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
-  }, [modelPreference, setModelPreference]);
+  }, []);
+
+  useEffect(() => {
+    if (enabledModelPreferences.length > 0 && !enabledModelPreferences.includes(modelPreference)) {
+      setModelPreference(enabledModelPreferences[0]);
+    }
+  }, [enabledModelPreferences, modelPreference, setModelPreference]);
   const searchParams = useSearchParams();
   const router = useRouter();
 
