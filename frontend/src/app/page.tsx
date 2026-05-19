@@ -511,28 +511,14 @@ export default function WorkspacePage() {
               // Accumulate code chunks in the buffer
               codeBufferRef.current += chunk;
 
-              // Cancel any pending edit frame (we'll batch multiple chunks into one frame)
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
+              // Write chunks immediately. Monaco stays in plaintext while streaming,
+              // so appending directly avoids both tokenization flashing and delayed paints.
+              const fullBuffer = codeBufferRef.current;
+              const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
+
+              if (newContent.length > 0 && appendToEditorModel(newContent)) {
+                lastWrittenLengthRef.current = fullBuffer.length;
               }
-
-              // Use requestAnimationFrame for smooth 60fps updates
-              editorUpdateFrameRef.current = requestAnimationFrame(() => {
-                // Calculate the delta: what hasn't been written to Monaco yet
-                // This ensures we don't lose chunks when multiple arrive within one frame
-                const fullBuffer = codeBufferRef.current;
-                const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
-
-                // Only write if there's new content
-                if (newContent.length > 0) {
-                  const wroteToEditor = appendToEditorModel(newContent);
-                  if (wroteToEditor) {
-                    lastWrittenLengthRef.current = fullBuffer.length;
-                  }
-                }
-                // Clear the frame ref since this frame has executed
-                editorUpdateFrameRef.current = null;
-              });
             },
 
             // Step 3: Code complete
