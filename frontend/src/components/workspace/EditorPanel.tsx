@@ -18,7 +18,7 @@ interface EditorPanelProps {
   onRemoveCustomTemplate: (id: string) => void;
   sharedTemplates?: SharedTemplate[];
   onRemoveSharedTemplate?: (id: string) => void;
-  onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
+  onEditorReady?: (editor: editor.IStandaloneCodeEditor, monaco: Parameters<OnMount>[1]) => void;
   isStreaming?: boolean;
 }
 
@@ -70,9 +70,9 @@ export function EditorPanel({
     }
   }, [isActionsMenuOpen]);
 
-  const handleEditorMount: OnMount = useCallback((editor) => {
+  const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
-    onEditorReady?.(editor);
+    onEditorReady?.(editor, monaco);
 
     // Configure editor settings
     editor.updateOptions({
@@ -636,6 +636,7 @@ export function EditorPanel({
       <div className="flex-1 overflow-hidden">
         <Editor
           defaultLanguage="html"
+          language={isStreaming ? "plaintext" : "html"}
           value={isStreaming ? undefined : code}
           onChange={handleChange}
           onMount={handleEditorMount}

@@ -86,6 +86,7 @@ export default function WorkspacePage() {
 
   // Monaco editor ref for direct manipulation
   const monacoEditorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
 
   // Focus intent flag for streaming start (handles delayed editor mount/ready)
   const shouldFocusEditorForStreamingRef = useRef<boolean>(false);
@@ -137,6 +138,16 @@ export default function WorkspacePage() {
     ]);
 
     return true;
+  }, []);
+
+  const setEditorLanguage = useCallback((language: "html" | "plaintext") => {
+    const editor = monacoEditorRef.current;
+    const monaco = monacoRef.current;
+    const model = editor?.getModel?.();
+
+    if (monaco && model) {
+      monaco.editor.setModelLanguage(model, language);
+    }
   }, []);
 
   const visitorId = useVisitorId();
@@ -446,6 +457,8 @@ export default function WorkspacePage() {
                 }
               }
 
+              setEditorLanguage("plaintext");
+
               // CRITICAL: Clear React state FIRST to prevent controlled component conflicts
               // This ensures that if React re-renders during streaming, it won't restore old code
               setCode("");
@@ -560,6 +573,7 @@ export default function WorkspacePage() {
 
               // Apply final code buffer to React state (for template switching, etc.)
               setCode(codeBufferRef.current);
+              setEditorLanguage("html");
 
               // Auto-format the document after streaming completes
               if (monacoEditorRef.current) {
@@ -625,6 +639,7 @@ export default function WorkspacePage() {
                   originalSetValueRef.current = null;
                 }
               }
+              setEditorLanguage("html");
 
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
@@ -720,6 +735,7 @@ export default function WorkspacePage() {
                   originalSetValueRef.current = null;
                 }
               }
+              setEditorLanguage("html");
 
               if (chatMode === "edit") {
                 codeBufferRef.current = codeBeforeGeneration;
@@ -795,6 +811,7 @@ export default function WorkspacePage() {
       chatMode,
       autoSwitchEnabled,
       appendToEditorModel,
+      setEditorLanguage,
       setSavedTemplateId,
     ],
   );
@@ -1142,10 +1159,15 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
-                onEditorReady={(editor) => {
+                onEditorReady={(editor, monaco) => {
                   monacoEditorRef.current = editor;
+                  monacoRef.current = monaco;
                   if (isStreaming) {
-                    editor.getModel()?.setValue(codeBufferRef.current);
+                    const model = editor.getModel();
+                    if (model) {
+                      monaco.editor.setModelLanguage(model, "plaintext");
+                      model.setValue(codeBufferRef.current);
+                    }
                     lastWrittenLengthRef.current = codeBufferRef.current.length;
                   }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
@@ -1205,10 +1227,15 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
-                onEditorReady={(editor) => {
+                onEditorReady={(editor, monaco) => {
                   monacoEditorRef.current = editor;
+                  monacoRef.current = monaco;
                   if (isStreaming) {
-                    editor.getModel()?.setValue(codeBufferRef.current);
+                    const model = editor.getModel();
+                    if (model) {
+                      monaco.editor.setModelLanguage(model, "plaintext");
+                      model.setValue(codeBufferRef.current);
+                    }
                     lastWrittenLengthRef.current = codeBufferRef.current.length;
                   }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
