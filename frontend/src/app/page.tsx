@@ -60,6 +60,7 @@ export default function WorkspacePage() {
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
   const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "fast");
+  const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>(["fast", "balanced", "accurate"]);
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
@@ -119,6 +120,32 @@ export default function WorkspacePage() {
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchEnabledModels = async () => {
+      try {
+        const models = await api.getEnabledModels();
+        if (!isMounted || models.length === 0) return;
+
+        setEnabledModelPreferences(models);
+        if (!models.includes(modelPreference)) {
+          setModelPreference(models[0]);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch enabled models:", error);
+      }
+    };
+
+    fetchEnabledModels();
+    const interval = setInterval(fetchEnabledModels, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [modelPreference, setModelPreference]);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -1103,6 +1130,7 @@ export default function WorkspacePage() {
                 onModeChange={setChatMode}
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
+                enabledModelPreferences={enabledModelPreferences}
                 onRetryMessage={handleSendMessage}
               />
             </Panel>
@@ -1168,6 +1196,7 @@ export default function WorkspacePage() {
                 onModeChange={setChatMode}
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
+                enabledModelPreferences={enabledModelPreferences}
                 onRetryMessage={handleSendMessage}
               />
             )}

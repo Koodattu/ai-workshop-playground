@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, ModelPreference, ModelSettings } from "@/types";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type TabId = "overview" | "passwords" | "usage" | "activity" | "shares";
+type TabId = "overview" | "passwords" | "usage" | "activity" | "models" | "shares";
 type ActivityPeriod = "24h" | "7d" | "30d";
 
 interface PasswordManagerProps {
@@ -893,6 +893,57 @@ const ShareLinksTab = ({ shareLinks, t }: ShareLinksTabProps) => {
   );
 };
 
+interface ModelSettingsTabProps {
+  modelSettings: ModelSettings;
+  isSaving: boolean;
+  onToggle: (model: ModelPreference) => Promise<void>;
+}
+
+const ModelSettingsTab = ({ modelSettings, isSaving, onToggle }: ModelSettingsTabProps) => {
+  const models: Array<{ id: ModelPreference; label: string; description: string }> = [
+    { id: "fast", label: "Fast and efficient", description: "Gemini 2.5 Flash" },
+    { id: "balanced", label: "Balanced", description: "Gemini 3 Flash Preview" },
+    { id: "accurate", label: "Slow and accurate", description: "Gemini 3.5 Flash" },
+  ];
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div>
+        <h3 className="font-display text-lg font-semibold text-white">Model dropdown</h3>
+        <p className="mt-1 text-sm text-gray-400 font-body">Enabled models appear in the participant chat dropdown. At least one model stays enabled.</p>
+      </div>
+
+      <div className="grid gap-3">
+        {models.map((model) => {
+          const isEnabled = modelSettings[model.id];
+
+          return (
+            <button
+              key={model.id}
+              type="button"
+              onClick={() => onToggle(model.id)}
+              disabled={isSaving}
+              className={`
+                flex items-center justify-between gap-4 p-4 rounded-xl border text-left transition-all
+                ${isEnabled ? "bg-electric/10 border-electric/30" : "bg-carbon border-steel/50 hover:border-steel"}
+                disabled:opacity-50 disabled:cursor-not-allowed
+              `}
+            >
+              <div>
+                <p className={`font-display text-sm font-semibold ${isEnabled ? "text-electric" : "text-white"}`}>{model.label}</p>
+                <p className="mt-1 text-xs font-mono text-gray-500">{model.description}</p>
+              </div>
+              <span className={`px-2.5 py-1 rounded font-mono text-xs ${isEnabled ? "bg-electric/20 text-electric" : "bg-graphite text-gray-400"}`}>
+                {isEnabled ? "Enabled" : "Disabled"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -909,6 +960,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [recentRequests, setRecentRequests] = useState<RequestLogEntry[]>([]);
   const [shareLinks, setShareLinks] = useState<ShareLinkEntry[]>([]);
+  const [modelSettings, setModelSettings] = useState<ModelSettings>({ fast: true, balanced: true, accurate: true });
   const [passwordStats, setPasswordStats] = useState<Map<string, PasswordDetailedStats>>(new Map());
 
   // Single unified loading state for initial data load
@@ -923,6 +975,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [newMaxUses, setNewMaxUses] = useState(10);
   const [newExpiresAt, setNewExpiresAt] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isSavingModelSettings, setIsSavingModelSettings] = useState(false);
 
   // Expanded state
   const [expandedPasswordId, setExpandedPasswordId] = useState<string | null>(null);
@@ -948,12 +1001,13 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       };
 
       // Load everything in parallel
-      const [statsData, passwordsData, usageData, logsData, shareLinksData] = await Promise.all([
+      const [statsData, passwordsData, usageData, logsData, shareLinksData, modelSettingsData] = await Promise.all([
         api.getSystemStats(adminSecret),
         api.getPasswords(adminSecret),
         api.getUsageStats(adminSecret),
         api.getRecentRequests(adminSecret, limitMap[activityPeriod]),
         api.getShareLinks(adminSecret),
+        api.getModelSettings(adminSecret),
       ]);
 
       // Update all state at once
@@ -962,6 +1016,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       setUsage(usageData);
       setRecentRequests(logsData);
       setShareLinks(shareLinksData);
+      setModelSettings(modelSettingsData);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t("api.dataFetchError"));
     } finally {
@@ -1078,6 +1133,33 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
     fetchAllData();
   }, [fetchAllData]);
 
+  const handleToggleModel = useCallback(
+    async (model: ModelPreference) => {
+      const nextSettings = {
+        ...modelSettings,
+        [model]: !modelSettings[model],
+      };
+
+      if (!Object.values(nextSettings).some(Boolean)) {
+        nextSettings.fast = true;
+      }
+
+      setIsSavingModelSettings(true);
+      setModelSettings(nextSettings);
+
+      try {
+        const savedSettings = await api.updateModelSettings(adminSecret, nextSettings);
+        setModelSettings(savedSettings);
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "Failed to update model settings");
+        await fetchAllData();
+      } finally {
+        setIsSavingModelSettings(false);
+      }
+    },
+    [adminSecret, fetchAllData, modelSettings],
+  );
+
   // ============================================================================
   // TAB CONFIGURATION
   // ============================================================================
@@ -1088,6 +1170,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       { id: "passwords" as TabId, label: t("passwordManager.passwordsTab", { count: passwords.length }), icon: <KeyIcon /> },
       { id: "usage" as TabId, label: t("passwordManager.usageTab", { count: usage.length }), icon: <UsersIcon /> },
       { id: "activity" as TabId, label: t("passwordManager.activityTab"), icon: <ActivityIcon /> },
+      { id: "models" as TabId, label: "Models", icon: <TokenIcon /> },
       { id: "shares" as TabId, label: t("passwordManager.sharesTab", { count: shareLinks.length }), icon: <ShareIcon /> },
     ],
     [t, passwords.length, usage.length, shareLinks.length],
@@ -1169,6 +1252,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         )}
 
         {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={setActivityPeriod} t={t} />}
+
+        {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} isSaving={isSavingModelSettings} onToggle={handleToggleModel} />}
 
         {activeTab === "shares" && <ShareLinksTab shareLinks={shareLinks} t={t} />}
       </div>

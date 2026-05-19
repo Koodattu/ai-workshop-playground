@@ -14,6 +14,8 @@ import type {
   CreateShareResponse,
   GetShareResponse,
   ShareLinkEntry,
+  ModelPreference,
+  ModelSettings,
 } from "@/types";
 
 class ApiClient {
@@ -212,6 +214,11 @@ class ApiClient {
     }
   }
 
+  async getEnabledModels(): Promise<ModelPreference[]> {
+    const { data } = await this.request<{ models: ModelPreference[] }>("/api/models");
+    return data.models;
+  }
+
   // Validate password - returns validation result with usage info
   async validatePassword(password: string, visitorId: string): Promise<{ valid: boolean; remainingUses: number; maxUses: number; isRateLimited: boolean }> {
     const { data } = await this.request<{
@@ -248,6 +255,26 @@ class ApiClient {
     } catch {
       return false;
     }
+  }
+
+  async getModelSettings(adminSecret: string): Promise<ModelSettings> {
+    const { data } = await this.request<{ models: ModelSettings }>("/api/admin/model-settings", {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data.models;
+  }
+
+  async updateModelSettings(adminSecret: string, models: ModelSettings): Promise<ModelSettings> {
+    const { data } = await this.request<{ models: ModelSettings }>("/api/admin/model-settings", {
+      method: "PUT",
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+      body: JSON.stringify({ models }),
+    });
+    return data.models;
   }
 
   async getPasswords(adminSecret: string): Promise<PasswordEntry[]> {

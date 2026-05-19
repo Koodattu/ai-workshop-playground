@@ -22,6 +22,7 @@ interface ChatPanelProps {
   onModeChange: (mode: ChatMode) => void;
   modelPreference: ModelPreference;
   onModelPreferenceChange: (modelPreference: ModelPreference) => void;
+  enabledModelPreferences: ModelPreference[];
   onRetryMessage?: (prompt: string) => Promise<void>;
 }
 
@@ -41,12 +42,19 @@ export function ChatPanel({
   onModeChange,
   modelPreference,
   onModelPreferenceChange,
+  enabledModelPreferences,
   onRetryMessage,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
+  const modelOptions = [
+    { value: "fast", label: t("chat.modelFast") },
+    { value: "balanced", label: t("chat.modelBalanced") },
+    { value: "accurate", label: t("chat.modelAccurate") },
+  ] satisfies Array<{ value: ModelPreference; label: string }>;
+  const enabledModelOptions = modelOptions.filter((option) => enabledModelPreferences.includes(option.value));
 
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
@@ -413,9 +421,11 @@ export function ChatPanel({
                   "
                   title={t("chat.modelSelectLabel")}
                 >
-                  <option value="fast">{t("chat.modelFast")}</option>
-                  <option value="balanced">{t("chat.modelBalanced")}</option>
-                  <option value="accurate">{t("chat.modelAccurate")}</option>
+                  {enabledModelOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 

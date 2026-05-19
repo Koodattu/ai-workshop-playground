@@ -29,6 +29,8 @@ export interface GenerateResponse {
   code: string;
 }
 
+export type ModelSettings = Record<ModelPreference, boolean>;
+
 export interface PasswordEntry {
   _id: string;
   code: string;

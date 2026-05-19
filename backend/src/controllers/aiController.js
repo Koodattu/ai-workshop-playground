@@ -9,6 +9,7 @@ const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const { ERROR_CODES } = require("../constants/errorCodes");
 const RequestLog = require("../models/RequestLog");
 const Usage = require("../models/Usage");
+const { getAllowedModelPreference } = require("../services/modelSettings");
 
 const MODEL_PREFERENCES = {
   fast: {
@@ -37,7 +38,7 @@ const MODEL_PREFERENCES = {
   },
 };
 
-const DEFAULT_MODEL_PREFERENCE = "balanced";
+const DEFAULT_MODEL_PREFERENCE = "fast";
 
 const GEMINI_THINKING_LEVELS = {
   minimal: ThinkingLevel.MINIMAL,
@@ -57,7 +58,8 @@ function calculateCostInCents(promptTokens, billableOutputTokens, pricing) {
 }
 
 function getModelPreference(modelPreference) {
-  return MODEL_PREFERENCES[modelPreference] || MODEL_PREFERENCES[DEFAULT_MODEL_PREFERENCE];
+  const allowedPreference = getAllowedModelPreference(modelPreference, DEFAULT_MODEL_PREFERENCE);
+  return MODEL_PREFERENCES[allowedPreference] || MODEL_PREFERENCES[DEFAULT_MODEL_PREFERENCE];
 }
 
 function getGeminiThinkingLevel() {

@@ -8,6 +8,8 @@ const { body, param, query } = require("express-validator");
 const {
   verifyAdmin,
   verifyAdminCredentials,
+  getAdminModelSettings,
+  updateAdminModelSettings,
   createPassword,
   listPasswords,
   getUsageStats,
@@ -32,6 +34,19 @@ router.post("/verify", verifyAdmin, verifyAdminCredentials);
 
 // All other admin routes require admin authentication
 router.use(verifyAdmin);
+
+router.get("/model-settings", getAdminModelSettings);
+router.put(
+  "/model-settings",
+  [
+    body("models").isObject().withMessage("Model settings are required"),
+    body("models.fast").optional().isBoolean().withMessage("fast must be a boolean"),
+    body("models.balanced").optional().isBoolean().withMessage("balanced must be a boolean"),
+    body("models.accurate").optional().isBoolean().withMessage("accurate must be a boolean"),
+    validateRequest,
+  ],
+  updateAdminModelSettings,
+);
 
 /**
  * POST /api/admin/passwords

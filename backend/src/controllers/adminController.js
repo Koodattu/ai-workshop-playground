@@ -10,6 +10,7 @@ const RequestLog = require("../models/RequestLog");
 const SharedCode = require("../models/SharedCode");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
+const { getModelSettings, updateModelSettings } = require("../services/modelSettings");
 
 /**
  * Middleware to verify admin access
@@ -33,6 +34,18 @@ const verifyAdminCredentials = asyncHandler(async (req, res) => {
   res.json({
     message: "Admin credentials verified successfully",
     authenticated: true,
+  });
+});
+
+const getAdminModelSettings = asyncHandler(async (req, res) => {
+  res.json({
+    models: getModelSettings(),
+  });
+});
+
+const updateAdminModelSettings = asyncHandler(async (req, res) => {
+  res.json({
+    models: updateModelSettings(req.body.models || {}),
   });
 });
 
@@ -629,6 +642,8 @@ const getShareLinks = asyncHandler(async (req, res) => {
 module.exports = {
   verifyAdmin,
   verifyAdminCredentials,
+  getAdminModelSettings,
+  updateAdminModelSettings,
   createPassword,
   listPasswords,
   getUsageStats,
