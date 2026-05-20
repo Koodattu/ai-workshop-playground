@@ -38,7 +38,7 @@ const MODEL_PREFERENCES = {
   },
 };
 
-const DEFAULT_MODEL_PREFERENCE = "fast";
+const DEFAULT_MODEL_PREFERENCE = "balanced";
 
 const GEMINI_THINKING_LEVELS = {
   minimal: ThinkingLevel.MINIMAL,

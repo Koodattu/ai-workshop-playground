@@ -26,6 +26,19 @@ const getMessages = (lang: string) => {
   return lang === "fi" ? fiMessages : enMessages;
 };
 
+const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate"] as const satisfies readonly ModelPreference[];
+
+const isModelPreference = (value: unknown): value is ModelPreference => {
+  return MODEL_PREFERENCE_PRIORITY.includes(value as ModelPreference);
+};
+
+const getAvailableModelPreferences = (models: unknown): ModelPreference[] => {
+  const enabledPreferences = new Set((Array.isArray(models) ? models : []).filter(isModelPreference));
+  const orderedPreferences = MODEL_PREFERENCE_PRIORITY.filter((preference) => enabledPreferences.has(preference));
+
+  return orderedPreferences.length > 0 ? orderedPreferences : [...MODEL_PREFERENCE_PRIORITY];
+};
+
 export default function WorkspacePage() {
   // Custom templates management (needed early for validation)
   const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
@@ -59,8 +72,8 @@ export default function WorkspacePage() {
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
-  const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "fast");
-  const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>(["fast", "balanced", "accurate"]);
+  const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "balanced");
+  const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>([...MODEL_PREFERENCE_PRIORITY]);
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
@@ -127,9 +140,11 @@ export default function WorkspacePage() {
     const fetchEnabledModels = async () => {
       try {
         const models = await api.getEnabledModels();
-        if (!isMounted || models.length === 0) return;
+        if (!isMounted) return;
 
-        setEnabledModelPreferences(models);
+        const availableModels = getAvailableModelPreferences(models);
+        setEnabledModelPreferences(availableModels);
+        setModelPreference(availableModels[0]);
       } catch (error) {
         console.warn("Failed to fetch enabled models:", error);
       }
@@ -143,8 +158,10 @@ export default function WorkspacePage() {
   }, []);
 
   useEffect(() => {
-    if (enabledModelPreferences.length > 0 && !enabledModelPreferences.includes(modelPreference)) {
-      setModelPreference(enabledModelPreferences[0]);
+    const availableModels = getAvailableModelPreferences(enabledModelPreferences);
+
+    if (!availableModels.includes(modelPreference)) {
+      setModelPreference(availableModels[0]);
     }
   }, [enabledModelPreferences, modelPreference, setModelPreference]);
   const searchParams = useSearchParams();

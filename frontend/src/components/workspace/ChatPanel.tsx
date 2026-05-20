@@ -50,11 +50,12 @@ export function ChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
   const modelOptions = [
-    { value: "fast", label: t("chat.modelFast") },
     { value: "balanced", label: t("chat.modelBalanced") },
+    { value: "fast", label: t("chat.modelFast") },
     { value: "accurate", label: t("chat.modelAccurate") },
   ] satisfies Array<{ value: ModelPreference; label: string }>;
   const enabledModelOptions = modelOptions.filter((option) => enabledModelPreferences.includes(option.value));
+  const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : modelOptions;
 
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
@@ -421,7 +422,7 @@ export function ChatPanel({
                   "
                   title={t("chat.modelSelectLabel")}
                 >
-                  {enabledModelOptions.map((option) => (
+                  {visibleModelOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

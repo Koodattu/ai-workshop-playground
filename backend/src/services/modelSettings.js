@@ -1,4 +1,4 @@
-const MODEL_PREFERENCE_IDS = ["fast", "balanced", "accurate"];
+const MODEL_PREFERENCE_IDS = ["balanced", "fast", "accurate"];
 
 // Quick runtime settings. Defaults favor cost savings.
 const modelSettings = {
@@ -28,14 +28,14 @@ function updateModelSettings(settings = {}) {
   const nextSettings = normalizeModelSettings(settings);
 
   if (!MODEL_PREFERENCE_IDS.some((id) => nextSettings[id])) {
-    nextSettings.fast = true;
+    nextSettings.balanced = true;
   }
 
   Object.assign(modelSettings, nextSettings);
   return getModelSettings();
 }
 
-function getAllowedModelPreference(requestedPreference, defaultPreference = "fast") {
+function getAllowedModelPreference(requestedPreference, defaultPreference = "balanced") {
   const enabledPreferences = getEnabledModelPreferences();
 
   if (enabledPreferences.includes(requestedPreference)) {
@@ -46,7 +46,7 @@ function getAllowedModelPreference(requestedPreference, defaultPreference = "fas
     return defaultPreference;
   }
 
-  return enabledPreferences[0] || "fast";
+  return enabledPreferences[0] || "balanced";
 }
 
 module.exports = {

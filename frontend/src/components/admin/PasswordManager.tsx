@@ -901,8 +901,8 @@ interface ModelSettingsTabProps {
 
 const ModelSettingsTab = ({ modelSettings, isSaving, onToggle }: ModelSettingsTabProps) => {
   const models: Array<{ id: ModelPreference; label: string; description: string }> = [
+    { id: "balanced", label: "Balanced", description: "Gemini 3 Flash" },
     { id: "fast", label: "Fast and efficient", description: "Gemini 2.5 Flash" },
-    { id: "balanced", label: "Balanced", description: "Gemini 3 Flash Preview" },
     { id: "accurate", label: "Slow and accurate", description: "Gemini 3.5 Flash" },
   ];
 
@@ -1141,7 +1141,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       };
 
       if (!Object.values(nextSettings).some(Boolean)) {
-        nextSettings.fast = true;
+        nextSettings.balanced = true;
       }
 
       setIsSavingModelSettings(true);
