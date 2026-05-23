@@ -125,6 +125,19 @@
     "redo": "Redo",
     "downloadTitle": "Download Code as File"
   },
+  "versionHistory": {
+    "title": "Version History",
+    "description": "Select any saved AI version to continue from it.",
+    "open": "Open version history",
+    "refresh": "Refresh versions",
+    "empty": "No AI-generated versions yet.",
+    "untitled": "Untitled Version",
+    "patch": "Patch",
+    "full": "Full",
+    "manual": "Manual base",
+    "current": "Current",
+    "loaded": "Version loaded"
+  },
   "templates": {
     "welcome": "Advanced Welcome",
     "tailwind": "Advanced Tailwind",
@@ -388,6 +401,10 @@
     "anonymous": "Anonymous",
     "noData": "No data available",
     "sharesTab": "Shares ({count})",
+    "versionsTab": "Versions ({count})",
+    "versionsTitle": "Generated Versions",
+    "versionsCount": "versions",
+    "noVersions": "No generated versions yet",
     "shareLinksTitle": "Share Links",
     "shareLinksCount": "links",
     "noShareLinks": "No share links created yet",

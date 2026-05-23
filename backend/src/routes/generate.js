@@ -72,6 +72,8 @@ router.post(
       .bail()
       .isLength({ max: 5000 })
       .withMessage({ msg: "Message content must not exceed 5000 characters", errorCode: ERROR_CODES.MESSAGE_CONTENT_TOO_LONG }),
+    body("existingCode").optional().isString().withMessage({ msg: "Existing code must be a string", errorCode: ERROR_CODES.VALIDATION_FAILED }).isLength({ max: 500000 }),
+    body("parentVersionId").optional({ nullable: true, checkFalsy: true }).isMongoId().withMessage({ msg: "Parent version ID is invalid", errorCode: ERROR_CODES.INVALID_OBJECT_ID }),
     body("mode").optional().isIn(["edit", "ask"]).withMessage({ msg: "Mode must be either 'edit' or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("modelPreference")
       .optional()

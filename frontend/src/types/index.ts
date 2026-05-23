@@ -19,6 +19,7 @@ export interface GenerateRequest {
   visitorId: string;
   prompt: string;
   existingCode?: string;
+  parentVersionId?: string | null;
   messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   mode?: ChatMode;
   modelPreference?: ModelPreference;
@@ -27,6 +28,9 @@ export interface GenerateRequest {
 export interface GenerateResponse {
   message: string;
   code: string;
+  projectName?: string;
+  editMode?: "replace_all" | "patch";
+  version?: CodeVersion;
 }
 
 export type ModelSettings = Record<ModelPreference, boolean>;
@@ -94,6 +98,8 @@ export interface StreamDoneEvent {
   message: string;
   code: string;
   projectName?: string;
+  editMode?: "replace_all" | "patch";
+  version?: CodeVersion;
   remaining: number;
 }
 
@@ -134,7 +140,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; projectName?: string; remaining: number }) => void;
+  onDone?: (data: { message: string; code: string; projectName?: string; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining: number }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
@@ -304,4 +310,24 @@ export interface ShareLinkEntry {
   title: string | null;
   projectName: string | null;
   createdAt: string;
+}
+
+export interface CodeVersion {
+  id: string;
+  _id?: string;
+  visitorId: string;
+  passwordId?: string | null;
+  parentVersionId?: string | null;
+  rootVersionId?: string | null;
+  code: string;
+  codePreview?: string;
+  codeLength?: number;
+  prompt: string;
+  message: string;
+  projectName?: string | null;
+  editMode: "replace_all" | "patch";
+  editCount: number;
+  manualEditsSinceParent?: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }

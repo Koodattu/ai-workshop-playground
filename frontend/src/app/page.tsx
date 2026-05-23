@@ -7,6 +7,7 @@ import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
 import { PasswordModal } from "@/components/workspace/PasswordModal";
+import { VersionHistoryDialog } from "@/components/workspace/VersionHistoryDialog";
 import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -17,7 +18,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage } from "@/lib/errorTranslation";
-import type { ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference } from "@/types";
+import type { ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference, CodeVersion } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -94,6 +95,10 @@ export default function WorkspacePage() {
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
+  const [versions, setVersions] = useState<CodeVersion[]>([]);
+  const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
+  const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const abortStreamRef = useRef<(() => void) | null>(null);
 
   // Preview control ref
@@ -133,6 +138,31 @@ export default function WorkspacePage() {
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
+
+  const fetchVersions = useCallback(
+    async (options?: { loadLatest?: boolean }) => {
+      if (!visitorId || !password) return;
+
+      setIsLoadingVersions(true);
+      try {
+        const fetchedVersions = await api.getMyCodeVersions(password, visitorId, true);
+        setVersions(fetchedVersions);
+
+        if (options?.loadLatest && fetchedVersions.length > 0) {
+          const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+          setCode(latest.code);
+          setCurrentVersionId(latest.id);
+          originalCodeSnapshotRef.current = latest.code;
+          previewControlRef.current?.forceRefresh(latest.code);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch code versions:", error);
+      } finally {
+        setIsLoadingVersions(false);
+      }
+    },
+    [password, visitorId],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -306,6 +336,19 @@ export default function WorkspacePage() {
           setIsPasswordModalOpen(false);
           // Set remaining uses from validation response
           setRemainingUses(result.remainingUses);
+          try {
+            const fetchedVersions = await api.getMyCodeVersions(enteredPassword, visitorId, true);
+            setVersions(fetchedVersions);
+            if (fetchedVersions.length > 0) {
+              const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+              setCode(latest.code);
+              setCurrentVersionId(latest.id);
+              originalCodeSnapshotRef.current = latest.code;
+              previewControlRef.current?.forceRefresh(latest.code);
+            }
+          } catch (versionError) {
+            console.warn("Failed to load code versions:", versionError);
+          }
           showToast(t("workspace.welcomeBack"), "success");
         } else {
           // Clear invalid password from localStorage
@@ -377,6 +420,7 @@ export default function WorkspacePage() {
 
         // Switch to the shared template
         setCurrentTemplateId(newTemplate.id);
+        setCurrentVersionId(null);
         setCode(pendingShare.code);
         originalCodeSnapshotRef.current = pendingShare.code;
 
@@ -421,6 +465,7 @@ export default function WorkspacePage() {
             visitorId,
             prompt,
             existingCode: code,
+            parentVersionId: currentVersionId,
             messageHistory,
             mode: chatMode,
             modelPreference,
@@ -687,6 +732,13 @@ export default function WorkspacePage() {
                 setCode(finalCode);
                 // Set the snapshot to the new code so it's not dirty
                 originalCodeSnapshotRef.current = finalCode;
+                if (data.version) {
+                  setCurrentVersionId(data.version.id);
+                  setVersions((prev) => {
+                    const withoutDuplicate = prev.filter((version) => version.id !== data.version?.id);
+                    return [...withoutDuplicate, data.version as CodeVersion].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                  });
+                }
               }
               setRemainingUses(data.remaining);
 
@@ -815,6 +867,7 @@ export default function WorkspacePage() {
       addTemplate,
       chatMode,
       modelPreference,
+      currentVersionId,
       autoSwitchEnabled,
       setSavedTemplateId,
     ],
@@ -935,6 +988,7 @@ export default function WorkspacePage() {
 
       // Save the new template ID to localStorage
       setSavedTemplateId(templateId);
+      setCurrentVersionId(null);
 
       const dirty = isCodeDirty();
 
@@ -991,6 +1045,22 @@ export default function WorkspacePage() {
       }
     },
     [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates, getSharedTemplate],
+  );
+
+  const handleSelectVersion = useCallback(
+    (version: CodeVersion) => {
+      if (!version.code) return;
+
+      setCode(version.code);
+      setCurrentVersionId(version.id);
+      originalCodeSnapshotRef.current = version.code;
+      setContextMessages([]);
+      setIsVersionHistoryOpen(false);
+      previewControlRef.current?.forceRefresh(version.code);
+
+      showToast(t("versionHistory.loaded"), "success");
+    },
+    [showToast, t],
   );
 
   const handleRemoveCustomTemplate = useCallback(
@@ -1099,6 +1169,8 @@ export default function WorkspacePage() {
                     setChatHistory([]);
                     setContextMessages([]);
                     setRemainingUses(undefined);
+                    setVersions([]);
+                    setCurrentVersionId(null);
                   }}
                   className="md:hidden p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
                   title={t("common.logout")}
@@ -1117,6 +1189,8 @@ export default function WorkspacePage() {
                     setChatHistory([]);
                     setContextMessages([]);
                     setRemainingUses(undefined);
+                    setVersions([]);
+                    setCurrentVersionId(null);
                   }}
                   className="hidden md:inline text-xs font-mono text-gray-400 hover:text-white transition-colors"
                 >
@@ -1167,6 +1241,11 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
+                onOpenVersionHistory={() => {
+                  setIsVersionHistoryOpen(true);
+                  fetchVersions();
+                }}
+                versionCount={versions.length}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
@@ -1229,6 +1308,11 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
+                onOpenVersionHistory={() => {
+                  setIsVersionHistoryOpen(true);
+                  fetchVersions();
+                }}
+                versionCount={versions.length}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
@@ -1309,6 +1393,17 @@ export default function WorkspacePage() {
           error={authError}
           initialPassword={urlPassword || undefined}
           onClose={handleClosePasswordModal}
+        />
+      )}
+
+      {isVersionHistoryOpen && (
+        <VersionHistoryDialog
+          versions={versions}
+          currentVersionId={currentVersionId}
+          isLoading={isLoadingVersions}
+          onClose={() => setIsVersionHistoryOpen(false)}
+          onRefresh={fetchVersions}
+          onSelectVersion={handleSelectVersion}
         />
       )}
 

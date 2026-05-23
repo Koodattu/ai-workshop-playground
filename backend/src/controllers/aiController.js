@@ -4,11 +4,13 @@
  */
 
 const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
+const mongoose = require("mongoose");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const { ERROR_CODES } = require("../constants/errorCodes");
 const RequestLog = require("../models/RequestLog");
 const Usage = require("../models/Usage");
+const CodeVersion = require("../models/CodeVersion");
 const { getAllowedModelPreference } = require("../services/modelSettings");
 
 const MODEL_PREFERENCES = {
@@ -65,6 +67,79 @@ function getModelPreference(modelPreference) {
 function getGeminiThinkingLevel() {
   const normalizedLevel = (config.geminiThinkingLevel || "low").toLowerCase();
   return GEMINI_THINKING_LEVELS[normalizedLevel] || ThinkingLevel.LOW;
+}
+
+function countOccurrences(haystack, needle) {
+  if (!needle) return 0;
+  let count = 0;
+  let position = 0;
+
+  while (position !== -1) {
+    position = haystack.indexOf(needle, position);
+    if (position !== -1) {
+      count++;
+      position += needle.length;
+    }
+  }
+
+  return count;
+}
+
+function applyExactEdits(originalCode, edits) {
+  if (!Array.isArray(edits) || edits.length === 0) {
+    throw new AppError("Patch response did not include any edits", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+  }
+
+  const replacements = edits.map((edit, index) => {
+    const oldText = typeof edit.oldText === "string" ? edit.oldText : "";
+    const newText = typeof edit.newText === "string" ? edit.newText : "";
+
+    if (!oldText) {
+      throw new AppError(`Patch edit ${index + 1} is missing oldText`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
+    }
+
+    const occurrences = countOccurrences(originalCode, oldText);
+    if (occurrences === 0) {
+      throw new AppError(`Patch edit ${index + 1} did not match the current code`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
+    }
+    if (occurrences > 1) {
+      throw new AppError(`Patch edit ${index + 1} matched multiple locations`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
+    }
+
+    return {
+      start: originalCode.indexOf(oldText),
+      end: originalCode.indexOf(oldText) + oldText.length,
+      newText,
+    };
+  });
+
+  replacements.sort((a, b) => b.start - a.start);
+
+  let patchedCode = originalCode;
+  for (const replacement of replacements) {
+    patchedCode = patchedCode.slice(0, replacement.start) + replacement.newText + patchedCode.slice(replacement.end);
+  }
+
+  return patchedCode;
+}
+
+async function resolveParentVersion(parentVersionId, visitorId) {
+  if (!parentVersionId) return null;
+
+  if (!mongoose.Types.ObjectId.isValid(parentVersionId)) {
+    throw new AppError("Invalid parent version ID", 400, ERROR_CODES.INVALID_OBJECT_ID);
+  }
+
+  const parentVersion = await CodeVersion.findOne({
+    _id: parentVersionId,
+    visitorId,
+  });
+
+  if (!parentVersion) {
+    throw new AppError("Parent version not found", 404, ERROR_CODES.INVALID_OBJECT_ID);
+  }
+
+  return parentVersion;
 }
 
 /**
@@ -198,13 +273,14 @@ const SYSTEM_INSTRUCTION = `You are an expert web developer assistant. Your task
 Reply in the same language as the user, and SUPER shortly tell what you did. SUPER short.
 
 CRITICAL OUTPUT RULES - FOLLOW EXACTLY:
-1. Return code in the "code" field - absolutely NO markdown code fences, NO explanations
+1. Return either a full replacement or exact patch edits using "editMode"
 2. Return a SUPER short message in the "message" field in the SAME LANGUAGE as the user
 3. Return a TWO-WORD project name in the "projectName" field in the SAME LANGUAGE as the user
-4. The code field should contain ONLY the code itself - start directly with <!DOCTYPE html> or the first line of code
+4. For "replace_all", the "code" field should contain ONLY the complete code itself - start directly with <!DOCTYPE html> or the first line of code
 5. NO markdown code fences (no \`\`\`html, no \`\`\`, nothing) in the code field
 6. The message should be 1-2 sentences maximum
 7. The projectName MUST be exactly TWO WORDS that describe the project creatively (e.g., "Solar Dashboard", "Pixel Art", "Magic Quiz")
+8. For "patch", set "code" to an empty string and put all changes in "edits"
 
 CODE MODIFICATION RULES:
 - If existing code is provided, modify/extend it based on the user's request
@@ -212,6 +288,12 @@ CODE MODIFICATION RULES:
 - If user says "add", "modify", "change", or "update" - work with the existing code
 - If user wants something completely new, you can start fresh
 - Preserve working functionality unless asked to remove it
+- Prefer "patch" for targeted changes when existing code is provided
+- Use "replace_all" only for brand new projects or broad rewrites
+- Patch edits must use exact oldText copied from the provided existing code
+- Each oldText must match exactly one location in the existing code
+- If multiple areas need changes, return multiple edits
+- Do not use line numbers. Exact text replacement avoids line-number drift when several edits are applied.
 
 IF YOU NEED IMAGES:
 - Use https://static.photos/ for placeholder images, https://static.photos/CATEGORY/RESOLUTION/SEED
@@ -229,7 +311,7 @@ CODE GENERATION RULES:
 7. Make interactive elements functional with proper JavaScript
 8. Format code with proper indentation - each tag, style rule, and script line should be on its own line
 
-REMEMBER: Return JSON with "message" (short, in user's language), "projectName" (TWO words only, creative name in user's language), and "code" (clean, properly formatted HTML/CSS/JS, no markdown).`;
+REMEMBER: Return JSON with "message" (short, in user's language), "projectName" (TWO words only, creative name in user's language), "editMode" ("replace_all" or "patch"), "code" (full code only for replace_all), and "edits" (exact replacements for patch).`;
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
@@ -245,10 +327,33 @@ const CODE_GENERATION_SCHEMA = {
     },
     code: {
       type: "string",
-      description: "The generated or modified HTML/CSS/JS code without any markdown formatting",
+      description: "Complete HTML/CSS/JS code for replace_all responses. Empty string for patch responses.",
+    },
+    editMode: {
+      type: "string",
+      enum: ["replace_all", "patch"],
+      description: "Use replace_all for complete output, or patch for exact oldText/newText replacements.",
+    },
+    edits: {
+      type: "array",
+      description: "Exact replacements for patch mode. Each oldText must match the existing code exactly once.",
+      items: {
+        type: "object",
+        properties: {
+          oldText: {
+            type: "string",
+            description: "Exact text copied from the existing code.",
+          },
+          newText: {
+            type: "string",
+            description: "Replacement text.",
+          },
+        },
+        required: ["oldText", "newText"],
+      },
     },
   },
-  required: ["message", "projectName", "code"],
+  required: ["message", "projectName", "editMode", "code", "edits"],
 };
 
 // System instruction for ASK mode - answering questions without generating code
@@ -282,8 +387,10 @@ const ASK_SCHEMA = {
  * Generate code using Gemini API with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
-  const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE } = req.body;
+  const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE, parentVersionId } = req.body;
   const isAskMode = mode === "ask";
+  const hasExistingCode = Boolean(existingCode && existingCode.trim());
+  const allowCodeStreaming = !isAskMode && !hasExistingCode;
   const selectedModel = getModelPreference(modelPreference);
 
   if (!prompt) {
@@ -396,7 +503,7 @@ Modify or extend the existing code based on the user's request.`;
           }
 
           // If code field hasn't started yet, look for it
-          if (!codeStarted) {
+          if (allowCodeStreaming && !codeStarted) {
             // Look for "code": pattern
             const codeKeyIndex = accumulatedText.indexOf('"code"');
             if (codeKeyIndex !== -1) {
@@ -429,7 +536,7 @@ Modify or extend the existing code based on the user's request.`;
                 }
               }
             }
-          } else if (!codeComplete) {
+          } else if (allowCodeStreaming && !codeComplete) {
             // Code has started but not complete - decode the new chunk directly
             // We only pass the new chunk text to the decoder (it maintains state)
             const { decoded, done } = codeDecoder.decode(chunkText);
@@ -458,14 +565,33 @@ Modify or extend the existing code based on the user's request.`;
       throw new AppError("Failed to parse AI response", 500, ERROR_CODES.AI_RESPONSE_PARSE_FAILED);
     }
 
+    let finalCode = "";
+    let savedVersion = null;
+    let finalEditMode = "replace_all";
+
     // Validate response has required fields based on mode
     if (isAskMode) {
       if (!structuredResponse.message) {
         throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
       }
     } else {
-      if (!structuredResponse.code || !structuredResponse.message) {
+      if (!structuredResponse.message || !structuredResponse.projectName || !structuredResponse.editMode) {
         throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+      }
+
+      finalEditMode = structuredResponse.editMode === "patch" && hasExistingCode ? "patch" : "replace_all";
+
+      if (finalEditMode === "patch") {
+        finalCode = applyExactEdits(existingCode, structuredResponse.edits);
+      } else {
+        if (!structuredResponse.code) {
+          throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+        }
+        finalCode = structuredResponse.code;
+      }
+
+      if (finalCode.length > 500000) {
+        throw new AppError("Generated code cannot exceed 500KB", 400, ERROR_CODES.VALIDATION_FAILED);
       }
     }
 
@@ -477,6 +603,46 @@ Modify or extend the existing code based on the user's request.`;
     // Send message-complete event (message field is complete)
     const finalMessage = structuredResponse.message;
     sendSse({ type: "message-complete", message: finalMessage });
+
+    if (!isAskMode && req.workshop?.visitorId) {
+      const parentVersion = await resolveParentVersion(parentVersionId, req.workshop.visitorId);
+      const manualEditsSinceParent = Boolean(parentVersion && existingCode && parentVersion.code !== existingCode);
+      const version = await CodeVersion.create({
+        visitorId: req.workshop.visitorId,
+        passwordId: req.workshop.passwordId || null,
+        parentVersionId: parentVersion?._id || null,
+        rootVersionId: parentVersion?.rootVersionId || parentVersion?._id || null,
+        code: finalCode,
+        prompt,
+        message: structuredResponse.message,
+        projectName: structuredResponse.projectName || null,
+        editMode: finalEditMode,
+        editCount: Array.isArray(structuredResponse.edits) ? structuredResponse.edits.length : 0,
+        manualEditsSinceParent,
+      });
+
+      if (!version.rootVersionId) {
+        version.rootVersionId = version._id;
+        await version.save();
+      }
+
+      savedVersion = {
+        id: version._id.toString(),
+        visitorId: version.visitorId,
+        passwordId: version.passwordId?.toString() || null,
+        parentVersionId: version.parentVersionId?.toString() || null,
+        rootVersionId: version.rootVersionId?.toString() || null,
+        code: version.code,
+        prompt: version.prompt,
+        message: version.message,
+        projectName: version.projectName,
+        editMode: version.editMode,
+        editCount: version.editCount,
+        manualEditsSinceParent: version.manualEditsSinceParent,
+        createdAt: version.createdAt,
+        updatedAt: version.updatedAt,
+      };
+    }
 
     // Get token usage metadata from the stream
     try {
@@ -536,8 +702,10 @@ Modify or extend the existing code based on the user's request.`;
     const finalData = {
       type: "done",
       message: structuredResponse.message,
-      code: isAskMode ? "" : structuredResponse.code,
+      code: isAskMode ? "" : finalCode,
       projectName: isAskMode ? undefined : structuredResponse.projectName,
+      editMode: isAskMode ? undefined : finalEditMode,
+      version: savedVersion,
       remaining: req.workshop?.remaining,
     };
 

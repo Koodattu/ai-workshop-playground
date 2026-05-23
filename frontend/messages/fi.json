@@ -125,6 +125,19 @@
     "redo": "Tee uudelleen",
     "downloadTitle": "Lataa koodi tiedostona"
   },
+  "versionHistory": {
+    "title": "Versiohistoria",
+    "description": "Valitse tallennettu AI-versio ja jatka siitä.",
+    "open": "Avaa versiohistoria",
+    "refresh": "Päivitä versiot",
+    "empty": "AI:n luomia versioita ei vielä ole.",
+    "untitled": "Nimetön versio",
+    "patch": "Paikkaus",
+    "full": "Täysi",
+    "manual": "Käsin muokattu",
+    "current": "Nykyinen",
+    "loaded": "Versio ladattu"
+  },
   "templates": {
     "welcome": "Laaja Tervetuloa",
     "tailwind": "Laaja Tailwind",
@@ -388,6 +401,10 @@
     "anonymous": "Anonyymi",
     "noData": "Ei tietoja saatavilla",
     "sharesTab": "Jaot ({count})",
+    "versionsTab": "Versiot ({count})",
+    "versionsTitle": "Luodut versiot",
+    "versionsCount": "versiota",
+    "noVersions": "Luotuja versioita ei vielä ole",
     "shareLinksTitle": "Jakolinkit",
     "shareLinksCount": "linkkiä",
     "noShareLinks": "Jakolinkkejä ei ole vielä luotu",

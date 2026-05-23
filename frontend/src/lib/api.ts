@@ -14,6 +14,7 @@ import type {
   CreateShareResponse,
   GetShareResponse,
   ShareLinkEntry,
+  CodeVersion,
   ModelPreference,
   ModelSettings,
 } from "@/types";
@@ -182,6 +183,8 @@ class ApiClient {
                         message: event.message,
                         code: event.code,
                         projectName: event.projectName,
+                        editMode: event.editMode,
+                        version: event.version,
                         remaining: event.remaining,
                       });
                       break;
@@ -217,6 +220,14 @@ class ApiClient {
   async getEnabledModels(): Promise<ModelPreference[]> {
     const { data } = await this.request<{ models: ModelPreference[] }>("/api/models");
     return data.models;
+  }
+
+  async getMyCodeVersions(password: string, visitorId: string, includeCode = true): Promise<CodeVersion[]> {
+    const { data } = await this.request<{ count: number; versions: CodeVersion[] }>("/api/versions/list", {
+      method: "POST",
+      body: JSON.stringify({ password, visitorId, includeCode }),
+    });
+    return data.versions;
   }
 
   // Validate password - returns validation result with usage info
@@ -411,6 +422,18 @@ class ApiClient {
       },
     });
     return data.shareLinks;
+  }
+
+  async getCodeVersions(adminSecret: string): Promise<CodeVersion[]> {
+    const { data } = await this.request<{ count: number; versions: CodeVersion[] }>("/api/admin/code-versions", {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data.versions.map((version) => ({
+      ...version,
+      id: version.id || version._id || "",
+    }));
   }
 }
 

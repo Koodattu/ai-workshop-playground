@@ -8,6 +8,7 @@ const Password = require("../models/Password");
 const Usage = require("../models/Usage");
 const RequestLog = require("../models/RequestLog");
 const SharedCode = require("../models/SharedCode");
+const CodeVersion = require("../models/CodeVersion");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const { getModelSettings, updateModelSettings } = require("../services/modelSettings");
@@ -193,7 +194,7 @@ const updatePassword = asyncHandler(async (req, res) => {
   if (isActive !== undefined) updateData.isActive = isActive;
 
   const password = await Password.findByIdAndUpdate(id, updateData, {
-    new: true,
+    returnDocument: "after",
     runValidators: true,
   });
 
@@ -639,6 +640,36 @@ const getShareLinks = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get all generated code versions
+ */
+const getCodeVersions = asyncHandler(async (req, res) => {
+  const versions = await CodeVersion.find()
+    .select("visitorId passwordId parentVersionId rootVersionId code prompt message projectName editMode editCount manualEditsSinceParent createdAt")
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .lean();
+
+  res.json({
+    count: versions.length,
+    versions: versions.map((version) => ({
+      _id: version._id,
+      visitorId: version.visitorId,
+      passwordId: version.passwordId,
+      parentVersionId: version.parentVersionId,
+      rootVersionId: version.rootVersionId,
+      code: version.code,
+      prompt: version.prompt,
+      message: version.message,
+      projectName: version.projectName,
+      editMode: version.editMode,
+      editCount: version.editCount,
+      manualEditsSinceParent: version.manualEditsSinceParent,
+      createdAt: version.createdAt,
+    })),
+  });
+});
+
 module.exports = {
   verifyAdmin,
   verifyAdminCredentials,
@@ -655,4 +686,5 @@ module.exports = {
   getRecentRequests,
   getTokenTimeSeries,
   getShareLinks,
+  getCodeVersions,
 };

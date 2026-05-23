@@ -21,6 +21,7 @@ const {
   getRecentRequests,
   getTokenTimeSeries,
   getShareLinks,
+  getCodeVersions,
 } = require("../controllers/adminController");
 const validateRequest = require("../middleware/validateRequest");
 
@@ -168,5 +169,11 @@ router.get(
  * Get all share links
  */
 router.get("/share-links", getShareLinks);
+
+/**
+ * GET /api/admin/code-versions
+ * Get all generated code versions
+ */
+router.get("/code-versions", getCodeVersions);
 
 module.exports = router;

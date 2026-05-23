@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, ModelPreference, ModelSettings } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings } from "@/types";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type TabId = "overview" | "passwords" | "usage" | "activity" | "models" | "shares";
+type TabId = "overview" | "passwords" | "usage" | "activity" | "models" | "shares" | "versions";
 type ActivityPeriod = "24h" | "7d" | "30d";
 
 interface PasswordManagerProps {
@@ -893,6 +893,65 @@ const ShareLinksTab = ({ shareLinks, t }: ShareLinksTabProps) => {
   );
 };
 
+interface CodeVersionsTabProps {
+  versions: CodeVersion[];
+  t: (key: string, params?: Record<string, unknown>) => string;
+}
+
+const CodeVersionsTab = ({ versions, t }: CodeVersionsTabProps) => {
+  if (!versions || versions.length === 0) {
+    return (
+      <div className="text-center py-12 animate-fade-in">
+        <ActivityIcon />
+        <p className="mt-2 text-gray-400 font-body">{t("passwordManager.noVersions")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-lg font-semibold text-white">{t("passwordManager.versionsTitle")}</h3>
+        <span className="text-xs font-mono text-gray-400">
+          {versions.length} {t("passwordManager.versionsCount")}
+        </span>
+      </div>
+
+      <div className="space-y-2 max-h-150 overflow-y-auto scrollbar-thin pr-2">
+        {versions.map((version, index) => (
+          <div
+            key={version.id}
+            className="p-4 rounded-xl bg-carbon border border-steel/50 hover:border-electric/30 transition-all animate-fade-in"
+            style={{ animationDelay: `${index * 20}ms` }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-sm text-gray-300 font-display font-semibold">{version.projectName || t("versionHistory.untitled")}</span>
+                  <span className="px-2 py-0.5 rounded bg-electric/20 text-electric font-mono text-xs uppercase">{version.editMode === "patch" ? t("versionHistory.patch") : t("versionHistory.full")}</span>
+                  {version.parentVersionId && <span className="px-2 py-0.5 rounded bg-graphite text-gray-400 font-mono text-xs">parent {String(version.parentVersionId).slice(-6)}</span>}
+                  {version.manualEditsSinceParent && <span className="px-2 py-0.5 rounded bg-ember/15 text-ember font-mono text-xs uppercase">{t("versionHistory.manual")}</span>}
+                </div>
+                <p className="text-xs font-mono text-gray-500">
+                  {t("passwordManager.visitorId")}: <span className="text-gray-300">{truncateVisitorId(version.visitorId)}</span> - {formatDate(version.createdAt)}
+                </p>
+                <p className="text-xs text-gray-400 mt-2 line-clamp-2">{version.prompt || version.message}</p>
+                <p className="text-xs font-mono text-gray-600 mt-2 truncate" title={version.code?.slice(0, 120)}>
+                  {(version.code || version.codePreview || "").slice(0, 100)}...
+                </p>
+              </div>
+              <div className="text-right shrink-0 text-xs font-mono text-gray-500">
+                <p>{formatTokens((version.code || "").length)} chars</p>
+                <p className="mt-1">{version.editCount || 0} edits</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 interface ModelSettingsTabProps {
   modelSettings: ModelSettings;
   isSaving: boolean;
@@ -960,6 +1019,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [recentRequests, setRecentRequests] = useState<RequestLogEntry[]>([]);
   const [shareLinks, setShareLinks] = useState<ShareLinkEntry[]>([]);
+  const [codeVersions, setCodeVersions] = useState<CodeVersion[]>([]);
   const [modelSettings, setModelSettings] = useState<ModelSettings>({ fast: true, balanced: true, accurate: true });
   const [passwordStats, setPasswordStats] = useState<Map<string, PasswordDetailedStats>>(new Map());
 
@@ -1001,12 +1061,13 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       };
 
       // Load everything in parallel
-      const [statsData, passwordsData, usageData, logsData, shareLinksData, modelSettingsData] = await Promise.all([
+      const [statsData, passwordsData, usageData, logsData, shareLinksData, codeVersionsData, modelSettingsData] = await Promise.all([
         api.getSystemStats(adminSecret),
         api.getPasswords(adminSecret),
         api.getUsageStats(adminSecret),
         api.getRecentRequests(adminSecret, limitMap[activityPeriod]),
         api.getShareLinks(adminSecret),
+        api.getCodeVersions(adminSecret),
         api.getModelSettings(adminSecret),
       ]);
 
@@ -1016,6 +1077,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       setUsage(usageData);
       setRecentRequests(logsData);
       setShareLinks(shareLinksData);
+      setCodeVersions(codeVersionsData);
       setModelSettings(modelSettingsData);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t("api.dataFetchError"));
@@ -1172,8 +1234,9 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       { id: "activity" as TabId, label: t("passwordManager.activityTab"), icon: <ActivityIcon /> },
       { id: "models" as TabId, label: "Models", icon: <TokenIcon /> },
       { id: "shares" as TabId, label: t("passwordManager.sharesTab", { count: shareLinks.length }), icon: <ShareIcon /> },
+      { id: "versions" as TabId, label: t("passwordManager.versionsTab", { count: codeVersions.length }), icon: <ActivityIcon /> },
     ],
-    [t, passwords.length, usage.length, shareLinks.length],
+    [t, passwords.length, usage.length, shareLinks.length, codeVersions.length],
   );
 
   // ============================================================================
@@ -1256,6 +1319,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} isSaving={isSavingModelSettings} onToggle={handleToggleModel} />}
 
         {activeTab === "shares" && <ShareLinksTab shareLinks={shareLinks} t={t} />}
+
+        {activeTab === "versions" && <CodeVersionsTab versions={codeVersions} t={t} />}
       </div>
 
       {/* Refresh button */}
