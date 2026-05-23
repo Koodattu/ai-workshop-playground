@@ -4,6 +4,7 @@
  */
 
 const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
+const crypto = require("crypto");
 const mongoose = require("mongoose");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
@@ -85,31 +86,257 @@ function countOccurrences(haystack, needle) {
   return count;
 }
 
-function applyExactEdits(originalCode, edits) {
+function hashText(text) {
+  return crypto.createHash("sha256").update(text || "").digest("hex").slice(0, 16);
+}
+
+function previewText(text, maxLength = 600) {
+  if (typeof text !== "string") return "";
+  const normalized = text.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
+}
+
+function normalizeLineEndings(text) {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function getDominantLineEnding(text) {
+  const crlfCount = (text.match(/\r\n/g) || []).length;
+  const withoutCrlf = text.replace(/\r\n/g, "");
+  const lfCount = (withoutCrlf.match(/\n/g) || []).length;
+
+  return crlfCount > lfCount ? "\r\n" : "\n";
+}
+
+function applyLineEnding(text, lineEnding) {
+  return normalizeLineEndings(text).replace(/\n/g, lineEnding);
+}
+
+function normalizeWhitespace(text) {
+  return normalizeLineEndings(text).replace(/\s+/g, " ").trim();
+}
+
+function findClosestTextWindows(originalCode, oldText, maxResults = 3) {
+  if (!oldText || !originalCode) return [];
+
+  const needle = normalizeWhitespace(oldText);
+  if (!needle) return [];
+
+  const oldLines = normalizeLineEndings(oldText).split("\n");
+  const windowLineCount = Math.max(1, Math.min(80, oldLines.length + 4));
+  const originalLines = normalizeLineEndings(originalCode).split("\n");
+  const results = [];
+
+  for (let startLine = 0; startLine < originalLines.length; startLine++) {
+    const windowText = originalLines.slice(startLine, startLine + windowLineCount).join("\n");
+    const normalizedWindow = normalizeWhitespace(windowText);
+    if (!normalizedWindow) continue;
+
+    const sharedLength = Math.min(needle.length, normalizedWindow.length);
+    let matchingPrefix = 0;
+    while (matchingPrefix < sharedLength && needle[matchingPrefix] === normalizedWindow[matchingPrefix]) {
+      matchingPrefix++;
+    }
+
+    const tokenSet = new Set(needle.split(" ").filter(Boolean));
+    const windowTokens = normalizedWindow.split(" ").filter(Boolean);
+    const sharedTokens = windowTokens.filter((token) => tokenSet.has(token)).length;
+    const score = matchingPrefix + sharedTokens * 6;
+
+    if (score === 0) continue;
+
+    results.push({
+      startLine: startLine + 1,
+      endLine: Math.min(originalLines.length, startLine + windowLineCount),
+      score,
+      matchingPrefix,
+      sharedTokens,
+      preview: previewText(windowText),
+      hash: hashText(windowText),
+    });
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, maxResults);
+}
+
+function logPatchDiagnostic(reason, payload) {
+  console.error(
+    "[Patch Apply Diagnostic]",
+    JSON.stringify(
+      {
+        reason,
+        ...payload,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function buildNormalizedIndexMap(originalCode) {
+  const normalizedChars = [];
+  const normalizedToOriginalIndex = [];
+
+  for (let originalIndex = 0; originalIndex < originalCode.length; originalIndex++) {
+    const char = originalCode[originalIndex];
+
+    if (char === "\r") {
+      if (originalCode[originalIndex + 1] === "\n") {
+        normalizedChars.push("\n");
+        normalizedToOriginalIndex.push(originalIndex);
+        originalIndex++;
+      } else {
+        normalizedChars.push("\n");
+        normalizedToOriginalIndex.push(originalIndex);
+      }
+    } else {
+      normalizedChars.push(char);
+      normalizedToOriginalIndex.push(originalIndex);
+    }
+  }
+
+  normalizedToOriginalIndex.push(originalCode.length);
+
+  return {
+    normalizedCode: normalizedChars.join(""),
+    normalizedToOriginalIndex,
+  };
+}
+
+function resolveLineEndingNormalizedReplacement(originalCode, oldText, newText) {
+  const { normalizedCode, normalizedToOriginalIndex } = buildNormalizedIndexMap(originalCode);
+  const normalizedOldText = normalizeLineEndings(oldText);
+  const occurrences = countOccurrences(normalizedCode, normalizedOldText);
+
+  if (occurrences !== 1) {
+    return { occurrences };
+  }
+
+  const normalizedStart = normalizedCode.indexOf(normalizedOldText);
+  const normalizedEnd = normalizedStart + normalizedOldText.length;
+  const start = normalizedToOriginalIndex[normalizedStart];
+  const end = normalizedToOriginalIndex[normalizedEnd];
+  const lineEnding = getDominantLineEnding(originalCode.slice(start, end) || originalCode);
+
+  return {
+    occurrences,
+    replacement: {
+      start,
+      end,
+      newText: applyLineEnding(newText, lineEnding),
+      appliedWith: "line-ending-normalized",
+    },
+  };
+}
+
+function applyExactEdits(originalCode, edits, diagnosticContext = {}) {
   if (!Array.isArray(edits) || edits.length === 0) {
+    logPatchDiagnostic("missing-edits", {
+      ...diagnosticContext,
+      editsType: typeof edits,
+      editsIsArray: Array.isArray(edits),
+    });
     throw new AppError("Patch response did not include any edits", 500, ERROR_CODES.AI_RESPONSE_INVALID);
   }
 
   const replacements = edits.map((edit, index) => {
     const oldText = typeof edit.oldText === "string" ? edit.oldText : "";
     const newText = typeof edit.newText === "string" ? edit.newText : "";
+    const editNumber = index + 1;
 
     if (!oldText) {
-      throw new AppError(`Patch edit ${index + 1} is missing oldText`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
+      logPatchDiagnostic("missing-oldText", {
+        ...diagnosticContext,
+        editNumber,
+        editKeys: edit && typeof edit === "object" ? Object.keys(edit) : [],
+        newTextLength: newText.length,
+        newTextHash: hashText(newText),
+        newTextPreview: previewText(newText),
+      });
+      throw new AppError(`Patch edit ${editNumber} is missing oldText`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
     }
 
     const occurrences = countOccurrences(originalCode, oldText);
     if (occurrences === 0) {
-      throw new AppError(`Patch edit ${index + 1} did not match the current code`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
+      const lineEndingOccurrences = countOccurrences(normalizeLineEndings(originalCode), normalizeLineEndings(oldText));
+      const whitespaceOccurrences = countOccurrences(normalizeWhitespace(originalCode), normalizeWhitespace(oldText));
+
+      if (lineEndingOccurrences === 1) {
+        const normalizedResult = resolveLineEndingNormalizedReplacement(originalCode, oldText, newText);
+
+        if (normalizedResult.replacement) {
+          console.warn(
+            "[Patch Apply Fallback]",
+            JSON.stringify({
+              reason: "line-ending-normalized-match",
+              ...diagnosticContext,
+              editNumber,
+              editCount: edits.length,
+              originalCodeLength: originalCode.length,
+              originalCodeHash: hashText(originalCode),
+              oldTextLength: oldText.length,
+              oldTextHash: hashText(oldText),
+              newTextLength: newText.length,
+              newTextHash: hashText(newText),
+            }),
+          );
+
+          return normalizedResult.replacement;
+        }
+
+        logPatchDiagnostic("line-ending-fallback-unexpected", {
+          ...diagnosticContext,
+          editNumber,
+          editCount: edits.length,
+          lineEndingOccurrences,
+          normalizedResultOccurrences: normalizedResult.occurrences,
+          originalCodeHash: hashText(originalCode),
+          oldTextHash: hashText(oldText),
+        });
+      }
+
+      logPatchDiagnostic("oldText-not-found", {
+        ...diagnosticContext,
+        editNumber,
+        editCount: edits.length,
+        originalCodeLength: originalCode.length,
+        originalCodeHash: hashText(originalCode),
+        oldTextLength: oldText.length,
+        oldTextHash: hashText(oldText),
+        oldTextPreview: previewText(oldText),
+        newTextLength: newText.length,
+        newTextHash: hashText(newText),
+        newTextPreview: previewText(newText),
+        normalizedChecks: {
+          lineEndingOccurrences,
+          whitespaceOccurrences,
+          oldTextLineEndingHash: hashText(normalizeLineEndings(oldText)),
+          originalLineEndingHash: hashText(normalizeLineEndings(originalCode)),
+        },
+        closestWindows: findClosestTextWindows(originalCode, oldText),
+      });
+      throw new AppError(`Patch edit ${editNumber} did not match the current code`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
     }
     if (occurrences > 1) {
-      throw new AppError(`Patch edit ${index + 1} matched multiple locations`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
+      logPatchDiagnostic("oldText-ambiguous", {
+        ...diagnosticContext,
+        editNumber,
+        editCount: edits.length,
+        occurrences,
+        originalCodeLength: originalCode.length,
+        originalCodeHash: hashText(originalCode),
+        oldTextLength: oldText.length,
+        oldTextHash: hashText(oldText),
+        oldTextPreview: previewText(oldText),
+      });
+      throw new AppError(`Patch edit ${editNumber} matched multiple locations`, 500, ERROR_CODES.AI_RESPONSE_INVALID);
     }
 
     return {
       start: originalCode.indexOf(oldText),
       end: originalCode.indexOf(oldText) + oldText.length,
       newText,
+      appliedWith: "exact",
     };
   });
 
@@ -384,6 +611,144 @@ const ASK_SCHEMA = {
   required: ["message"],
 };
 
+function combineUsageMetadata(first = {}, second = {}) {
+  const keysToSum = ["promptTokenCount", "candidatesTokenCount", "thoughtsTokenCount", "cachedContentTokenCount", "totalTokenCount"];
+  const combined = { ...(first || {}) };
+
+  for (const key of keysToSum) {
+    const firstValue = first?.[key] || 0;
+    const secondValue = second?.[key] || 0;
+    combined[key] = firstValue + secondValue;
+  }
+
+  return combined;
+}
+
+async function generateFullRewriteAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext }) {
+  const retryConfig = {
+    ...generationConfig,
+    systemInstruction: `${SYSTEM_INSTRUCTION}
+
+PATCH RETRY MODE:
+- A previous patch response could not be applied safely to the current code.
+- You MUST return editMode "replace_all".
+- You MUST return the complete updated HTML document in "code".
+- You MUST return edits as an empty array.
+- Do not return patch edits in this retry.`,
+  };
+
+  const retryPrompt = `${userPrompt}
+
+The previous patch could not be applied safely. Return the complete updated code instead of patch edits.`;
+
+  console.warn(
+    "[Patch Retry]",
+    JSON.stringify({
+      reason: "falling-back-to-full-rewrite",
+      requestId,
+      ...diagnosticContext,
+    }),
+  );
+
+  let accumulatedText = "";
+  let usageMetadata = null;
+  let codeStarted = false;
+  let codeComplete = false;
+  let detectedEditMode = null;
+  const retryCodeDecoder = createJsonStringDecoder();
+
+  const stream = await genAI.models.generateContentStream({
+    model: selectedModel.model,
+    contents: retryPrompt,
+    config: retryConfig,
+  });
+
+  for await (const chunk of stream) {
+    if (chunk.usageMetadata) {
+      usageMetadata = chunk.usageMetadata;
+    }
+
+    const chunkText = chunk.text || chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!chunkText) continue;
+
+    accumulatedText += chunkText;
+
+    if (!detectedEditMode) {
+      const editModeMatch = accumulatedText.match(/"editMode"\s*:\s*"(replace_all|patch)"/);
+      if (editModeMatch) {
+        detectedEditMode = editModeMatch[1];
+      }
+    }
+
+    if (detectedEditMode === "patch") {
+      continue;
+    }
+
+    if (!codeStarted && detectedEditMode === "replace_all") {
+      const codeKeyIndex = accumulatedText.indexOf('"code"');
+      if (codeKeyIndex !== -1) {
+        const colonPos = accumulatedText.indexOf(":", codeKeyIndex + 6);
+        if (colonPos !== -1) {
+          let openQuotePos = colonPos + 1;
+          while (openQuotePos < accumulatedText.length && /\s/.test(accumulatedText[openQuotePos])) {
+            openQuotePos++;
+          }
+
+          if (accumulatedText[openQuotePos] === '"') {
+            codeStarted = true;
+            sendSse({ type: "code-start" });
+
+            const initialContent = accumulatedText.substring(openQuotePos + 1);
+            if (initialContent.length > 0) {
+              const { decoded, done } = retryCodeDecoder.decode(initialContent);
+              if (decoded) {
+                sendSse({ type: "code-chunk", chunk: decoded });
+              }
+              if (done) {
+                codeComplete = true;
+                sendSse({ type: "code-complete" });
+              }
+            }
+          }
+        }
+      }
+    } else if (codeStarted && !codeComplete) {
+      const { decoded, done } = retryCodeDecoder.decode(chunkText);
+
+      if (decoded) {
+        sendSse({ type: "code-chunk", chunk: decoded });
+      }
+
+      if (done) {
+        codeComplete = true;
+        sendSse({ type: "code-complete" });
+      }
+    }
+  }
+
+  let structuredResponse;
+  try {
+    structuredResponse = JSON.parse(accumulatedText);
+  } catch (parseError) {
+    throw new AppError("Failed to parse AI retry response", 500, ERROR_CODES.AI_RESPONSE_PARSE_FAILED);
+  }
+
+  if (!structuredResponse.message || !structuredResponse.projectName || !structuredResponse.code) {
+    throw new AppError("Invalid AI retry response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+  }
+
+  return {
+    structuredResponse: {
+      ...structuredResponse,
+      editMode: "replace_all",
+      edits: [],
+    },
+    usageMetadata,
+    codeStarted,
+    codeComplete,
+  };
+}
+
 /**
  * Generate code using Gemini API with streaming structured outputs
  */
@@ -393,6 +758,7 @@ const generateCode = asyncHandler(async (req, res) => {
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
   const allowCodeStreaming = !isAskMode;
   const selectedModel = getModelPreference(modelPreference);
+  const requestId = crypto.randomUUID();
 
   if (!prompt) {
     throw new AppError("Prompt is required", 400, ERROR_CODES.PROMPT_REQUIRED);
@@ -594,11 +960,51 @@ Modify or extend the existing code based on the user's request.`;
       finalEditMode = structuredResponse.editMode === "patch" && hasExistingCode ? "patch" : "replace_all";
 
       if (finalEditMode === "patch") {
-        finalCode = applyExactEdits(existingCode, structuredResponse.edits);
-        finalEdits = structuredResponse.edits.map((edit) => ({
-          oldText: edit.oldText,
-          newText: edit.newText,
-        }));
+        const patchDiagnosticContext = {
+          requestId,
+          visitorId: req.workshop?.visitorId,
+          passwordId: req.workshop?.passwordId?.toString(),
+          parentVersionId: parentVersionId || null,
+          model: selectedModel.model,
+          modelPreference,
+          promptHash: hashText(prompt),
+          promptPreview: previewText(prompt, 300),
+          messageHistoryCount: Array.isArray(messageHistory) ? messageHistory.length : 0,
+          structuredMessage: structuredResponse.message,
+          projectName: structuredResponse.projectName,
+        };
+
+        try {
+          finalCode = applyExactEdits(existingCode, structuredResponse.edits, patchDiagnosticContext);
+          finalEdits = structuredResponse.edits.map((edit) => ({
+            oldText: edit.oldText,
+            newText: edit.newText,
+          }));
+        } catch (patchError) {
+          if (!(patchError instanceof AppError) || patchError.errorCode !== ERROR_CODES.AI_RESPONSE_INVALID) {
+            throw patchError;
+          }
+
+          const retryResult = await generateFullRewriteAfterPatchFailure({
+            selectedModel,
+            generationConfig,
+            userPrompt,
+            sendSse,
+            requestId,
+            diagnosticContext: {
+              ...patchDiagnosticContext,
+              patchError: patchError.message,
+            },
+          });
+
+          latestUsageMetadata = combineUsageMetadata(latestUsageMetadata, retryResult.usageMetadata);
+          structuredResponse = retryResult.structuredResponse;
+          finalEditMode = "replace_all";
+          finalEdits = [];
+          finalCode = structuredResponse.code;
+          codeStarted = codeStarted || retryResult.codeStarted;
+          codeComplete = codeComplete || retryResult.codeComplete;
+        }
       } else {
         if (!structuredResponse.code) {
           throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
@@ -730,7 +1136,14 @@ Modify or extend the existing code based on the user's request.`;
     sendSse(finalData);
     endSse();
   } catch (error) {
-    console.error("[AI Generation Error]", error);
+    console.error("[AI Generation Error]", {
+      requestId,
+      visitorId: req.workshop?.visitorId,
+      parentVersionId: parentVersionId || null,
+      model: selectedModel.model,
+      mode,
+      error,
+    });
 
     // Handle specific Gemini API errors
     let errorMessage = "AI generation failed";
