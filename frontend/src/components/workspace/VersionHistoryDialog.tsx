@@ -44,7 +44,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
           setDiffVersion(null);
         }}
       >
-        <div className="w-full max-w-3xl max-h-[82vh] overflow-hidden rounded-xl border border-steel/60 bg-obsidian shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="w-full max-w-4xl max-h-[82vh] overflow-hidden rounded-xl border border-steel/60 bg-obsidian shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex items-center justify-between gap-4 border-b border-steel/40 px-5 py-4">
             <div>
               <h3 className="font-display text-base font-semibold text-white">{t("versionHistory.diff")}</h3>
@@ -57,15 +57,15 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
             </button>
           </div>
 
-          <div className="max-h-[calc(82vh-73px)] overflow-auto p-5">
+          <div className="max-h-[calc(82vh-73px)] overflow-auto scrollbar-thin p-5">
             <div className="space-y-5">
               {diffVersion.edits.map((edit, index) => (
                 <div key={`${diffVersion.id}-${index}`} className="overflow-hidden rounded-lg border border-steel/40 bg-void/70">
                   <div className="border-b border-steel/30 px-3 py-2 font-mono text-xs text-gray-500">@@ {t("versionHistory.edit")} {index + 1}</div>
-                  <pre className="overflow-auto whitespace-pre-wrap border-b border-red-500/20 bg-red-950/20 p-3 text-xs text-red-100">
+                  <pre className="overflow-auto scrollbar-thin whitespace-pre-wrap border-b border-red-500/20 bg-red-950/20 p-3 text-xs text-red-100">
                     {edit.oldText.split("\n").map((line) => `- ${line}`).join("\n")}
                   </pre>
-                  <pre className="overflow-auto whitespace-pre-wrap bg-green-950/20 p-3 text-xs text-green-100">
+                  <pre className="overflow-auto scrollbar-thin whitespace-pre-wrap bg-green-950/20 p-3 text-xs text-green-100">
                     {edit.newText.split("\n").map((line) => `+ ${line}`).join("\n")}
                   </pre>
                 </div>
@@ -93,17 +93,19 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
           }
         }}
         className={`
-          w-72 max-w-[72vw] cursor-pointer rounded-lg border p-3 text-left transition-all
-          ${isCurrent ? "bg-electric/10 border-electric/50" : "bg-carbon border-steel/40 hover:border-electric/30 hover:bg-graphite/50"}
+          w-80 max-w-[76vw] cursor-pointer rounded-lg border p-3 text-left transition-all duration-200
+          ${isCurrent ? "bg-electric/10 border-electric/50 shadow-[0_0_18px_rgba(0,212,255,0.10)]" : "bg-carbon border-steel/40 hover:border-electric/30 hover:bg-electric/10 hover:shadow-[0_0_18px_rgba(0,212,255,0.10)]"}
         `}
       >
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <p className={`truncate text-sm font-display font-semibold ${isCurrent ? "text-electric" : "text-white"}`}>{version.projectName || t("versionHistory.untitled")}</p>
+            <div className="flex min-w-0 items-center gap-2">
+              <p className={`truncate text-sm font-display font-semibold ${isCurrent ? "text-electric" : "text-white"}`}>{version.projectName || t("versionHistory.untitled")}</p>
+              {isCurrent && <span className="shrink-0 text-[10px] font-mono text-electric uppercase">{t("versionHistory.current")}</span>}
+            </div>
             <p className="mt-1 text-xs text-gray-400 line-clamp-2">{version.prompt || version.message}</p>
             <div className="mt-2 flex items-center gap-2">
               {version.manualEditsSinceParent && <span className="px-1.5 py-0.5 rounded bg-ember/15 text-[10px] font-mono uppercase text-ember">{t("versionHistory.manual")}</span>}
-              {isCurrent && <span className="text-[10px] font-mono text-electric uppercase">{t("versionHistory.current")}</span>}
             </div>
           </div>
 
@@ -114,7 +116,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
                 event.stopPropagation();
                 setDiffVersion(version);
               }}
-              className="shrink-0 text-xs font-mono text-ember hover:text-white underline underline-offset-4"
+              className="shrink-0 text-xs font-mono text-electric hover:text-white transition-colors"
             >
               {t("versionHistory.diff")}
             </button>
@@ -128,7 +130,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
     const children = childrenByParent.get(version.id) || [];
 
     return (
-      <div key={version.id} className="flex min-w-72 flex-col items-center">
+      <div key={version.id} className="flex min-w-80 flex-col items-center">
         {renderVersionCard(version)}
 
         {children.length === 1 && (
@@ -145,7 +147,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
           <>
             <div className="h-5 w-px bg-steel/70" />
             <div className="relative inline-flex gap-4 overflow-x-auto px-2 pt-8">
-              <div className="absolute left-36 right-36 top-0 h-px bg-steel/60" />
+              <div className="absolute left-40 right-40 top-0 h-px bg-steel/60" />
               {children.map((child) => (
                 <div key={child.id} className="relative flex flex-col items-center">
                   <div className="absolute -top-8 h-6 w-px bg-steel/60" />
@@ -166,7 +168,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-3xl max-h-[85vh] bg-obsidian border border-steel/60 rounded-xl shadow-2xl overflow-hidden" onClick={(event) => event.stopPropagation()}>
+      <div className="w-full max-w-5xl max-h-[85vh] bg-obsidian border border-steel/60 rounded-xl shadow-2xl overflow-hidden" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-steel/40">
           <div>
             <h2 className="font-display text-lg font-semibold text-white">{t("versionHistory.title")}</h2>
@@ -179,7 +181,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
           </button>
         </div>
 
-        <div className="p-5 overflow-y-auto max-h-[calc(85vh-88px)]">
+        <div className="p-4 overflow-y-auto scrollbar-thin max-h-[calc(85vh-88px)]">
           {isLoading ? (
             <div className="py-12 text-center text-sm font-mono text-gray-400">{t("common.loading")}</div>
           ) : roots.length === 0 ? (
@@ -187,7 +189,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
               <p className="text-sm text-gray-400">{t("versionHistory.empty")}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto pb-2">
+            <div className="overflow-x-auto scrollbar-thin pb-2">
               <div className="flex min-w-max justify-center gap-6">{roots.map((root) => renderVersion(root))}</div>
             </div>
           )}
