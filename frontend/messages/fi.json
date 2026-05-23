@@ -136,7 +136,13 @@
     "full": "Täysi",
     "manual": "Käsin muokattu",
     "current": "Nykyinen",
-    "loaded": "Versio ladattu"
+    "loaded": "Versio ladattu",
+    "load": "Lataa",
+    "viewPatch": "Näytä paikkaus",
+    "hidePatch": "Piilota paikkaus",
+    "patchDetails": "Paikkauksen tiedot",
+    "oldText": "Ennen",
+    "newText": "Jälkeen"
   },
   "templates": {
     "welcome": "Laaja Tervetuloa",

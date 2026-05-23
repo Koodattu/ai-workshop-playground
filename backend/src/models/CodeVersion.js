@@ -55,6 +55,23 @@ const codeVersionSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    edits: {
+      type: [
+        {
+          oldText: {
+            type: String,
+            required: true,
+            maxlength: [500000, "Patch oldText cannot exceed 500KB"],
+          },
+          newText: {
+            type: String,
+            required: true,
+            maxlength: [500000, "Patch newText cannot exceed 500KB"],
+          },
+        },
+      ],
+      default: [],
+    },
     manualEditsSinceParent: {
       type: Boolean,
       default: false,

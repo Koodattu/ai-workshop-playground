@@ -136,7 +136,13 @@
     "full": "Full",
     "manual": "Manual base",
     "current": "Current",
-    "loaded": "Version loaded"
+    "loaded": "Version loaded",
+    "load": "Load",
+    "viewPatch": "View patch",
+    "hidePatch": "Hide patch",
+    "patchDetails": "Patch details",
+    "oldText": "Before",
+    "newText": "After"
   },
   "templates": {
     "welcome": "Advanced Welcome",

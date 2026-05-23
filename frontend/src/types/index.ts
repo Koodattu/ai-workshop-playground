@@ -327,6 +327,7 @@ export interface CodeVersion {
   projectName?: string | null;
   editMode: "replace_all" | "patch";
   editCount: number;
+  edits?: Array<{ oldText: string; newText: string }>;
   manualEditsSinceParent?: boolean;
   createdAt: string;
   updatedAt?: string;

@@ -1245,7 +1245,6 @@ export default function WorkspacePage() {
                   setIsVersionHistoryOpen(true);
                   fetchVersions();
                 }}
-                versionCount={versions.length}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
@@ -1312,7 +1311,6 @@ export default function WorkspacePage() {
                   setIsVersionHistoryOpen(true);
                   fetchVersions();
                 }}
-                versionCount={versions.length}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {

@@ -281,6 +281,7 @@ CRITICAL OUTPUT RULES - FOLLOW EXACTLY:
 6. The message should be 1-2 sentences maximum
 7. The projectName MUST be exactly TWO WORDS that describe the project creatively (e.g., "Solar Dashboard", "Pixel Art", "Magic Quiz")
 8. For "patch", set "code" to an empty string and put all changes in "edits"
+9. Put "editMode" before "code" in the JSON object
 
 CODE MODIFICATION RULES:
 - If existing code is provided, modify/extend it based on the user's request
@@ -325,14 +326,14 @@ const CODE_GENERATION_SCHEMA = {
       type: "string",
       description: "A creative TWO-WORD name for this project in the same language as the user (e.g., 'Solar Dashboard', 'Pixel Art', 'Magic Quiz')",
     },
-    code: {
-      type: "string",
-      description: "Complete HTML/CSS/JS code for replace_all responses. Empty string for patch responses.",
-    },
     editMode: {
       type: "string",
       enum: ["replace_all", "patch"],
       description: "Use replace_all for complete output, or patch for exact oldText/newText replacements.",
+    },
+    code: {
+      type: "string",
+      description: "Complete HTML/CSS/JS code for replace_all responses. Empty string for patch responses.",
     },
     edits: {
       type: "array",
@@ -390,7 +391,7 @@ const generateCode = asyncHandler(async (req, res) => {
   const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE, parentVersionId } = req.body;
   const isAskMode = mode === "ask";
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
-  const allowCodeStreaming = !isAskMode && !hasExistingCode;
+  const allowCodeStreaming = !isAskMode;
   const selectedModel = getModelPreference(modelPreference);
 
   if (!prompt) {
@@ -426,6 +427,7 @@ const generateCode = asyncHandler(async (req, res) => {
   let codeFieldStartPos = -1; // Position after opening quote of code field
   const codeDecoder = createJsonStringDecoder();
   let latestUsageMetadata = null;
+  let detectedEditMode = null;
 
   try {
     // Configure generation with system instruction based on mode
@@ -502,8 +504,17 @@ Modify or extend the existing code based on the user's request.`;
             continue;
           }
 
+          if (!detectedEditMode) {
+            const editModeMatch = accumulatedText.match(/"editMode"\s*:\s*"(replace_all|patch)"/);
+            if (editModeMatch) {
+              detectedEditMode = editModeMatch[1];
+            }
+          }
+
+          const canStreamCode = allowCodeStreaming && (!hasExistingCode || detectedEditMode === "replace_all") && detectedEditMode !== "patch";
+
           // If code field hasn't started yet, look for it
-          if (allowCodeStreaming && !codeStarted) {
+          if (canStreamCode && !codeStarted) {
             // Look for "code": pattern
             const codeKeyIndex = accumulatedText.indexOf('"code"');
             if (codeKeyIndex !== -1) {
@@ -536,7 +547,7 @@ Modify or extend the existing code based on the user's request.`;
                 }
               }
             }
-          } else if (allowCodeStreaming && !codeComplete) {
+          } else if (codeStarted && !codeComplete) {
             // Code has started but not complete - decode the new chunk directly
             // We only pass the new chunk text to the decoder (it maintains state)
             const { decoded, done } = codeDecoder.decode(chunkText);
@@ -568,6 +579,7 @@ Modify or extend the existing code based on the user's request.`;
     let finalCode = "";
     let savedVersion = null;
     let finalEditMode = "replace_all";
+    let finalEdits = [];
 
     // Validate response has required fields based on mode
     if (isAskMode) {
@@ -583,6 +595,10 @@ Modify or extend the existing code based on the user's request.`;
 
       if (finalEditMode === "patch") {
         finalCode = applyExactEdits(existingCode, structuredResponse.edits);
+        finalEdits = structuredResponse.edits.map((edit) => ({
+          oldText: edit.oldText,
+          newText: edit.newText,
+        }));
       } else {
         if (!structuredResponse.code) {
           throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
@@ -617,7 +633,8 @@ Modify or extend the existing code based on the user's request.`;
         message: structuredResponse.message,
         projectName: structuredResponse.projectName || null,
         editMode: finalEditMode,
-        editCount: Array.isArray(structuredResponse.edits) ? structuredResponse.edits.length : 0,
+        editCount: finalEdits.length,
+        edits: finalEdits,
         manualEditsSinceParent,
       });
 
@@ -638,6 +655,7 @@ Modify or extend the existing code based on the user's request.`;
         projectName: version.projectName,
         editMode: version.editMode,
         editCount: version.editCount,
+        edits: version.edits,
         manualEditsSinceParent: version.manualEditsSinceParent,
         createdAt: version.createdAt,
         updatedAt: version.updatedAt,

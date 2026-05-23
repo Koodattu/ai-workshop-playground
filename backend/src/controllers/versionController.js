@@ -14,6 +14,7 @@ const mapVersion = (version, includeCode = false) => {
     projectName: version.projectName,
     editMode: version.editMode,
     editCount: version.editCount,
+    edits: version.edits || [],
     manualEditsSinceParent: version.manualEditsSinceParent,
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,

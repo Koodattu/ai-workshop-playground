@@ -645,7 +645,7 @@ const getShareLinks = asyncHandler(async (req, res) => {
  */
 const getCodeVersions = asyncHandler(async (req, res) => {
   const versions = await CodeVersion.find()
-    .select("visitorId passwordId parentVersionId rootVersionId code prompt message projectName editMode editCount manualEditsSinceParent createdAt")
+    .select("visitorId passwordId parentVersionId rootVersionId code prompt message projectName editMode editCount edits manualEditsSinceParent createdAt")
     .sort({ createdAt: -1 })
     .limit(500)
     .lean();
@@ -664,6 +664,7 @@ const getCodeVersions = asyncHandler(async (req, res) => {
       projectName: version.projectName,
       editMode: version.editMode,
       editCount: version.editCount,
+      edits: version.edits || [],
       manualEditsSinceParent: version.manualEditsSinceParent,
       createdAt: version.createdAt,
     })),
