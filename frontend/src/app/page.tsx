@@ -1400,7 +1400,6 @@ export default function WorkspacePage() {
           currentVersionId={currentVersionId}
           isLoading={isLoadingVersions}
           onClose={() => setIsVersionHistoryOpen(false)}
-          onRefresh={fetchVersions}
           onSelectVersion={handleSelectVersion}
         />
       )}

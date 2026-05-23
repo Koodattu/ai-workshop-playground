@@ -9,25 +9,16 @@ interface VersionHistoryDialogProps {
   currentVersionId: string | null;
   isLoading: boolean;
   onClose: () => void;
-  onRefresh: () => void;
   onSelectVersion: (version: CodeVersion) => void;
 }
 
-const formatVersionDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
-export function VersionHistoryDialog({ versions, currentVersionId, isLoading, onClose, onRefresh, onSelectVersion }: VersionHistoryDialogProps) {
+export function VersionHistoryDialog({ versions, currentVersionId, isLoading, onClose, onSelectVersion }: VersionHistoryDialogProps) {
   const { t } = useLanguage();
-  const [expandedPatchId, setExpandedPatchId] = useState<string | null>(null);
+  const [diffVersion, setDiffVersion] = useState<CodeVersion | null>(null);
 
   const childrenByParent = useMemo(() => {
     const map = new Map<string, CodeVersion[]>();
+
     for (const version of versions) {
       const parentKey = version.parentVersionId || "root";
       const children = map.get(parentKey) || [];
@@ -42,25 +33,45 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
     return map;
   }, [versions]);
 
-  const renderPatchDetails = (version: CodeVersion) => {
-    if (version.editMode !== "patch" || !version.edits?.length || expandedPatchId !== version.id) return null;
+  const renderDiffDialog = () => {
+    if (!diffVersion?.edits?.length) return null;
 
     return (
-      <div className="mt-3 w-full rounded-lg border border-steel/40 bg-void/80 p-3">
-        <p className="mb-3 text-xs font-mono uppercase text-gray-500">{t("versionHistory.patchDetails")}</p>
-        <div className="space-y-3">
-          {version.edits.map((edit, index) => (
-            <div key={`${version.id}-${index}`} className="grid gap-2 md:grid-cols-2">
-              <div className="min-w-0">
-                <p className="mb-1 text-[10px] font-mono uppercase text-red-300">{t("versionHistory.oldText")}</p>
-                <pre className="max-h-44 overflow-auto rounded bg-red-950/20 p-2 text-xs text-red-100 whitespace-pre-wrap">{edit.oldText}</pre>
-              </div>
-              <div className="min-w-0">
-                <p className="mb-1 text-[10px] font-mono uppercase text-green-300">{t("versionHistory.newText")}</p>
-                <pre className="max-h-44 overflow-auto rounded bg-green-950/20 p-2 text-xs text-green-100 whitespace-pre-wrap">{edit.newText}</pre>
-              </div>
+      <div
+        className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/70 p-4"
+        onClick={(event) => {
+          event.stopPropagation();
+          setDiffVersion(null);
+        }}
+      >
+        <div className="w-full max-w-3xl max-h-[82vh] overflow-hidden rounded-xl border border-steel/60 bg-obsidian shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between gap-4 border-b border-steel/40 px-5 py-4">
+            <div>
+              <h3 className="font-display text-base font-semibold text-white">{t("versionHistory.diff")}</h3>
+              <p className="text-xs text-gray-500">{diffVersion.projectName || t("versionHistory.untitled")}</p>
             </div>
-          ))}
+            <button onClick={() => setDiffVersion(null)} className="p-2 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("common.close")}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="max-h-[calc(82vh-73px)] overflow-auto p-5">
+            <div className="space-y-5">
+              {diffVersion.edits.map((edit, index) => (
+                <div key={`${diffVersion.id}-${index}`} className="overflow-hidden rounded-lg border border-steel/40 bg-void/70">
+                  <div className="border-b border-steel/30 px-3 py-2 font-mono text-xs text-gray-500">@@ {t("versionHistory.edit")} {index + 1}</div>
+                  <pre className="overflow-auto whitespace-pre-wrap border-b border-red-500/20 bg-red-950/20 p-3 text-xs text-red-100">
+                    {edit.oldText.split("\n").map((line) => `- ${line}`).join("\n")}
+                  </pre>
+                  <pre className="overflow-auto whitespace-pre-wrap bg-green-950/20 p-3 text-xs text-green-100">
+                    {edit.newText.split("\n").map((line) => `+ ${line}`).join("\n")}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -68,46 +79,47 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
 
   const renderVersionCard = (version: CodeVersion) => {
     const isCurrent = version.id === currentVersionId;
-    const canShowPatch = version.editMode === "patch" && Boolean(version.edits?.length);
+    const canShowDiff = version.editMode === "patch" && Boolean(version.edits?.length);
 
     return (
       <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelectVersion(version)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelectVersion(version);
+          }
+        }}
         className={`
-          w-72 max-w-[72vw] rounded-lg border p-3 transition-all
-          ${isCurrent ? "bg-electric/10 border-electric/50" : "bg-carbon border-steel/40 hover:border-electric/30"}
+          w-72 max-w-[72vw] cursor-pointer rounded-lg border p-3 text-left transition-all
+          ${isCurrent ? "bg-electric/10 border-electric/50" : "bg-carbon border-steel/40 hover:border-electric/30 hover:bg-graphite/50"}
         `}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`text-sm font-display font-semibold ${isCurrent ? "text-electric" : "text-white"}`}>{version.projectName || t("versionHistory.untitled")}</span>
-              <span className="px-1.5 py-0.5 rounded bg-graphite text-[10px] font-mono uppercase text-gray-400">{version.editMode === "patch" ? t("versionHistory.patch") : t("versionHistory.full")}</span>
-              {version.manualEditsSinceParent && <span className="px-1.5 py-0.5 rounded bg-ember/15 text-[10px] font-mono uppercase text-ember">{t("versionHistory.manual")}</span>}
-            </div>
+            <p className={`truncate text-sm font-display font-semibold ${isCurrent ? "text-electric" : "text-white"}`}>{version.projectName || t("versionHistory.untitled")}</p>
             <p className="mt-1 text-xs text-gray-400 line-clamp-2">{version.prompt || version.message}</p>
+            <div className="mt-2 flex items-center gap-2">
+              {version.manualEditsSinceParent && <span className="px-1.5 py-0.5 rounded bg-ember/15 text-[10px] font-mono uppercase text-ember">{t("versionHistory.manual")}</span>}
+              {isCurrent && <span className="text-[10px] font-mono text-electric uppercase">{t("versionHistory.current")}</span>}
+            </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-xs font-mono text-gray-500">{formatVersionDate(version.createdAt)}</p>
-            {isCurrent && <p className="mt-1 text-[10px] font-mono text-electric uppercase">{t("versionHistory.current")}</p>}
-          </div>
-        </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <button type="button" onClick={() => onSelectVersion(version)} className="px-2.5 py-1.5 rounded bg-graphite text-xs font-mono text-gray-300 hover:text-white hover:bg-electric/20 transition-colors">
-            {t("versionHistory.load")}
-          </button>
-          {canShowPatch && (
+          {canShowDiff && (
             <button
               type="button"
-              onClick={() => setExpandedPatchId((current) => (current === version.id ? null : version.id))}
-              className="px-2.5 py-1.5 rounded bg-graphite text-xs font-mono text-gray-300 hover:text-white hover:bg-ember/20 transition-colors"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDiffVersion(version);
+              }}
+              className="shrink-0 text-xs font-mono text-ember hover:text-white underline underline-offset-4"
             >
-              {expandedPatchId === version.id ? t("versionHistory.hidePatch") : t("versionHistory.viewPatch")}
+              {t("versionHistory.diff")}
             </button>
           )}
         </div>
-
-        {renderPatchDetails(version)}
       </div>
     );
   };
@@ -132,11 +144,14 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
         {children.length > 1 && (
           <>
             <div className="h-5 w-px bg-steel/70" />
-            <div className="relative flex gap-4 overflow-x-auto px-2 pt-6">
-              <div className="absolute left-10 right-10 top-0 h-px bg-steel/60" />
+            <div className="relative inline-flex gap-4 overflow-x-auto px-2 pt-8">
+              <div className="absolute left-36 right-36 top-0 h-px bg-steel/60" />
               {children.map((child) => (
                 <div key={child.id} className="relative flex flex-col items-center">
-                  <div className="absolute -top-6 h-6 w-px bg-steel/60" />
+                  <div className="absolute -top-8 h-6 w-px bg-steel/60" />
+                  <svg className="absolute -top-3 h-3 w-3 text-steel" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                    <path d="M6 10 1.5 3h9L6 10Z" />
+                  </svg>
                   {renderVersion(child)}
                 </div>
               ))}
@@ -150,25 +165,18 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
   const roots = childrenByParent.get("root") || [];
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-3xl max-h-[85vh] bg-obsidian border border-steel/60 rounded-xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-3xl max-h-[85vh] bg-obsidian border border-steel/60 rounded-xl shadow-2xl overflow-hidden" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-steel/40">
           <div>
             <h2 className="font-display text-lg font-semibold text-white">{t("versionHistory.title")}</h2>
             <p className="text-xs font-mono text-gray-500">{t("versionHistory.description")}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onRefresh} className="p-2 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("versionHistory.refresh")}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8 8 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8 8 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-            <button onClick={onClose} className="p-2 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("common.close")}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          <button onClick={onClose} className="p-2 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("common.close")}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <div className="p-5 overflow-y-auto max-h-[calc(85vh-88px)]">
@@ -185,6 +193,8 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
           )}
         </div>
       </div>
+
+      {renderDiffDialog()}
     </div>
   );
 }

@@ -140,6 +140,8 @@
     "load": "Load",
     "viewPatch": "View patch",
     "hidePatch": "Hide patch",
+    "diff": "Diff",
+    "edit": "Edit",
     "patchDetails": "Patch details",
     "oldText": "Before",
     "newText": "After"

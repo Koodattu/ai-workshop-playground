@@ -140,6 +140,8 @@
     "load": "Lataa",
     "viewPatch": "Näytä paikkaus",
     "hidePatch": "Piilota paikkaus",
+    "diff": "Ero",
+    "edit": "Muutos",
     "patchDetails": "Paikkauksen tiedot",
     "oldText": "Ennen",
     "newText": "Jälkeen"
