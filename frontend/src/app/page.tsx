@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
@@ -163,6 +163,16 @@ export default function WorkspacePage() {
     },
     [password, visitorId],
   );
+
+  const currentProjectVersions = useMemo(() => {
+    if (!currentVersionId) return [];
+
+    const currentVersion = versions.find((version) => version.id === currentVersionId);
+    if (!currentVersion) return [];
+
+    const rootVersionId = currentVersion.rootVersionId || currentVersion.id;
+    return versions.filter((version) => (version.rootVersionId || version.id) === rootVersionId);
+  }, [currentVersionId, versions]);
 
   useEffect(() => {
     let isMounted = true;
@@ -695,6 +705,12 @@ export default function WorkspacePage() {
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
               const projectName = data.projectName;
+              const versionMeta = data.version
+                ? {
+                    currentVersionId: data.version.id,
+                    rootVersionId: data.version.rootVersionId || data.version.id,
+                  }
+                : undefined;
 
               // In EDIT mode, update templates and code
               if (chatMode === "edit") {
@@ -706,7 +722,7 @@ export default function WorkspacePage() {
                 // If user is in a custom template, update it instead of creating a new one
                 if (isCustomTemplateId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
-                  updateTemplate(currentTemplateId, finalCode, projectName);
+                  updateTemplate(currentTemplateId, finalCode, projectName, versionMeta);
                   // Keep the same template ID
                   setCurrentTemplateId(currentTemplateId);
                 } else {
@@ -720,7 +736,7 @@ export default function WorkspacePage() {
                     const messages = getMessages(language);
                     templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
                   }
-                  const newTemplate = addTemplate(templateName, finalCode, projectName);
+                  const newTemplate = addTemplate(templateName, finalCode, projectName, versionMeta);
                   // Switch to the new custom template and update savedTemplateId to match
                   setSavedTemplateId(newTemplate.id);
                   setCurrentTemplateId(newTemplate.id);
@@ -1021,6 +1037,7 @@ export default function WorkspacePage() {
           setCode(customTemplate.code);
           originalCodeSnapshotRef.current = customTemplate.code;
           setCurrentTemplateId(templateId);
+          setCurrentVersionId(customTemplate.currentVersionId || null);
           // Clear context messages when switching templates
           setContextMessages([]);
           // Force instant preview update with the new code
@@ -1053,6 +1070,12 @@ export default function WorkspacePage() {
 
       setCode(version.code);
       setCurrentVersionId(version.id);
+      if (isCustomTemplateId(currentTemplateId)) {
+        updateTemplate(currentTemplateId, version.code, version.projectName || undefined, {
+          currentVersionId: version.id,
+          rootVersionId: version.rootVersionId || version.id,
+        });
+      }
       originalCodeSnapshotRef.current = version.code;
       setContextMessages([]);
       setIsVersionHistoryOpen(false);
@@ -1060,7 +1083,7 @@ export default function WorkspacePage() {
 
       showToast(t("versionHistory.loaded"), "success");
     },
-    [showToast, t],
+    [currentTemplateId, isCustomTemplateId, showToast, t, updateTemplate],
   );
 
   const handleRemoveCustomTemplate = useCallback(
@@ -1396,7 +1419,7 @@ export default function WorkspacePage() {
 
       {isVersionHistoryOpen && (
         <VersionHistoryDialog
-          versions={versions}
+          versions={currentProjectVersions}
           currentVersionId={currentVersionId}
           isLoading={isLoadingVersions}
           onClose={() => setIsVersionHistoryOpen(false)}

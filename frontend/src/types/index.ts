@@ -157,6 +157,8 @@ export interface CustomTemplate {
   name: string;
   code: string;
   projectName?: string; // LLM-provided project name
+  currentVersionId?: string | null; // latest AI version for this creation
+  rootVersionId?: string | null; // root version tree for this creation
   createdAt: number; // timestamp for sorting/deletion
   updatedAt: number; // timestamp for tracking last modification
 }
