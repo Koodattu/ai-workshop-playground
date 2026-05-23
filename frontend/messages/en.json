@@ -144,7 +144,10 @@
     "edit": "Edit",
     "patchDetails": "Patch details",
     "oldText": "Before",
-    "newText": "After"
+    "newText": "After",
+    "added": "added",
+    "deleted": "deleted",
+    "changed": "changed"
   },
   "templates": {
     "welcome": "Advanced Welcome",

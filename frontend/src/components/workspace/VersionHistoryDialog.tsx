@@ -12,6 +12,103 @@ interface VersionHistoryDialogProps {
   onSelectVersion: (version: CodeVersion) => void;
 }
 
+type DiffLineKind = "same" | "added" | "deleted";
+
+interface DiffLine {
+  kind: DiffLineKind;
+  oldLineNumber: number | null;
+  newLineNumber: number | null;
+  text: string;
+}
+
+interface DiffHunk {
+  editIndex: number;
+  oldStartLine: number | null;
+  newStartLine: number | null;
+  lines: DiffLine[];
+  addedLines: number;
+  deletedLines: number;
+  changedLines: number;
+}
+
+const splitLines = (text: string) => text.split("\n");
+
+const findStartLine = (code: string | undefined, snippet: string): number | null => {
+  if (!code || !snippet) return null;
+
+  const index = code.indexOf(snippet);
+  if (index === -1) return null;
+
+  return code.slice(0, index).split("\n").length;
+};
+
+const buildLineDiff = (oldText: string, newText: string, oldStartLine: number | null, newStartLine: number | null): DiffLine[] => {
+  const oldLines = splitLines(oldText);
+  const newLines = splitLines(newText);
+
+  if (oldLines.length * newLines.length > 10000) {
+    return [
+      ...oldLines.map((line, index) => ({
+        kind: "deleted" as const,
+        oldLineNumber: oldStartLine === null ? null : oldStartLine + index,
+        newLineNumber: null,
+        text: line,
+      })),
+      ...newLines.map((line, index) => ({
+        kind: "added" as const,
+        oldLineNumber: null,
+        newLineNumber: newStartLine === null ? null : newStartLine + index,
+        text: line,
+      })),
+    ];
+  }
+
+  const dp = Array.from({ length: oldLines.length + 1 }, () => Array(newLines.length + 1).fill(0));
+  for (let oldIndex = oldLines.length - 1; oldIndex >= 0; oldIndex--) {
+    for (let newIndex = newLines.length - 1; newIndex >= 0; newIndex--) {
+      dp[oldIndex][newIndex] =
+        oldLines[oldIndex] === newLines[newIndex]
+          ? dp[oldIndex + 1][newIndex + 1] + 1
+          : Math.max(dp[oldIndex + 1][newIndex], dp[oldIndex][newIndex + 1]);
+    }
+  }
+
+  const lines: DiffLine[] = [];
+  let oldIndex = 0;
+  let newIndex = 0;
+
+  while (oldIndex < oldLines.length || newIndex < newLines.length) {
+    if (oldIndex < oldLines.length && newIndex < newLines.length && oldLines[oldIndex] === newLines[newIndex]) {
+      lines.push({
+        kind: "same",
+        oldLineNumber: oldStartLine === null ? null : oldStartLine + oldIndex,
+        newLineNumber: newStartLine === null ? null : newStartLine + newIndex,
+        text: oldLines[oldIndex],
+      });
+      oldIndex++;
+      newIndex++;
+    } else if (newIndex < newLines.length && (oldIndex === oldLines.length || dp[oldIndex][newIndex + 1] >= dp[oldIndex + 1][newIndex])) {
+      lines.push({
+        kind: "added",
+        oldLineNumber: null,
+        newLineNumber: newStartLine === null ? null : newStartLine + newIndex,
+        text: newLines[newIndex],
+      });
+      newIndex++;
+    } else {
+      lines.push({
+        kind: "deleted",
+        oldLineNumber: oldStartLine === null ? null : oldStartLine + oldIndex,
+        newLineNumber: null,
+        text: oldLines[oldIndex],
+      });
+      oldIndex++;
+    }
+  }
+
+  return lines;
+};
+
 export function VersionHistoryDialog({ versions, currentVersionId, isLoading, onClose, onSelectVersion }: VersionHistoryDialogProps) {
   const { t } = useLanguage();
   const [diffVersion, setDiffVersion] = useState<CodeVersion | null>(null);
@@ -33,8 +130,37 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
     return map;
   }, [versions]);
 
+  const diffHunks = useMemo<DiffHunk[]>(() => {
+    if (!diffVersion?.edits?.length) return [];
+
+    const parentVersion = versions.find((version) => version.id === diffVersion.parentVersionId);
+
+    return diffVersion.edits.map((edit, index) => {
+      const oldStartLine = findStartLine(parentVersion?.code, edit.oldText);
+      const newStartLine = findStartLine(diffVersion.code, edit.newText);
+      const lines = buildLineDiff(edit.oldText, edit.newText, oldStartLine, newStartLine);
+      const addedLines = lines.filter((line) => line.kind === "added").length;
+      const deletedLines = lines.filter((line) => line.kind === "deleted").length;
+      const changedLines = Math.min(addedLines, deletedLines);
+
+      return {
+        editIndex: index,
+        oldStartLine,
+        newStartLine,
+        lines,
+        addedLines,
+        deletedLines,
+        changedLines,
+      };
+    });
+  }, [diffVersion, versions]);
+
   const renderDiffDialog = () => {
     if (!diffVersion?.edits?.length) return null;
+
+    const totalAddedLines = diffHunks.reduce((sum, hunk) => sum + hunk.addedLines, 0);
+    const totalDeletedLines = diffHunks.reduce((sum, hunk) => sum + hunk.deletedLines, 0);
+    const totalChangedLines = diffHunks.reduce((sum, hunk) => sum + hunk.changedLines, 0);
 
     return (
       <div
@@ -48,7 +174,12 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
           <div className="flex items-center justify-between gap-4 border-b border-steel/40 px-5 py-4">
             <div>
               <h3 className="font-display text-base font-semibold text-white">{t("versionHistory.diff")}</h3>
-              <p className="text-xs text-gray-500">{diffVersion.projectName || t("versionHistory.untitled")}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs font-mono">
+                <span className="text-gray-500">{diffVersion.projectName || t("versionHistory.untitled")}</span>
+                <span className="text-green-300">+{totalAddedLines} {t("versionHistory.added")}</span>
+                <span className="text-red-300">-{totalDeletedLines} {t("versionHistory.deleted")}</span>
+                <span className="text-yellow-300">~{totalChangedLines} {t("versionHistory.changed")}</span>
+              </div>
             </div>
             <button onClick={() => setDiffVersion(null)} className="p-2 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("common.close")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -59,15 +190,39 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
 
           <div className="max-h-[calc(82vh-73px)] overflow-auto scrollbar-thin p-5">
             <div className="space-y-5">
-              {diffVersion.edits.map((edit, index) => (
-                <div key={`${diffVersion.id}-${index}`} className="overflow-hidden rounded-lg border border-steel/40 bg-void/70">
-                  <div className="border-b border-steel/30 px-3 py-2 font-mono text-xs text-gray-500">@@ {t("versionHistory.edit")} {index + 1}</div>
-                  <pre className="overflow-auto scrollbar-thin whitespace-pre-wrap border-b border-red-500/20 bg-red-950/20 p-3 text-xs text-red-100">
-                    {edit.oldText.split("\n").map((line) => `- ${line}`).join("\n")}
-                  </pre>
-                  <pre className="overflow-auto scrollbar-thin whitespace-pre-wrap bg-green-950/20 p-3 text-xs text-green-100">
-                    {edit.newText.split("\n").map((line) => `+ ${line}`).join("\n")}
-                  </pre>
+              {diffHunks.map((hunk) => (
+                <div key={`${diffVersion.id}-${hunk.editIndex}`} className="overflow-hidden rounded-lg border border-steel/40 bg-void/70">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-steel/30 px-3 py-2 font-mono text-xs text-gray-500">
+                    <span>
+                      @@ {t("versionHistory.edit")} {hunk.editIndex + 1}
+                      {hunk.oldStartLine !== null && hunk.newStartLine !== null ? ` -${hunk.oldStartLine} +${hunk.newStartLine}` : ""}
+                    </span>
+                    <span className="flex gap-3">
+                      <span className="text-green-300">+{hunk.addedLines}</span>
+                      <span className="text-red-300">-{hunk.deletedLines}</span>
+                      <span className="text-yellow-300">~{hunk.changedLines}</span>
+                    </span>
+                  </div>
+                  <div className="overflow-auto scrollbar-thin font-mono text-xs">
+                    {hunk.lines.map((line, index) => {
+                      const prefix = line.kind === "added" ? "+" : line.kind === "deleted" ? "-" : " ";
+                      const rowClass =
+                        line.kind === "added"
+                          ? "bg-green-950/20 text-green-100"
+                          : line.kind === "deleted"
+                            ? "bg-red-950/20 text-red-100"
+                            : "text-gray-300";
+
+                      return (
+                        <div key={`${hunk.editIndex}-${index}`} className={`grid grid-cols-[3rem_3rem_1.5rem_minmax(0,1fr)] gap-2 px-3 py-0.5 ${rowClass}`}>
+                          <span className="select-none text-right text-gray-500">{line.oldLineNumber ?? ""}</span>
+                          <span className="select-none text-right text-gray-500">{line.newLineNumber ?? ""}</span>
+                          <span className={line.kind === "added" ? "text-green-300" : line.kind === "deleted" ? "text-red-300" : "text-gray-600"}>{prefix}</span>
+                          <span className="whitespace-pre-wrap break-words">{line.text || " "}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
@@ -104,9 +259,6 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
               {isCurrent && <span className="shrink-0 text-[10px] font-mono text-electric uppercase">{t("versionHistory.current")}</span>}
             </div>
             <p className="mt-1 text-xs text-gray-400 line-clamp-2">{version.prompt || version.message}</p>
-            <div className="mt-2 flex items-center gap-2">
-              {version.manualEditsSinceParent && <span className="px-1.5 py-0.5 rounded bg-ember/15 text-[10px] font-mono uppercase text-ember">{t("versionHistory.manual")}</span>}
-            </div>
           </div>
 
           {canShowDiff && (

@@ -144,7 +144,10 @@
     "edit": "Muutos",
     "patchDetails": "Paikkauksen tiedot",
     "oldText": "Ennen",
-    "newText": "Jälkeen"
+    "newText": "Jälkeen",
+    "added": "lisätty",
+    "deleted": "poistettu",
+    "changed": "muutettu"
   },
   "templates": {
     "welcome": "Laaja Tervetuloa",
