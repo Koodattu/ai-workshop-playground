@@ -4,6 +4,7 @@
  */
 
 const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
+const OpenAI = require("openai");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const config = require("../config");
@@ -12,39 +13,104 @@ const { ERROR_CODES } = require("../constants/errorCodes");
 const RequestLog = require("../models/RequestLog");
 const Usage = require("../models/Usage");
 const CodeVersion = require("../models/CodeVersion");
-const { getAllowedModelPreference } = require("../services/modelSettings");
+const { getAllowedModelPreference, getModelSetting, normalizeThinkingLevel } = require("../services/modelSettings");
 
 const MODEL_PREFERENCES = {
   fast: {
+    provider: "gemini",
     model: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    shortLabel: "2.5",
     pricing: {
       inputPerToken: 0.0000003,
       outputPerToken: 0.0000025,
     },
-    thinkingConfig: {
-      thinkingBudget: 0,
-    },
+    thinkingOptions: ["none"],
+    defaultThinking: "none",
+    thinkingMode: "gemini-budget",
   },
   balanced: {
+    provider: "gemini",
     model: "gemini-3-flash-preview",
+    label: "Gemini 3 Flash",
+    shortLabel: "3",
     pricing: {
       inputPerToken: 0.0000005,
       outputPerToken: 0.000003,
     },
+    thinkingOptions: ["low", "medium", "high"],
+    defaultThinking: "low",
+    thinkingMode: "gemini-level",
   },
   accurate: {
+    provider: "gemini",
     model: "gemini-3.5-flash",
+    label: "Gemini 3.5 Flash",
+    shortLabel: "3.5",
     pricing: {
       inputPerToken: 0.0000015,
       outputPerToken: 0.000009,
     },
+    thinkingOptions: ["low", "medium", "high"],
+    defaultThinking: "low",
+    thinkingMode: "gemini-level",
+  },
+  gpt54mini: {
+    provider: "openai",
+    model: "gpt-5.4-mini",
+    label: "GPT-5.4 mini",
+    shortLabel: "5.4-mini",
+    pricing: {
+      inputPerToken: 0.75 / 1000000,
+      cachedInputPerToken: 0.075 / 1000000,
+      outputPerToken: 4.5 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
+    defaultThinking: "none",
+    thinkingMode: "openai-reasoning",
+  },
+  gpt54: {
+    provider: "openai",
+    model: "gpt-5.4",
+    label: "GPT-5.4",
+    shortLabel: "5.4",
+    pricing: {
+      inputPerToken: 2.5 / 1000000,
+      cachedInputPerToken: 0.25 / 1000000,
+      outputPerToken: 15 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
+    defaultThinking: "none",
+    thinkingMode: "openai-reasoning",
+  },
+  gpt55: {
+    provider: "openai",
+    model: "gpt-5.5",
+    label: "GPT-5.5",
+    shortLabel: "5.5",
+    pricing: {
+      inputPerToken: 5 / 1000000,
+      cachedInputPerToken: 0.5 / 1000000,
+      outputPerToken: 30 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
+    defaultThinking: "medium",
+    thinkingMode: "openai-reasoning",
   },
 };
 
 const DEFAULT_MODEL_PREFERENCE = "balanced";
 
 const GEMINI_THINKING_LEVELS = {
-  minimal: ThinkingLevel.MINIMAL,
   low: ThinkingLevel.LOW,
   medium: ThinkingLevel.MEDIUM,
   high: ThinkingLevel.HIGH,
@@ -53,21 +119,52 @@ const GEMINI_THINKING_LEVELS = {
 /**
  * Calculate estimated cost in cents based on token usage
  */
-function calculateCostInCents(promptTokens, billableOutputTokens, pricing) {
-  const inputCost = promptTokens * pricing.inputPerToken;
-  const outputCost = billableOutputTokens * pricing.outputPerToken;
+function calculateCostInCents(promptTokens, billableOutputTokens, pricing, cachedTokens = 0) {
+  const normalizedCachedTokens = Math.min(Math.max(cachedTokens || 0, 0), promptTokens || 0);
+  const uncachedInputTokens = Math.max(0, (promptTokens || 0) - normalizedCachedTokens);
+  const cachedInputPerToken = pricing.cachedInputPerToken ?? pricing.inputPerToken;
+  const usesLongContextRate =
+    pricing.longContextInputTokenThreshold && promptTokens > pricing.longContextInputTokenThreshold;
+  const inputMultiplier = usesLongContextRate ? pricing.longContextInputMultiplier || 1 : 1;
+  const outputMultiplier = usesLongContextRate ? pricing.longContextOutputMultiplier || 1 : 1;
+
+  const inputCost = (uncachedInputTokens * pricing.inputPerToken + normalizedCachedTokens * cachedInputPerToken) * inputMultiplier;
+  const outputCost = (billableOutputTokens || 0) * pricing.outputPerToken * outputMultiplier;
   const totalCostDollars = inputCost + outputCost;
   return totalCostDollars * 100; // Convert to cents
 }
 
-function getModelPreference(modelPreference) {
-  const allowedPreference = getAllowedModelPreference(modelPreference, DEFAULT_MODEL_PREFERENCE);
-  return MODEL_PREFERENCES[allowedPreference] || MODEL_PREFERENCES[DEFAULT_MODEL_PREFERENCE];
+async function getModelPreference(modelPreference) {
+  const allowedPreference = await getAllowedModelPreference(modelPreference, DEFAULT_MODEL_PREFERENCE);
+  const selectedModel = MODEL_PREFERENCES[allowedPreference] || MODEL_PREFERENCES[DEFAULT_MODEL_PREFERENCE];
+  const setting = await getModelSetting(allowedPreference);
+
+  return {
+    ...selectedModel,
+    id: allowedPreference,
+    thinking: normalizeThinkingLevel(setting.thinking, selectedModel.thinkingOptions, selectedModel.defaultThinking),
+  };
 }
 
-function getGeminiThinkingLevel() {
-  const normalizedLevel = (config.geminiThinkingLevel || "low").toLowerCase();
-  return GEMINI_THINKING_LEVELS[normalizedLevel] || ThinkingLevel.LOW;
+function getGeminiThinkingConfig(selectedModel) {
+  if (selectedModel.thinkingMode === "gemini-budget") {
+    return { thinkingBudget: 0 };
+  }
+
+  if (selectedModel.thinkingMode === "gemini-level") {
+    return {
+      thinkingLevel: GEMINI_THINKING_LEVELS[selectedModel.thinking] || ThinkingLevel.LOW,
+    };
+  }
+
+  return null;
+}
+
+function getOpenAIReasoningConfig(selectedModel) {
+  if (selectedModel.thinkingMode !== "openai-reasoning") return null;
+  return {
+    effort: selectedModel.thinking,
+  };
 }
 
 function countOccurrences(haystack, needle) {
@@ -229,6 +326,128 @@ function resolveLineEndingNormalizedReplacement(originalCode, oldText, newText) 
   };
 }
 
+function boundedLevenshteinDistance(left, right, maxDistance) {
+  if (Math.abs(left.length - right.length) > maxDistance) return maxDistance + 1;
+
+  let previous = new Array(right.length + 1);
+  let current = new Array(right.length + 1);
+
+  for (let column = 0; column <= right.length; column++) {
+    previous[column] = column;
+  }
+
+  for (let row = 1; row <= left.length; row++) {
+    current[0] = row;
+    let rowMinimum = current[0];
+
+    for (let column = 1; column <= right.length; column++) {
+      const substitutionCost = left[row - 1] === right[column - 1] ? 0 : 1;
+      const distance = Math.min(
+        previous[column] + 1,
+        current[column - 1] + 1,
+        previous[column - 1] + substitutionCost,
+      );
+      current[column] = distance;
+      rowMinimum = Math.min(rowMinimum, distance);
+    }
+
+    if (rowMinimum > maxDistance) return maxDistance + 1;
+
+    const temp = previous;
+    previous = current;
+    current = temp;
+  }
+
+  return previous[right.length];
+}
+
+function getNormalizedLineSpans(normalizedCode) {
+  const lineStarts = [0];
+  const lines = normalizedCode.split("\n");
+
+  for (let index = 0; index < normalizedCode.length; index++) {
+    if (normalizedCode[index] === "\n") {
+      lineStarts.push(index + 1);
+    }
+  }
+
+  return { lines, lineStarts };
+}
+
+function resolveNearExactReplacement(originalCode, oldText, newText) {
+  const normalizedOldText = normalizeLineEndings(oldText);
+  const oldLines = normalizedOldText.split("\n");
+  const oldLineCount = oldLines.length;
+
+  if (normalizedOldText.length < 80 && oldLineCount < 2) {
+    return { accepted: false, reason: "snippet-too-small" };
+  }
+
+  if (normalizedOldText.length > 5000) {
+    return { accepted: false, reason: "snippet-too-large" };
+  }
+
+  const maxDistance = Math.max(2, Math.min(12, Math.floor(normalizedOldText.length * 0.03)));
+  const { normalizedCode, normalizedToOriginalIndex } = buildNormalizedIndexMap(originalCode);
+  const { lines, lineStarts } = getNormalizedLineSpans(normalizedCode);
+  const candidates = [];
+
+  for (let startLineIndex = 0; startLineIndex <= lines.length - oldLineCount; startLineIndex++) {
+    const candidateText = lines.slice(startLineIndex, startLineIndex + oldLineCount).join("\n");
+    if (Math.abs(candidateText.length - normalizedOldText.length) > maxDistance) continue;
+
+    const distance = boundedLevenshteinDistance(normalizedOldText, candidateText, maxDistance);
+    if (distance > maxDistance) continue;
+
+    const normalizedStart = lineStarts[startLineIndex];
+    const nextLineStart = lineStarts[startLineIndex + oldLineCount];
+    const normalizedEnd = nextLineStart === undefined ? normalizedCode.length : nextLineStart - 1;
+
+    candidates.push({
+      distance,
+      startLine: startLineIndex + 1,
+      endLine: startLineIndex + oldLineCount,
+      normalizedStart,
+      normalizedEnd,
+      candidateText,
+    });
+  }
+
+  candidates.sort((a, b) => a.distance - b.distance || a.startLine - b.startLine);
+
+  if (candidates.length !== 1) {
+    return {
+      accepted: false,
+      reason: candidates.length === 0 ? "no-near-match" : "ambiguous-near-match",
+      candidateCount: candidates.length,
+      maxDistance,
+      bestDistance: candidates[0]?.distance ?? null,
+      secondBestDistance: candidates[1]?.distance ?? null,
+    };
+  }
+
+  const candidate = candidates[0];
+  const start = normalizedToOriginalIndex[candidate.normalizedStart];
+  const end = normalizedToOriginalIndex[candidate.normalizedEnd];
+  const lineEnding = getDominantLineEnding(originalCode.slice(start, end) || originalCode);
+
+  return {
+    accepted: true,
+    maxDistance,
+    distance: candidate.distance,
+    startLine: candidate.startLine,
+    endLine: candidate.endLine,
+    candidateHash: hashText(candidate.candidateText),
+    candidatePreview: previewText(candidate.candidateText),
+    replacement: {
+      start,
+      end,
+      newText: applyLineEnding(newText, lineEnding),
+      appliedWith: "near-exact",
+    },
+  };
+}
+
 function applyExactEdits(originalCode, edits, diagnosticContext = {}) {
   if (!Array.isArray(edits) || edits.length === 0) {
     logPatchDiagnostic("missing-edits", {
@@ -295,6 +514,33 @@ function applyExactEdits(originalCode, edits, diagnosticContext = {}) {
         });
       }
 
+      const nearExactResult = resolveNearExactReplacement(originalCode, oldText, newText);
+      if (nearExactResult.replacement) {
+        console.warn(
+          "[Patch Apply Fallback]",
+          JSON.stringify({
+            reason: "near-exact-match",
+            ...diagnosticContext,
+            editNumber,
+            editCount: edits.length,
+            originalCodeLength: originalCode.length,
+            originalCodeHash: hashText(originalCode),
+            oldTextLength: oldText.length,
+            oldTextHash: hashText(oldText),
+            newTextLength: newText.length,
+            newTextHash: hashText(newText),
+            maxDistance: nearExactResult.maxDistance,
+            distance: nearExactResult.distance,
+            startLine: nearExactResult.startLine,
+            endLine: nearExactResult.endLine,
+            candidateHash: nearExactResult.candidateHash,
+            candidatePreview: nearExactResult.candidatePreview,
+          }),
+        );
+
+        return nearExactResult.replacement;
+      }
+
       logPatchDiagnostic("oldText-not-found", {
         ...diagnosticContext,
         editNumber,
@@ -312,6 +558,13 @@ function applyExactEdits(originalCode, edits, diagnosticContext = {}) {
           whitespaceOccurrences,
           oldTextLineEndingHash: hashText(normalizeLineEndings(oldText)),
           originalLineEndingHash: hashText(normalizeLineEndings(originalCode)),
+        },
+        nearExact: {
+          reason: nearExactResult.reason,
+          candidateCount: nearExactResult.candidateCount,
+          maxDistance: nearExactResult.maxDistance,
+          bestDistance: nearExactResult.bestDistance,
+          secondBestDistance: nearExactResult.secondBestDistance,
         },
         closestWindows: findClosestTextWindows(originalCode, oldText),
       });
@@ -493,6 +746,7 @@ function createJsonStringDecoder() {
 
 // Initialize Gemini AI client
 const genAI = new GoogleGenAI({ apiKey: config.geminiApiKey });
+const openAI = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey }) : null;
 
 // System instruction for clean code output
 const SYSTEM_INSTRUCTION = `You are an expert web developer assistant. Your task is to generate or modify clean, production-ready HTML, CSS, and JavaScript code.
@@ -520,6 +774,7 @@ CODE MODIFICATION RULES:
 - Use "replace_all" only for brand new projects or broad rewrites
 - Patch edits must use exact oldText copied from the provided existing code
 - Each oldText must match exactly one location in the existing code
+- For translation requests, oldText must stay in the original language exactly as it appears in the code; translate only newText
 - If multiple areas need changes, return multiple edits
 - Do not use line numbers. Exact text replacement avoids line-number drift when several edits are applied.
 
@@ -539,20 +794,12 @@ CODE GENERATION RULES:
 7. Make interactive elements functional with proper JavaScript
 8. Format code with proper indentation - each tag, style rule, and script line should be on its own line
 
-REMEMBER: Return JSON with "message" (short, in user's language), "projectName" (TWO words only, creative name in user's language), "editMode" ("replace_all" or "patch"), "code" (full code only for replace_all), and "edits" (exact replacements for patch).`;
+REMEMBER: Return JSON fields in this exact order: "editMode", "code", "edits", "message", "projectName".`;
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
   type: "object",
   properties: {
-    message: {
-      type: "string",
-      description: "A very short response in the same language as the user describing what was done (1-2 sentences max)",
-    },
-    projectName: {
-      type: "string",
-      description: "A creative TWO-WORD name for this project in the same language as the user (e.g., 'Solar Dashboard', 'Pixel Art', 'Magic Quiz')",
-    },
     editMode: {
       type: "string",
       enum: ["replace_all", "patch"],
@@ -580,8 +827,16 @@ const CODE_GENERATION_SCHEMA = {
         required: ["oldText", "newText"],
       },
     },
+    message: {
+      type: "string",
+      description: "A very short response in the same language as the user describing what was done (1-2 sentences max)",
+    },
+    projectName: {
+      type: "string",
+      description: "A creative TWO-WORD name for this project in the same language as the user (e.g., 'Solar Dashboard', 'Pixel Art', 'Magic Quiz')",
+    },
   },
-  required: ["message", "projectName", "editMode", "code", "edits"],
+  required: ["editMode", "code", "edits", "message", "projectName"],
 };
 
 // System instruction for ASK mode - answering questions without generating code
@@ -611,6 +866,40 @@ const ASK_SCHEMA = {
   required: ["message"],
 };
 
+function addStrictJsonSchemaRules(schema) {
+  if (!schema || typeof schema !== "object") return schema;
+
+  if (schema.type === "object") {
+    return {
+      ...schema,
+      additionalProperties: false,
+      properties: Object.fromEntries(
+        Object.entries(schema.properties || {}).map(([key, value]) => [key, addStrictJsonSchemaRules(value)]),
+      ),
+    };
+  }
+
+  if (schema.type === "array" && schema.items) {
+    return {
+      ...schema,
+      items: addStrictJsonSchemaRules(schema.items),
+    };
+  }
+
+  return schema;
+}
+
+function buildOpenAITextFormat(isAskMode) {
+  return {
+    format: {
+      type: "json_schema",
+      name: isAskMode ? "ask_response" : "code_generation_response",
+      strict: true,
+      schema: addStrictJsonSchemaRules(isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA),
+    },
+  };
+}
+
 function combineUsageMetadata(first = {}, second = {}) {
   const keysToSum = ["promptTokenCount", "candidatesTokenCount", "thoughtsTokenCount", "cachedContentTokenCount", "totalTokenCount"];
   const combined = { ...(first || {}) };
@@ -622,6 +911,148 @@ function combineUsageMetadata(first = {}, second = {}) {
   }
 
   return combined;
+}
+
+function toGeminiUsageMetadata(openAIUsage = {}) {
+  const promptTokenCount = openAIUsage.input_tokens || 0;
+  const thoughtsTokenCount = openAIUsage.output_tokens_details?.reasoning_tokens || 0;
+  const outputTokenCount = openAIUsage.output_tokens || 0;
+  const candidatesTokenCount = Math.max(0, outputTokenCount - thoughtsTokenCount);
+  const cachedContentTokenCount = openAIUsage.input_tokens_details?.cached_tokens || 0;
+
+  return {
+    promptTokenCount,
+    candidatesTokenCount,
+    thoughtsTokenCount,
+    cachedContentTokenCount,
+    totalTokenCount: openAIUsage.total_tokens || promptTokenCount + outputTokenCount,
+  };
+}
+
+function logStreamDiagnostic(event, payload) {
+  console.info(`[AI Stream Diagnostic] ${event}`, JSON.stringify(payload));
+}
+
+async function createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase }) {
+  const stream = await genAI.models.generateContentStream({
+    model: selectedModel.model,
+    contents: userPrompt,
+    config: generationConfig,
+  });
+
+  return (async function* () {
+    const diagnostics = {
+      requestId,
+      phase,
+      provider: selectedModel.provider,
+      model: selectedModel.model,
+      textChunks: 0,
+      textChars: 0,
+      maxChunkChars: 0,
+      usageChunks: 0,
+      startedAt: Date.now(),
+    };
+
+    try {
+      for await (const chunk of stream) {
+        const text = chunk.text || chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (text) {
+          diagnostics.textChunks += 1;
+          diagnostics.textChars += text.length;
+          diagnostics.maxChunkChars = Math.max(diagnostics.maxChunkChars, text.length);
+        }
+        if (chunk.usageMetadata) diagnostics.usageChunks += 1;
+
+        yield {
+          text,
+          usageMetadata: chunk.usageMetadata || null,
+        };
+      }
+    } finally {
+      logStreamDiagnostic("provider-summary", {
+        ...diagnostics,
+        durationMs: Date.now() - diagnostics.startedAt,
+      });
+    }
+  })();
+}
+
+async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase }) {
+  if (!openAI) {
+    throw new AppError("OpenAI API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
+  }
+
+  const request = {
+    model: selectedModel.model,
+    instructions: systemInstruction || (isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION),
+    input: userPrompt,
+    text: buildOpenAITextFormat(isAskMode),
+    reasoning: getOpenAIReasoningConfig(selectedModel),
+    stream: true,
+    store: false,
+  };
+
+  const stream = await openAI.responses.create(request);
+
+  return (async function* () {
+    const diagnostics = {
+      requestId,
+      phase,
+      provider: selectedModel.provider,
+      model: selectedModel.model,
+      textChunks: 0,
+      textChars: 0,
+      maxChunkChars: 0,
+      eventTypes: {},
+      completed: false,
+      startedAt: Date.now(),
+    };
+
+    try {
+      for await (const event of stream) {
+        diagnostics.eventTypes[event.type] = (diagnostics.eventTypes[event.type] || 0) + 1;
+
+        if (event.type === "response.output_text.delta") {
+          const text = event.delta || "";
+          if (text) {
+            diagnostics.textChunks += 1;
+            diagnostics.textChars += text.length;
+            diagnostics.maxChunkChars = Math.max(diagnostics.maxChunkChars, text.length);
+          }
+
+          yield {
+            text,
+            usageMetadata: null,
+          };
+        } else if (event.type === "response.completed") {
+          diagnostics.completed = true;
+          yield {
+            text: "",
+            usageMetadata: toGeminiUsageMetadata(event.response?.usage || {}),
+          };
+        } else if (event.type === "response.failed") {
+          throw new Error(event.response?.error?.message || "OpenAI response failed");
+        } else if (event.type === "response.incomplete") {
+          throw new Error(event.response?.incomplete_details?.reason || "OpenAI response incomplete");
+        } else if (event.type === "response.error") {
+          throw new Error(event.error?.message || "OpenAI stream error");
+        }
+      }
+    } finally {
+      logStreamDiagnostic("provider-summary", {
+        ...diagnostics,
+        durationMs: Date.now() - diagnostics.startedAt,
+      });
+    }
+  })();
+}
+
+async function createModelTextStream({ selectedModel, generationConfig, userPrompt, isAskMode, requestId, phase = "primary" }) {
+  if (selectedModel.provider === "openai") {
+    return createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction: generationConfig?.systemInstruction, requestId, phase });
+  }
+
+  return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase });
 }
 
 async function generateFullRewriteAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext }) {
@@ -657,18 +1088,19 @@ The previous patch could not be applied safely. Return the complete updated code
   let detectedEditMode = null;
   const retryCodeDecoder = createJsonStringDecoder();
 
-  const stream = await genAI.models.generateContentStream({
-    model: selectedModel.model,
-    contents: retryPrompt,
-    config: retryConfig,
+  const stream = await createModelTextStream({
+    selectedModel,
+    generationConfig: retryConfig,
+    userPrompt: retryPrompt,
+    isAskMode: false,
+    requestId,
+    phase: "patch-retry",
   });
 
   for await (const chunk of stream) {
-    if (chunk.usageMetadata) {
-      usageMetadata = chunk.usageMetadata;
-    }
+    if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
 
-    const chunkText = chunk.text || chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+    const chunkText = chunk.text;
     if (!chunkText) continue;
 
     accumulatedText += chunkText;
@@ -757,15 +1189,19 @@ const generateCode = asyncHandler(async (req, res) => {
   const isAskMode = mode === "ask";
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
   const allowCodeStreaming = !isAskMode;
-  const selectedModel = getModelPreference(modelPreference);
+  const selectedModel = await getModelPreference(modelPreference);
   const requestId = crypto.randomUUID();
 
   if (!prompt) {
     throw new AppError("Prompt is required", 400, ERROR_CODES.PROMPT_REQUIRED);
   }
 
-  if (!config.geminiApiKey) {
+  if (selectedModel.provider === "gemini" && !config.geminiApiKey) {
     throw new AppError("Gemini API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
+  }
+
+  if (selectedModel.provider === "openai" && !config.openaiApiKey) {
+    throw new AppError("OpenAI API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
   }
 
   // Set up SSE headers
@@ -794,6 +1230,44 @@ const generateCode = asyncHandler(async (req, res) => {
   const codeDecoder = createJsonStringDecoder();
   let latestUsageMetadata = null;
   let detectedEditMode = null;
+  const codeStreamDiagnostics = {
+    requestId,
+    phase: "primary",
+    provider: selectedModel.provider,
+    model: selectedModel.model,
+    mode,
+    hasExistingCode,
+    textChunks: 0,
+    textChars: 0,
+    maxTextChunkChars: 0,
+    codeChunksSent: 0,
+    codeCharsSent: 0,
+    firstCodeChunkChars: null,
+    detectedEditMode: null,
+    codeKeySeenAtTextChunk: null,
+    codeStartAtTextChunk: null,
+    codeCompleteAtTextChunk: null,
+    startedAt: Date.now(),
+  };
+
+  const sendCodeChunk = (decoded) => {
+    if (!decoded) return;
+
+    codeStreamDiagnostics.codeChunksSent += 1;
+    codeStreamDiagnostics.codeCharsSent += decoded.length;
+    if (codeStreamDiagnostics.firstCodeChunkChars === null) {
+      codeStreamDiagnostics.firstCodeChunkChars = decoded.length;
+      logStreamDiagnostic("first-code-chunk", {
+        requestId,
+        provider: selectedModel.provider,
+        model: selectedModel.model,
+        chunkChars: decoded.length,
+        textChunkNumber: codeStreamDiagnostics.textChunks,
+      });
+    }
+
+    sendSse({ type: "code-chunk", chunk: decoded });
+  };
 
   try {
     // Configure generation with system instruction based on mode
@@ -803,12 +1277,9 @@ const generateCode = asyncHandler(async (req, res) => {
       responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
     };
 
-    if (selectedModel.thinkingConfig) {
-      generationConfig.thinkingConfig = selectedModel.thinkingConfig;
-    } else if (selectedModel.model.startsWith("gemini-3")) {
-      generationConfig.thinkingConfig = {
-        thinkingLevel: getGeminiThinkingLevel(),
-      };
+    const geminiThinkingConfig = getGeminiThinkingConfig(selectedModel);
+    if (geminiThinkingConfig) {
+      generationConfig.thinkingConfig = geminiThinkingConfig;
     }
 
     // Build the user prompt with context
@@ -844,10 +1315,13 @@ Modify or extend the existing code based on the user's request.`;
     }
 
     // Generate content with streaming
-    const stream = await genAI.models.generateContentStream({
-      model: selectedModel.model,
-      contents: userPrompt,
-      config: generationConfig,
+    const stream = await createModelTextStream({
+      selectedModel,
+      generationConfig,
+      userPrompt,
+      isAskMode,
+      requestId,
+      phase: "primary",
     });
 
     // Process the stream
@@ -857,10 +1331,14 @@ Modify or extend the existing code based on the user's request.`;
           latestUsageMetadata = chunk.usageMetadata;
         }
 
-        // Extract text from the chunk
-        const chunkText = chunk.text || chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+        // Extract text from the provider-normalized chunk
+        const chunkText = chunk.text;
 
         if (chunkText) {
+          codeStreamDiagnostics.textChunks += 1;
+          codeStreamDiagnostics.textChars += chunkText.length;
+          codeStreamDiagnostics.maxTextChunkChars = Math.max(codeStreamDiagnostics.maxTextChunkChars, chunkText.length);
+
           // Accumulate the text
           accumulatedText += chunkText;
 
@@ -874,6 +1352,15 @@ Modify or extend the existing code based on the user's request.`;
             const editModeMatch = accumulatedText.match(/"editMode"\s*:\s*"(replace_all|patch)"/);
             if (editModeMatch) {
               detectedEditMode = editModeMatch[1];
+              codeStreamDiagnostics.detectedEditMode = detectedEditMode;
+              logStreamDiagnostic("edit-mode-detected", {
+                requestId,
+                provider: selectedModel.provider,
+                model: selectedModel.model,
+                detectedEditMode,
+                textChunkNumber: codeStreamDiagnostics.textChunks,
+                accumulatedTextLength: accumulatedText.length,
+              });
             }
           }
 
@@ -884,6 +1371,18 @@ Modify or extend the existing code based on the user's request.`;
             // Look for "code": pattern
             const codeKeyIndex = accumulatedText.indexOf('"code"');
             if (codeKeyIndex !== -1) {
+              if (codeStreamDiagnostics.codeKeySeenAtTextChunk === null) {
+                codeStreamDiagnostics.codeKeySeenAtTextChunk = codeStreamDiagnostics.textChunks;
+                logStreamDiagnostic("code-key-seen", {
+                  requestId,
+                  provider: selectedModel.provider,
+                  model: selectedModel.model,
+                  textChunkNumber: codeStreamDiagnostics.textChunks,
+                  accumulatedTextLength: accumulatedText.length,
+                  codeKeyIndex,
+                });
+              }
+
               // Find the colon after "code"
               const colonPos = accumulatedText.indexOf(":", codeKeyIndex + 6);
               if (colonPos !== -1) {
@@ -896,17 +1395,33 @@ Modify or extend the existing code based on the user's request.`;
                 if (accumulatedText[openQuotePos] === '"') {
                   codeStarted = true;
                   codeFieldStartPos = openQuotePos + 1; // Position after opening quote
+                  codeStreamDiagnostics.codeStartAtTextChunk = codeStreamDiagnostics.textChunks;
+                  logStreamDiagnostic("code-start-sent", {
+                    requestId,
+                    provider: selectedModel.provider,
+                    model: selectedModel.model,
+                    textChunkNumber: codeStreamDiagnostics.textChunks,
+                    accumulatedTextLength: accumulatedText.length,
+                    initialBufferedChars: accumulatedText.length - codeFieldStartPos,
+                  });
                   sendSse({ type: "code-start" });
 
                   // Decode any content we already have after the opening quote
                   const initialContent = accumulatedText.substring(codeFieldStartPos);
                   if (initialContent.length > 0) {
                     const { decoded, done } = codeDecoder.decode(initialContent);
-                    if (decoded) {
-                      sendSse({ type: "code-chunk", chunk: decoded });
-                    }
+                    sendCodeChunk(decoded);
                     if (done) {
                       codeComplete = true;
+                      codeStreamDiagnostics.codeCompleteAtTextChunk = codeStreamDiagnostics.textChunks;
+                      logStreamDiagnostic("code-complete-sent", {
+                        requestId,
+                        provider: selectedModel.provider,
+                        model: selectedModel.model,
+                        textChunkNumber: codeStreamDiagnostics.textChunks,
+                        codeChunksSent: codeStreamDiagnostics.codeChunksSent,
+                        codeCharsSent: codeStreamDiagnostics.codeCharsSent,
+                      });
                       sendSse({ type: "code-complete" });
                     }
                   }
@@ -918,12 +1433,19 @@ Modify or extend the existing code based on the user's request.`;
             // We only pass the new chunk text to the decoder (it maintains state)
             const { decoded, done } = codeDecoder.decode(chunkText);
 
-            if (decoded) {
-              sendSse({ type: "code-chunk", chunk: decoded });
-            }
+            sendCodeChunk(decoded);
 
             if (done) {
               codeComplete = true;
+              codeStreamDiagnostics.codeCompleteAtTextChunk = codeStreamDiagnostics.textChunks;
+              logStreamDiagnostic("code-complete-sent", {
+                requestId,
+                provider: selectedModel.provider,
+                model: selectedModel.model,
+                textChunkNumber: codeStreamDiagnostics.textChunks,
+                codeChunksSent: codeStreamDiagnostics.codeChunksSent,
+                codeCharsSent: codeStreamDiagnostics.codeCharsSent,
+              });
               sendSse({ type: "code-complete" });
             }
           }
@@ -933,6 +1455,14 @@ Modify or extend the existing code based on the user's request.`;
         // Continue processing other chunks
       }
     }
+
+    logStreamDiagnostic("code-stream-summary", {
+      ...codeStreamDiagnostics,
+      accumulatedTextLength: accumulatedText.length,
+      codeStarted,
+      codeComplete,
+      durationMs: Date.now() - codeStreamDiagnostics.startedAt,
+    });
 
     // Parse the final accumulated JSON response
     let structuredResponse;
@@ -978,7 +1508,7 @@ Modify or extend the existing code based on the user's request.`;
           finalCode = applyExactEdits(existingCode, structuredResponse.edits, patchDiagnosticContext);
           finalEdits = structuredResponse.edits.map((edit) => ({
             oldText: edit.oldText,
-            newText: edit.newText,
+            newText: typeof edit.newText === "string" ? edit.newText : "",
           }));
         } catch (patchError) {
           if (!(patchError instanceof AppError) || patchError.errorCode !== ERROR_CODES.AI_RESPONSE_INVALID) {
@@ -1019,6 +1549,17 @@ Modify or extend the existing code based on the user's request.`;
 
     // Ensure code-complete was sent for EDIT mode (handles edge case where stream ends abruptly)
     if (!isAskMode && codeStarted && !codeComplete) {
+      codeComplete = true;
+      codeStreamDiagnostics.codeCompleteAtTextChunk = codeStreamDiagnostics.codeCompleteAtTextChunk || codeStreamDiagnostics.textChunks;
+      logStreamDiagnostic("code-complete-sent", {
+        requestId,
+        provider: selectedModel.provider,
+        model: selectedModel.model,
+        reason: "stream-ended-after-code-start",
+        textChunkNumber: codeStreamDiagnostics.textChunks,
+        codeChunksSent: codeStreamDiagnostics.codeChunksSent,
+        codeCharsSent: codeStreamDiagnostics.codeCharsSent,
+      });
       sendSse({ type: "code-complete" });
     }
 
@@ -1038,6 +1579,12 @@ Modify or extend the existing code based on the user's request.`;
         prompt,
         message: structuredResponse.message,
         projectName: structuredResponse.projectName || null,
+        modelProvider: selectedModel.provider,
+        modelPreference: selectedModel.id,
+        modelId: selectedModel.model,
+        modelLabel: selectedModel.label,
+        modelShortLabel: selectedModel.shortLabel,
+        modelThinking: selectedModel.thinking,
         editMode: finalEditMode,
         editCount: finalEdits.length,
         edits: finalEdits,
@@ -1059,6 +1606,12 @@ Modify or extend the existing code based on the user's request.`;
         prompt: version.prompt,
         message: version.message,
         projectName: version.projectName,
+        modelProvider: version.modelProvider,
+        modelPreference: version.modelPreference,
+        modelId: version.modelId,
+        modelLabel: version.modelLabel,
+        modelShortLabel: version.modelShortLabel,
+        modelThinking: version.modelThinking,
         editMode: version.editMode,
         editCount: version.editCount,
         edits: version.edits,
@@ -1081,7 +1634,7 @@ Modify or extend the existing code based on the user's request.`;
       const billableOutputTokens = candidatesTokens + thoughtsTokens;
 
       // Calculate estimated cost in cents
-      const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens, selectedModel.pricing);
+      const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens, selectedModel.pricing, cachedTokens);
 
       console.log(
         `[Token Usage] Model: ${selectedModel.model}, Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,

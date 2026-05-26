@@ -5,13 +5,14 @@
 
 const express = require("express");
 const { getEnabledModelPreferences } = require("../services/modelSettings");
+const { asyncHandler } = require("../middleware/errorHandler");
 
 const router = express.Router();
 
-router.get("/", (req, res) => {
+router.get("/", asyncHandler(async (req, res) => {
   res.json({
-    models: getEnabledModelPreferences(),
+    models: await getEnabledModelPreferences(),
   });
-});
+}));
 
 module.exports = router;

@@ -12,7 +12,8 @@ export interface ChatMessage {
 export type ChatMode = "edit" | "ask";
 
 // AI model preference sent as a symbolic value; backend maps it to provider model IDs.
-export type ModelPreference = "fast" | "balanced" | "accurate";
+export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55";
+export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh";
 
 export interface GenerateRequest {
   password: string;
@@ -33,7 +34,12 @@ export interface GenerateResponse {
   version?: CodeVersion;
 }
 
-export type ModelSettings = Record<ModelPreference, boolean>;
+export interface ModelSettingsEntry {
+  enabled: boolean;
+  thinking: ThinkingLevel;
+}
+
+export type ModelSettings = Record<ModelPreference, ModelSettingsEntry>;
 
 export interface PasswordEntry {
   _id: string;
@@ -327,6 +333,12 @@ export interface CodeVersion {
   prompt: string;
   message: string;
   projectName?: string | null;
+  modelProvider?: "gemini" | "openai" | null;
+  modelPreference?: ModelPreference | string | null;
+  modelId?: string | null;
+  modelLabel?: string | null;
+  modelShortLabel?: string | null;
+  modelThinking?: ThinkingLevel | string | null;
   editMode: "replace_all" | "patch";
   editCount: number;
   edits?: Array<{ oldText: string; newText: string }>;

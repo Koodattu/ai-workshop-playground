@@ -128,6 +128,17 @@ class ApiClient {
 
       const decoder = new TextDecoder();
       let buffer = "";
+      const streamDiagnostics = {
+        eventTypes: {} as Record<string, number>,
+        codeChunks: 0,
+        codeChars: 0,
+        firstCodeChunkChars: null as number | null,
+        startedAt: Date.now(),
+      };
+
+      const logStreamDiagnostic = (event: string, payload: Record<string, unknown>) => {
+        console.info(`[SSE Stream Diagnostic] ${event}`, payload);
+      };
 
       // Start reading the stream
       (async () => {
@@ -154,6 +165,7 @@ class ApiClient {
                 try {
                   const jsonData = line.slice(6); // Remove "data: " prefix
                   const event = JSON.parse(jsonData);
+                  streamDiagnostics.eventTypes[event.type] = (streamDiagnostics.eventTypes[event.type] || 0) + 1;
 
                   // Handle different event types
                   switch (event.type) {
@@ -161,9 +173,22 @@ class ApiClient {
                       callbacks.onChunk?.(event.chunk, event.accumulated);
                       break;
                     case "code-start":
+                      logStreamDiagnostic("code-start", {
+                        codeChunks: streamDiagnostics.codeChunks,
+                        elapsedMs: Date.now() - streamDiagnostics.startedAt,
+                      });
                       callbacks.onCodeStart?.();
                       break;
                     case "code-chunk":
+                      streamDiagnostics.codeChunks += 1;
+                      streamDiagnostics.codeChars += event.chunk?.length || 0;
+                      if (streamDiagnostics.firstCodeChunkChars === null) {
+                        streamDiagnostics.firstCodeChunkChars = event.chunk?.length || 0;
+                        logStreamDiagnostic("first-code-chunk", {
+                          chunkChars: streamDiagnostics.firstCodeChunkChars,
+                          elapsedMs: Date.now() - streamDiagnostics.startedAt,
+                        });
+                      }
                       callbacks.onCodeChunk?.(event.chunk);
                       break;
                     case "code-complete":
@@ -179,6 +204,10 @@ class ApiClient {
                       callbacks.onCodeUpdate?.(event.code);
                       break;
                     case "done":
+                      logStreamDiagnostic("summary", {
+                        ...streamDiagnostics,
+                        elapsedMs: Date.now() - streamDiagnostics.startedAt,
+                      });
                       callbacks.onDone?.({
                         message: event.message,
                         code: event.code,

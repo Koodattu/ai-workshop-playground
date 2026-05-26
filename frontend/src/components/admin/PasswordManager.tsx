@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel } from "@/types";
 
 // ============================================================================
 // TYPES
@@ -955,14 +955,34 @@ const CodeVersionsTab = ({ versions, t }: CodeVersionsTabProps) => {
 interface ModelSettingsTabProps {
   modelSettings: ModelSettings;
   isSaving: boolean;
-  onToggle: (model: ModelPreference) => Promise<void>;
+  onChange: (model: ModelPreference, nextSetting: ModelSettings[ModelPreference]) => Promise<void>;
 }
 
-const ModelSettingsTab = ({ modelSettings, isSaving, onToggle }: ModelSettingsTabProps) => {
-  const models: Array<{ id: ModelPreference; label: string; description: string }> = [
-    { id: "balanced", label: "Balanced", description: "Gemini 3 Flash" },
-    { id: "fast", label: "Fast and efficient", description: "Gemini 2.5 Flash" },
-    { id: "accurate", label: "Slow and accurate", description: "Gemini 3.5 Flash" },
+const DEFAULT_MODEL_SETTINGS: ModelSettings = {
+  fast: { enabled: true, thinking: "none" },
+  balanced: { enabled: true, thinking: "low" },
+  accurate: { enabled: true, thinking: "low" },
+  gpt54mini: { enabled: false, thinking: "none" },
+  gpt54: { enabled: false, thinking: "none" },
+  gpt55: { enabled: false, thinking: "medium" },
+};
+
+const THINKING_LABELS: Record<ThinkingLevel, string> = {
+  none: "None",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra high",
+};
+
+const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTabProps) => {
+  const models: Array<{ id: ModelPreference; label: string; description: string; thinkingOptions: ThinkingLevel[] }> = [
+    { id: "balanced", label: "Gemini Balanced", description: "Gemini 3 Flash - balanced cost and quality", thinkingOptions: ["low", "medium", "high"] },
+    { id: "fast", label: "Gemini Fast", description: "Gemini 2.5 Flash - cheapest and fastest Gemini option", thinkingOptions: ["none"] },
+    { id: "accurate", label: "Gemini Premium", description: "Gemini 3.5 Flash - highest-cost Gemini option", thinkingOptions: ["low", "medium", "high"] },
+    { id: "gpt54mini", label: "OpenAI Fast", description: "GPT-5.4 mini - cheapest and fastest OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
+    { id: "gpt54", label: "OpenAI Balanced", description: "GPT-5.4 - OpenAI tier comparable to Gemini 3", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
+    { id: "gpt55", label: "OpenAI Premium", description: "GPT-5.5 - highest-cost OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
   ];
 
   return (
@@ -974,28 +994,49 @@ const ModelSettingsTab = ({ modelSettings, isSaving, onToggle }: ModelSettingsTa
 
       <div className="grid gap-3">
         {models.map((model) => {
-          const isEnabled = modelSettings[model.id];
+          const setting = modelSettings[model.id] || DEFAULT_MODEL_SETTINGS[model.id];
+          const isEnabled = setting.enabled;
 
           return (
-            <button
+            <div
               key={model.id}
-              type="button"
-              onClick={() => onToggle(model.id)}
-              disabled={isSaving}
               className={`
-                flex items-center justify-between gap-4 p-4 rounded-xl border text-left transition-all
+                flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border text-left transition-all
                 ${isEnabled ? "bg-electric/10 border-electric/30" : "bg-carbon border-steel/50 hover:border-steel"}
-                disabled:opacity-50 disabled:cursor-not-allowed
+                ${isSaving ? "opacity-50" : ""}
               `}
             >
               <div>
                 <p className={`font-display text-sm font-semibold ${isEnabled ? "text-electric" : "text-white"}`}>{model.label}</p>
                 <p className="mt-1 text-xs font-mono text-gray-500">{model.description}</p>
               </div>
-              <span className={`px-2.5 py-1 rounded font-mono text-xs ${isEnabled ? "bg-electric/20 text-electric" : "bg-graphite text-gray-400"}`}>
-                {isEnabled ? "Enabled" : "Disabled"}
-              </span>
-            </button>
+              <div className="flex items-center gap-2">
+                <label className="sr-only" htmlFor={`thinking-${model.id}`}>
+                  Thinking level for {model.label}
+                </label>
+                <select
+                  id={`thinking-${model.id}`}
+                  value={setting.thinking}
+                  onChange={(event) => onChange(model.id, { ...setting, thinking: event.target.value as ThinkingLevel })}
+                  disabled={isSaving || model.thinkingOptions.length === 1}
+                  className="px-2.5 py-1.5 rounded bg-void border border-steel/50 text-gray-200 font-mono text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {model.thinkingOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {THINKING_LABELS[option]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => onChange(model.id, { ...setting, enabled: !isEnabled })}
+                  disabled={isSaving}
+                  className={`px-2.5 py-1 rounded font-mono text-xs transition-all disabled:cursor-not-allowed ${isEnabled ? "bg-electric/20 text-electric" : "bg-graphite text-gray-400"}`}
+                >
+                  {isEnabled ? "Enabled" : "Disabled"}
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>
@@ -1020,7 +1061,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [recentRequests, setRecentRequests] = useState<RequestLogEntry[]>([]);
   const [shareLinks, setShareLinks] = useState<ShareLinkEntry[]>([]);
   const [codeVersions, setCodeVersions] = useState<CodeVersion[]>([]);
-  const [modelSettings, setModelSettings] = useState<ModelSettings>({ fast: true, balanced: true, accurate: true });
+  const [modelSettings, setModelSettings] = useState<ModelSettings>(DEFAULT_MODEL_SETTINGS);
   const [passwordStats, setPasswordStats] = useState<Map<string, PasswordDetailedStats>>(new Map());
 
   // Single unified loading state for initial data load
@@ -1195,15 +1236,15 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
     fetchAllData();
   }, [fetchAllData]);
 
-  const handleToggleModel = useCallback(
-    async (model: ModelPreference) => {
+  const handleChangeModelSetting = useCallback(
+    async (model: ModelPreference, nextSetting: ModelSettings[ModelPreference]) => {
       const nextSettings = {
         ...modelSettings,
-        [model]: !modelSettings[model],
+        [model]: nextSetting,
       };
 
-      if (!Object.values(nextSettings).some(Boolean)) {
-        nextSettings.balanced = true;
+      if (!Object.values(nextSettings).some((setting) => setting.enabled)) {
+        nextSettings.balanced = { ...nextSettings.balanced, enabled: true };
       }
 
       setIsSavingModelSettings(true);
@@ -1316,7 +1357,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
         {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={setActivityPeriod} t={t} />}
 
-        {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} isSaving={isSavingModelSettings} onToggle={handleToggleModel} />}
+        {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} isSaving={isSavingModelSettings} onChange={handleChangeModelSetting} />}
 
         {activeTab === "shares" && <ShareLinksTab shareLinks={shareLinks} t={t} />}
 

@@ -37,6 +37,7 @@ cd ai-workshop-playground
 # 2. Set up your environment
 cp .env.example .env
 # Edit .env and add your GEMINI_API_KEY and ADMIN_SECRET
+# Add OPENAI_API_KEY too if you enable OpenAI models in the admin panel
 
 # 3. Start everything with Docker Compose
 docker-compose up --build
@@ -60,6 +61,7 @@ If you prefer to run services individually:
 - Node.js 20 or higher
 - MongoDB running locally or in Docker
 - Google Gemini API key ([get one free](https://makersuite.google.com/app/apikey))
+- Optional OpenAI API key for GPT models
 
 ```bash
 # Start MongoDB
@@ -68,7 +70,7 @@ docker run -d -p 27017:27017 mongo:latest
 # Start the backend
 cd backend
 npm install
-cp .env.example .env  # Add your GEMINI_API_KEY
+cp .env.example .env  # Add your GEMINI_API_KEY, ADMIN_SECRET, and optional OPENAI_API_KEY
 npm run dev
 
 # In another terminal, start the frontend

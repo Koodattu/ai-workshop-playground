@@ -42,6 +42,51 @@ const findStartLine = (code: string | undefined, snippet: string): number | null
   return code.slice(0, index).split("\n").length;
 };
 
+const getModelBadge = (version: CodeVersion): { provider: "gemini" | "openai"; shortLabel: string; title: string } | null => {
+  const modelId = (version.modelId || "").toLowerCase();
+  const provider = version.modelProvider || (modelId.includes("gpt") ? "openai" : modelId.includes("gemini") ? "gemini" : null);
+  if (provider !== "gemini" && provider !== "openai") return null;
+
+  let shortLabel = version.modelShortLabel || "";
+  if (!shortLabel) {
+    if (modelId.includes("5.4-mini")) shortLabel = "5.4-mini";
+    else if (modelId.includes("5.5")) shortLabel = "5.5";
+    else if (modelId.includes("5.4")) shortLabel = "5.4";
+    else if (modelId.includes("3.5")) shortLabel = "3.5";
+    else if (modelId.includes("gemini-3")) shortLabel = "3";
+    else if (modelId.includes("2.5")) shortLabel = "2.5";
+  }
+
+  if (!shortLabel) return null;
+
+  return {
+    provider,
+    shortLabel,
+    title: version.modelLabel || version.modelId || shortLabel,
+  };
+};
+
+const ModelBadge = ({ version }: { version: CodeVersion }) => {
+  const badge = getModelBadge(version);
+  if (!badge) return null;
+
+  const isOpenAI = badge.provider === "openai";
+
+  return (
+    <span
+      title={badge.title}
+      className={`shrink-0 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono leading-none ${
+        isOpenAI ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-violet-400/30 bg-violet-400/10 text-violet-200"
+      }`}
+    >
+      <span className={`grid h-3.5 place-items-center rounded-full text-[8px] font-bold ${isOpenAI ? "w-5 bg-emerald-300 text-obsidian" : "w-3.5 bg-violet-300 text-obsidian"}`}>
+        {isOpenAI ? "GPT" : "G"}
+      </span>
+      {badge.shortLabel}
+    </span>
+  );
+};
+
 const buildLineDiff = (oldText: string, newText: string, oldStartLine: number | null, newStartLine: number | null): DiffLine[] => {
   const oldLines = splitLines(oldText);
   const newLines = splitLines(newText);
@@ -256,6 +301,7 @@ export function VersionHistoryDialog({ versions, currentVersionId, isLoading, on
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <p className={`truncate text-sm font-display font-semibold ${isCurrent ? "text-electric" : "text-white"}`}>{version.projectName || t("versionHistory.untitled")}</p>
+              <ModelBadge version={version} />
               {isCurrent && <span className="shrink-0 text-[10px] font-mono text-electric uppercase">{t("versionHistory.current")}</span>}
             </div>
             <p className="mt-1 text-xs text-gray-400 line-clamp-2">{version.prompt || version.message}</p>

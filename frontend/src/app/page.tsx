@@ -27,7 +27,7 @@ const getMessages = (lang: string) => {
   return lang === "fi" ? fiMessages : enMessages;
 };
 
-const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate"] as const satisfies readonly ModelPreference[];
+const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55"] as const satisfies readonly ModelPreference[];
 
 const isModelPreference = (value: unknown): value is ModelPreference => {
   return MODEL_PREFERENCE_PRIORITY.includes(value as ModelPreference);

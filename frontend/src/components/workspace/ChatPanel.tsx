@@ -50,9 +50,12 @@ export function ChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
   const modelOptions = [
-    { value: "balanced", label: t("chat.modelBalanced") },
-    { value: "fast", label: t("chat.modelFast") },
-    { value: "accurate", label: t("chat.modelAccurate") },
+    { value: "balanced", label: t("chat.modelGemini3") },
+    { value: "fast", label: t("chat.modelGemini25") },
+    { value: "accurate", label: t("chat.modelGemini35") },
+    { value: "gpt54mini", label: t("chat.modelGpt54Mini") },
+    { value: "gpt54", label: t("chat.modelGpt54") },
+    { value: "gpt55", label: t("chat.modelGpt55") },
   ] satisfies Array<{ value: ModelPreference; label: string }>;
   const enabledModelOptions = modelOptions.filter((option) => enabledModelPreferences.includes(option.value));
   const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : modelOptions;

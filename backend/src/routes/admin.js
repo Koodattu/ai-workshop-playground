@@ -23,6 +23,7 @@ const {
   getShareLinks,
   getCodeVersions,
 } = require("../controllers/adminController");
+const { MODEL_PREFERENCE_IDS, MODEL_DEFAULTS } = require("../services/modelSettings");
 const validateRequest = require("../middleware/validateRequest");
 
 const router = express.Router();
@@ -40,10 +41,35 @@ router.get("/model-settings", getAdminModelSettings);
 router.put(
   "/model-settings",
   [
-    body("models").isObject().withMessage("Model settings are required"),
-    body("models.fast").optional().isBoolean().withMessage("fast must be a boolean"),
-    body("models.balanced").optional().isBoolean().withMessage("balanced must be a boolean"),
-    body("models.accurate").optional().isBoolean().withMessage("accurate must be a boolean"),
+    body("models")
+      .isObject()
+      .withMessage("Model settings are required")
+      .bail()
+      .custom((models) => {
+        for (const [id, setting] of Object.entries(models || {})) {
+          if (!MODEL_PREFERENCE_IDS.includes(id)) {
+            throw new Error(`Unknown model setting: ${id}`);
+          }
+
+          if (typeof setting === "boolean") {
+            continue;
+          }
+
+          if (!setting || typeof setting !== "object" || Array.isArray(setting)) {
+            throw new Error(`${id} must be a boolean or settings object`);
+          }
+
+          if ("enabled" in setting && typeof setting.enabled !== "boolean") {
+            throw new Error(`${id}.enabled must be a boolean`);
+          }
+
+          if ("thinking" in setting && !MODEL_DEFAULTS[id].thinkingOptions.includes(setting.thinking)) {
+            throw new Error(`${id}.thinking is not supported`);
+          }
+        }
+
+        return true;
+      }),
     validateRequest,
   ],
   updateAdminModelSettings,

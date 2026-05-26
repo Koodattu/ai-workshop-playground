@@ -45,6 +45,36 @@ const codeVersionSchema = new mongoose.Schema(
       maxlength: [50, "Project name cannot exceed 50 characters"],
       default: null,
     },
+    modelProvider: {
+      type: String,
+      enum: ["gemini", "openai", null],
+      default: null,
+    },
+    modelPreference: {
+      type: String,
+      default: null,
+      maxlength: [50, "Model preference cannot exceed 50 characters"],
+    },
+    modelId: {
+      type: String,
+      default: null,
+      maxlength: [100, "Model ID cannot exceed 100 characters"],
+    },
+    modelLabel: {
+      type: String,
+      default: null,
+      maxlength: [100, "Model label cannot exceed 100 characters"],
+    },
+    modelShortLabel: {
+      type: String,
+      default: null,
+      maxlength: [30, "Model short label cannot exceed 30 characters"],
+    },
+    modelThinking: {
+      type: String,
+      default: null,
+      maxlength: [30, "Model thinking setting cannot exceed 30 characters"],
+    },
     editMode: {
       type: String,
       enum: ["replace_all", "patch"],
@@ -65,7 +95,7 @@ const codeVersionSchema = new mongoose.Schema(
           },
           newText: {
             type: String,
-            required: true,
+            default: "",
             maxlength: [500000, "Patch newText cannot exceed 500KB"],
           },
         },

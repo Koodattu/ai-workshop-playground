@@ -40,13 +40,13 @@ const verifyAdminCredentials = asyncHandler(async (req, res) => {
 
 const getAdminModelSettings = asyncHandler(async (req, res) => {
   res.json({
-    models: getModelSettings(),
+    models: await getModelSettings(),
   });
 });
 
 const updateAdminModelSettings = asyncHandler(async (req, res) => {
   res.json({
-    models: updateModelSettings(req.body.models || {}),
+    models: await updateModelSettings(req.body.models || {}),
   });
 });
 
@@ -645,7 +645,9 @@ const getShareLinks = asyncHandler(async (req, res) => {
  */
 const getCodeVersions = asyncHandler(async (req, res) => {
   const versions = await CodeVersion.find()
-    .select("visitorId passwordId parentVersionId rootVersionId code prompt message projectName editMode editCount edits manualEditsSinceParent createdAt")
+    .select(
+      "visitorId passwordId parentVersionId rootVersionId code prompt message projectName modelProvider modelPreference modelId modelLabel modelShortLabel modelThinking editMode editCount edits manualEditsSinceParent createdAt",
+    )
     .sort({ createdAt: -1 })
     .limit(500)
     .lean();
@@ -662,6 +664,12 @@ const getCodeVersions = asyncHandler(async (req, res) => {
       prompt: version.prompt,
       message: version.message,
       projectName: version.projectName,
+      modelProvider: version.modelProvider || null,
+      modelPreference: version.modelPreference || null,
+      modelId: version.modelId || null,
+      modelLabel: version.modelLabel || null,
+      modelShortLabel: version.modelShortLabel || null,
+      modelThinking: version.modelThinking || null,
       editMode: version.editMode,
       editCount: version.editCount,
       edits: version.edits || [],

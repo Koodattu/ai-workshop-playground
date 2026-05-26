@@ -33,7 +33,7 @@ const withCode = (validationChain, errorCode) => {
  * - visitorId: Unique identifier for the visitor/machine
  * - prompt: The code generation prompt
  * - messageHistory: (optional) Array of previous messages for context
- * - modelPreference: (optional) "fast", "balanced", or "accurate"
+ * - modelPreference: (optional) "fast", "balanced", "accurate", "gpt54mini", "gpt54", or "gpt55"
  *
  * Response:
  * - code: Generated HTML/CSS/JS code
@@ -77,8 +77,8 @@ router.post(
     body("mode").optional().isIn(["edit", "ask"]).withMessage({ msg: "Mode must be either 'edit' or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("modelPreference")
       .optional()
-      .isIn(["fast", "balanced", "accurate"])
-      .withMessage({ msg: "Model preference must be either 'fast', 'balanced', or 'accurate'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+      .isIn(["fast", "balanced", "accurate", "gpt54mini", "gpt54", "gpt55"])
+      .withMessage({ msg: "Model preference must be one of 'fast', 'balanced', 'accurate', 'gpt54mini', 'gpt54', or 'gpt55'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     validateRequest,
   ],
   workshopGuard,

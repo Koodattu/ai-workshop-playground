@@ -78,6 +78,12 @@
     "modelFast": "Fast and efficient",
     "modelBalanced": "Balanced",
     "modelAccurate": "Slow and accurate",
+    "modelGemini25": "Gemini 2.5 Flash",
+    "modelGemini3": "Gemini 3 Flash",
+    "modelGemini35": "Gemini 3.5 Flash",
+    "modelGpt54Mini": "GPT-5.4 mini",
+    "modelGpt54": "GPT-5.4",
+    "modelGpt55": "GPT-5.5",
     "askButton": "Ask",
     "errors": {
       "VALIDATION_FAILED": "Validation failed",
