@@ -217,6 +217,7 @@ class ApiClient {
                         editMode: event.editMode,
                         version: event.version,
                         remaining: event.remaining,
+                        usage: event.usage,
                       });
                       break;
                     case "error":

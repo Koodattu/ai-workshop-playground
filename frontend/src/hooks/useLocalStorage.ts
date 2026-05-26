@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
   // State to store our value
   const [storedValue, setStoredValue] = useState<T>(initialValue);
+  const storedValueRef = useRef<T>(initialValue);
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Load from localStorage on mount
@@ -12,7 +13,9 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
     try {
       const item = window.localStorage.getItem(key);
       if (item) {
-        setStoredValue(JSON.parse(item));
+        const parsedValue = JSON.parse(item);
+        storedValueRef.current = parsedValue;
+        setStoredValue(parsedValue);
       }
     } catch (error) {
       console.warn(`Error reading localStorage key "${key}":`, error);
@@ -24,8 +27,9 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
   // persists the new value to localStorage
   const setValue = (value: T | ((prev: T) => T)) => {
     try {
-      // Allow value to be a function so we have the same API as useState
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      // Allow value to be a function so we have the same API as useState.
+      const valueToStore = value instanceof Function ? value(storedValueRef.current) : value;
+      storedValueRef.current = valueToStore;
       setStoredValue(valueToStore);
 
       if (typeof window !== "undefined") {

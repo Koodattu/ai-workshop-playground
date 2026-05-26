@@ -109,12 +109,61 @@ const MODEL_PREFERENCES = {
 };
 
 const DEFAULT_MODEL_PREFERENCE = "balanced";
+const SSE_CODE_CHUNK_FLUSH_CHARS = 1024;
+const SSE_CODE_CHUNK_FLUSH_MS = 100;
 
 const GEMINI_THINKING_LEVELS = {
   low: ThinkingLevel.LOW,
   medium: ThinkingLevel.MEDIUM,
   high: ThinkingLevel.HIGH,
 };
+
+function createCodeChunkSseBuffer(sendSse, { onFlush } = {}) {
+  let pendingChunk = "";
+  let flushTimer = null;
+
+  const clearFlushTimer = () => {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+  };
+
+  const flush = () => {
+    clearFlushTimer();
+    if (!pendingChunk) return;
+
+    const chunk = pendingChunk;
+    pendingChunk = "";
+    onFlush?.(chunk);
+    sendSse({ type: "code-chunk", chunk });
+  };
+
+  const push = (chunk) => {
+    if (!chunk) return;
+
+    pendingChunk += chunk;
+    if (pendingChunk.length >= SSE_CODE_CHUNK_FLUSH_CHARS) {
+      flush();
+      return;
+    }
+
+    if (!flushTimer) {
+      flushTimer = setTimeout(flush, SSE_CODE_CHUNK_FLUSH_MS);
+    }
+  };
+
+  const cancel = () => {
+    clearFlushTimer();
+    pendingChunk = "";
+  };
+
+  return {
+    push,
+    flush,
+    cancel,
+  };
+}
 
 /**
  * Calculate estimated cost in cents based on token usage
@@ -1158,6 +1207,7 @@ The previous patch could not be applied safely. Return the complete updated code
   let codeComplete = false;
   let detectedEditMode = null;
   const retryCodeDecoder = createJsonStringDecoder();
+  const retryCodeChunkBuffer = createCodeChunkSseBuffer(sendSse);
 
   const stream = await createModelTextStream({
     selectedModel,
@@ -1169,65 +1219,74 @@ The previous patch could not be applied safely. Return the complete updated code
     apiKeys,
   });
 
-  for await (const chunk of stream) {
-    if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
+  try {
+    for await (const chunk of stream) {
+      if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
 
-    const chunkText = chunk.text;
-    if (!chunkText) continue;
+      const chunkText = chunk.text;
+      if (!chunkText) continue;
 
-    accumulatedText += chunkText;
+      accumulatedText += chunkText;
 
-    if (!detectedEditMode) {
-      const editModeMatch = accumulatedText.match(/"editMode"\s*:\s*"(replace_all|patch)"/);
-      if (editModeMatch) {
-        detectedEditMode = editModeMatch[1];
+      if (!detectedEditMode) {
+        const editModeMatch = accumulatedText.match(/"editMode"\s*:\s*"(replace_all|patch)"/);
+        if (editModeMatch) {
+          detectedEditMode = editModeMatch[1];
+        }
       }
-    }
 
-    if (detectedEditMode === "patch") {
-      continue;
-    }
+      if (detectedEditMode === "patch") {
+        continue;
+      }
 
-    if (!codeStarted && detectedEditMode === "replace_all") {
-      const codeKeyIndex = accumulatedText.indexOf('"code"');
-      if (codeKeyIndex !== -1) {
-        const colonPos = accumulatedText.indexOf(":", codeKeyIndex + 6);
-        if (colonPos !== -1) {
-          let openQuotePos = colonPos + 1;
-          while (openQuotePos < accumulatedText.length && /\s/.test(accumulatedText[openQuotePos])) {
-            openQuotePos++;
-          }
+      if (!codeStarted && detectedEditMode === "replace_all") {
+        const codeKeyIndex = accumulatedText.indexOf('"code"');
+        if (codeKeyIndex !== -1) {
+          const colonPos = accumulatedText.indexOf(":", codeKeyIndex + 6);
+          if (colonPos !== -1) {
+            let openQuotePos = colonPos + 1;
+            while (openQuotePos < accumulatedText.length && /\s/.test(accumulatedText[openQuotePos])) {
+              openQuotePos++;
+            }
 
-          if (accumulatedText[openQuotePos] === '"') {
-            codeStarted = true;
-            sendSse({ type: "code-start" });
+            if (accumulatedText[openQuotePos] === '"') {
+              codeStarted = true;
+              sendSse({ type: "code-start" });
 
-            const initialContent = accumulatedText.substring(openQuotePos + 1);
-            if (initialContent.length > 0) {
-              const { decoded, done } = retryCodeDecoder.decode(initialContent);
-              if (decoded) {
-                sendSse({ type: "code-chunk", chunk: decoded });
-              }
-              if (done) {
-                codeComplete = true;
-                sendSse({ type: "code-complete" });
+              const initialContent = accumulatedText.substring(openQuotePos + 1);
+              if (initialContent.length > 0) {
+                const { decoded, done } = retryCodeDecoder.decode(initialContent);
+                if (decoded) {
+                  retryCodeChunkBuffer.push(decoded);
+                }
+                if (done) {
+                  retryCodeChunkBuffer.flush();
+                  codeComplete = true;
+                  sendSse({ type: "code-complete" });
+                }
               }
             }
           }
         }
-      }
-    } else if (codeStarted && !codeComplete) {
-      const { decoded, done } = retryCodeDecoder.decode(chunkText);
+      } else if (codeStarted && !codeComplete) {
+        const { decoded, done } = retryCodeDecoder.decode(chunkText);
 
-      if (decoded) {
-        sendSse({ type: "code-chunk", chunk: decoded });
-      }
+        if (decoded) {
+          retryCodeChunkBuffer.push(decoded);
+        }
 
-      if (done) {
-        codeComplete = true;
-        sendSse({ type: "code-complete" });
+        if (done) {
+          retryCodeChunkBuffer.flush();
+          codeComplete = true;
+          sendSse({ type: "code-complete" });
+        }
       }
     }
+
+    retryCodeChunkBuffer.flush();
+  } catch (error) {
+    retryCodeChunkBuffer.cancel();
+    throw error;
   }
 
   let structuredResponse;
@@ -1327,24 +1386,26 @@ const generateCode = asyncHandler(async (req, res) => {
     codeCompleteAtTextChunk: null,
     startedAt: Date.now(),
   };
+  const codeChunkSseBuffer = createCodeChunkSseBuffer(sendSse, {
+    onFlush: (chunk) => {
+      codeStreamDiagnostics.codeChunksSent += 1;
+      codeStreamDiagnostics.codeCharsSent += chunk.length;
+      if (codeStreamDiagnostics.firstCodeChunkChars === null) {
+        codeStreamDiagnostics.firstCodeChunkChars = chunk.length;
+        logStreamDiagnostic("first-code-chunk", {
+          requestId,
+          provider: selectedModel.provider,
+          model: selectedModel.model,
+          chunkChars: chunk.length,
+          textChunkNumber: codeStreamDiagnostics.textChunks,
+        });
+      }
+    },
+  });
 
   const sendCodeChunk = (decoded) => {
     if (!decoded) return;
-
-    codeStreamDiagnostics.codeChunksSent += 1;
-    codeStreamDiagnostics.codeCharsSent += decoded.length;
-    if (codeStreamDiagnostics.firstCodeChunkChars === null) {
-      codeStreamDiagnostics.firstCodeChunkChars = decoded.length;
-      logStreamDiagnostic("first-code-chunk", {
-        requestId,
-        provider: selectedModel.provider,
-        model: selectedModel.model,
-        chunkChars: decoded.length,
-        textChunkNumber: codeStreamDiagnostics.textChunks,
-      });
-    }
-
-    sendSse({ type: "code-chunk", chunk: decoded });
+    codeChunkSseBuffer.push(decoded);
   };
 
   try {
@@ -1491,6 +1552,7 @@ Modify or extend the existing code based on the user's request.`;
                     const { decoded, done } = codeDecoder.decode(initialContent);
                     sendCodeChunk(decoded);
                     if (done) {
+                      codeChunkSseBuffer.flush();
                       codeComplete = true;
                       codeStreamDiagnostics.codeCompleteAtTextChunk = codeStreamDiagnostics.textChunks;
                       logStreamDiagnostic("code-complete-sent", {
@@ -1515,6 +1577,7 @@ Modify or extend the existing code based on the user's request.`;
             sendCodeChunk(decoded);
 
             if (done) {
+              codeChunkSseBuffer.flush();
               codeComplete = true;
               codeStreamDiagnostics.codeCompleteAtTextChunk = codeStreamDiagnostics.textChunks;
               logStreamDiagnostic("code-complete-sent", {
@@ -1533,6 +1596,10 @@ Modify or extend the existing code based on the user's request.`;
         console.error("Error processing chunk:", chunkError);
         // Continue processing other chunks
       }
+    }
+
+    if (codeStarted) {
+      codeChunkSseBuffer.flush();
     }
 
     logStreamDiagnostic("code-stream-summary", {
@@ -1629,6 +1696,7 @@ Modify or extend the existing code based on the user's request.`;
 
     // Ensure code-complete was sent for EDIT mode (handles edge case where stream ends abruptly)
     if (!isAskMode && codeStarted && !codeComplete) {
+      codeChunkSseBuffer.flush();
       codeComplete = true;
       codeStreamDiagnostics.codeCompleteAtTextChunk = codeStreamDiagnostics.codeCompleteAtTextChunk || codeStreamDiagnostics.textChunks;
       logStreamDiagnostic("code-complete-sent", {
@@ -1800,6 +1868,8 @@ Modify or extend the existing code based on the user's request.`;
     sendSse(finalData);
     endSse();
   } catch (error) {
+    codeChunkSseBuffer.cancel();
+
     console.error("[AI Generation Error]", {
       requestId,
       visitorId: req.workshop?.visitorId,

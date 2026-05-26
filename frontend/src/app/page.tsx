@@ -28,6 +28,11 @@ const getMessages = (lang: string) => {
   return lang === "fi" ? fiMessages : enMessages;
 };
 
+const STREAM_EDITOR_FLUSH_CHARS = 1024;
+const STREAM_EDITOR_FLUSH_MS = 100;
+const STREAM_AUTO_FORMAT_MAX_CHARS = 60_000;
+const STREAM_AUTO_FORMAT_MAX_LINES = 1000;
+
 const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55"] as const satisfies readonly ModelPreference[];
 const MODEL_PROVIDER: Record<ModelPreference, ApiKeyProvider> = {
   balanced: "gemini",
@@ -52,6 +57,22 @@ const getAvailableModelPreferences = (models: unknown): ModelPreference[] => {
   const orderedPreferences = MODEL_PREFERENCE_PRIORITY.filter((preference) => enabledPreferences.has(preference));
 
   return orderedPreferences.length > 0 ? orderedPreferences : [...MODEL_PREFERENCE_PRIORITY];
+};
+
+const countLines = (text: string) => {
+  let lines = 1;
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) === 10) {
+      lines += 1;
+    }
+  }
+
+  return lines;
+};
+
+const shouldAutoFormatStreamedCode = (text: string) => {
+  return text.length <= STREAM_AUTO_FORMAT_MAX_CHARS && countLines(text) <= STREAM_AUTO_FORMAT_MAX_LINES;
 };
 
 export default function WorkspacePage() {
@@ -110,7 +131,6 @@ export default function WorkspacePage() {
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
-  const [streamingCode, setStreamingCode] = useState<string>("");
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
@@ -135,11 +155,11 @@ export default function WorkspacePage() {
   // Code buffer for streaming
   const codeBufferRef = useRef<string>("");
 
-  // Track how much of the buffer has been written to editor (for delta appends)
-  const lastWrittenLengthRef = useRef<number>(0);
+  // Pending streamed text waiting to be appended to Monaco.
+  const pendingEditorChunkRef = useRef<string>("");
 
-  // Throttling ref for editor updates (using requestAnimationFrame)
-  const editorUpdateFrameRef = useRef<number | null>(null);
+  // Timer for coalescing tiny provider deltas before touching Monaco.
+  const editorFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Guard to prevent template loading effect from reverting code after streaming completes
   // When streaming ends, onDone sets the final code - we don't want the template effect to override it
@@ -158,6 +178,137 @@ export default function WorkspacePage() {
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
   const hasApiKey = Boolean(apiKeySettings.gemini.trim() || apiKeySettings.openai.trim());
+
+  const clearEditorFlushTimer = useCallback(() => {
+    if (editorFlushTimerRef.current) {
+      clearTimeout(editorFlushTimerRef.current);
+      editorFlushTimerRef.current = null;
+    }
+  }, []);
+
+  const flushEditorChunks = useCallback(() => {
+    clearEditorFlushTimer();
+
+    const pendingChunk = pendingEditorChunkRef.current;
+    if (!pendingChunk) return;
+
+    const editor = monacoEditorRef.current;
+    const model = editor?.getModel?.();
+    if (!model) return;
+
+    pendingEditorChunkRef.current = "";
+
+    try {
+      const lineNumber = model.getLineCount();
+      const column = model.getLineMaxColumn(lineNumber);
+      model.applyEdits(
+        [
+          {
+            range: {
+              startLineNumber: lineNumber,
+              startColumn: column,
+              endLineNumber: lineNumber,
+              endColumn: column,
+            },
+            text: pendingChunk,
+          },
+        ],
+        false,
+      );
+    } catch (error) {
+      console.warn("Failed to append streamed code to editor:", error);
+      try {
+        model.setValue(codeBufferRef.current);
+      } catch (restoreError) {
+        console.warn("Failed to restore streamed code in editor:", restoreError);
+      }
+    }
+  }, [clearEditorFlushTimer]);
+
+  const scheduleEditorFlush = useCallback(() => {
+    if (pendingEditorChunkRef.current.length >= STREAM_EDITOR_FLUSH_CHARS) {
+      flushEditorChunks();
+      return;
+    }
+
+    if (editorFlushTimerRef.current) return;
+
+    editorFlushTimerRef.current = setTimeout(() => {
+      editorFlushTimerRef.current = null;
+      flushEditorChunks();
+    }, STREAM_EDITOR_FLUSH_MS);
+  }, [flushEditorChunks]);
+
+  const syncStreamingBufferToEditor = useCallback(() => {
+    const editor = monacoEditorRef.current;
+    const model = editor?.getModel?.();
+    if (!model) return;
+
+    const bufferedCode = codeBufferRef.current;
+    if (model.getValue() === bufferedCode) {
+      pendingEditorChunkRef.current = "";
+      clearEditorFlushTimer();
+      return;
+    }
+
+    pendingEditorChunkRef.current = "";
+    clearEditorFlushTimer();
+
+    try {
+      model.setValue(bufferedCode);
+      editor.layout?.();
+    } catch (error) {
+      console.warn("Failed to sync streamed code to editor:", error);
+    }
+  }, [clearEditorFlushTimer]);
+
+  const restoreSavedCursorPosition = useCallback(() => {
+    if (!savedCursorPositionRef.current) return;
+
+    const model = monacoEditorRef.current?.getModel?.();
+    if (!model) {
+      savedCursorPositionRef.current = null;
+      return;
+    }
+
+    const { lineNumber, column } = savedCursorPositionRef.current;
+    const newLineCount = model.getLineCount();
+
+    if (lineNumber <= newLineCount) {
+      const lineLength = model.getLineContent(lineNumber).length;
+      const safeColumn = Math.min(column, lineLength + 1);
+
+      monacoEditorRef.current?.setPosition({
+        lineNumber,
+        column: safeColumn,
+      });
+      monacoEditorRef.current?.revealLineInCenter(lineNumber);
+    }
+
+    savedCursorPositionRef.current = null;
+  }, []);
+
+  const runDeferredAutoFormat = useCallback(
+    (streamedCode: string) => {
+      if (!monacoEditorRef.current || !shouldAutoFormatStreamedCode(streamedCode)) {
+        restoreSavedCursorPosition();
+        return;
+      }
+
+      setTimeout(() => {
+        const formatAction = monacoEditorRef.current?.getAction("editor.action.formatDocument");
+        Promise.resolve(formatAction?.run())
+          .catch((error) => {
+            console.warn("Failed to auto-format streamed code:", error);
+          })
+          .finally(() => {
+            setTimeout(restoreSavedCursorPosition, 50);
+          });
+      }, 50);
+    },
+    [restoreSavedCursorPosition],
+  );
+
   const getOrCreateApiKeyAccessToken = useCallback(() => {
     if (apiKeySettings.accessToken) {
       return apiKeySettings.accessToken;
@@ -556,8 +707,9 @@ export default function WorkspacePage() {
       setIsGenerating(true);
       setIsStreaming(true);
       setStreamingMessage("");
-      setStreamingCode("");
       codeBufferRef.current = "";
+      pendingEditorChunkRef.current = "";
+      clearEditorFlushTimer();
 
       try {
         // Build message history from last 10 contextMessages
@@ -596,15 +748,10 @@ export default function WorkspacePage() {
               // Disable preview auto-refresh
               previewControlRef.current?.disableAutoRefresh();
 
-              // Clear the editor buffer and reset write tracking
+              // Clear the editor buffer and reset pending stream writes
               codeBufferRef.current = "";
-              lastWrittenLengthRef.current = 0;
-
-              // Cancel any pending animation frames from previous streaming
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
+              pendingEditorChunkRef.current = "";
+              clearEditorFlushTimer();
 
               // Mobile: Switch to editor panel to watch code stream in (if auto-switch enabled)
               if (autoSwitchEnabled) {
@@ -671,31 +818,10 @@ export default function WorkspacePage() {
               // In ASK mode, we don't modify code
               if (chatMode === "ask") return;
 
-              // Accumulate code chunks in the buffer
+              // Keep the authoritative full code outside React state while streaming.
               codeBufferRef.current += chunk;
-
-              // Cancel any pending edit frame (we'll batch multiple chunks into one frame)
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-              }
-
-              // Use requestAnimationFrame for smooth 60fps updates
-              editorUpdateFrameRef.current = requestAnimationFrame(() => {
-                // Calculate the delta: what hasn't been published to React state yet
-                // This ensures we don't lose chunks when multiple arrive within one frame
-                const fullBuffer = codeBufferRef.current;
-                const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
-
-                // Only publish if there's new content
-                if (newContent.length > 0) {
-                  // Update tracking: mark all buffer content as published
-                  lastWrittenLengthRef.current = fullBuffer.length;
-                  // Single-writer approach: React state drives editor content
-                  setCode(fullBuffer);
-                }
-                // Clear the frame ref since this frame has executed
-                editorUpdateFrameRef.current = null;
-              });
+              pendingEditorChunkRef.current += chunk;
+              scheduleEditorFlush();
             },
 
             // Step 3: Code complete
@@ -703,17 +829,8 @@ export default function WorkspacePage() {
               // In ASK mode, we don't modify code
               if (chatMode === "ask") return;
 
-              // Clear any pending animation frames
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
-
-              // Ensure any remaining buffered content is published
-              if (lastWrittenLengthRef.current < codeBufferRef.current.length) {
-                lastWrittenLengthRef.current = codeBufferRef.current.length;
-                setCode(codeBufferRef.current);
-              }
+              flushEditorChunks();
+              syncStreamingBufferToEditor();
 
               // Clean up scroll interval
               if (scrollIntervalRef.current) {
@@ -733,41 +850,10 @@ export default function WorkspacePage() {
               }
 
               // Apply final code buffer to React state (for template switching, etc.)
-              setCode(codeBufferRef.current);
+              const finalStreamedCode = codeBufferRef.current;
+              setCode(finalStreamedCode);
 
-              // Auto-format the document after streaming completes
-              if (monacoEditorRef.current) {
-                // Use setTimeout to ensure Monaco has processed the final content
-                setTimeout(() => {
-                  monacoEditorRef.current?.getAction("editor.action.formatDocument")?.run();
-
-                  // Restore cursor position after formatting completes
-                  setTimeout(() => {
-                    if (savedCursorPositionRef.current) {
-                      const model = monacoEditorRef.current?.getModel();
-                      if (model) {
-                        const { lineNumber, column } = savedCursorPositionRef.current;
-                        const newLineCount = model.getLineCount();
-
-                        // Only restore if the line still exists
-                        if (lineNumber <= newLineCount) {
-                          const lineLength = model.getLineContent(lineNumber).length;
-                          const safeColumn = Math.min(column, lineLength + 1);
-
-                          monacoEditorRef.current.setPosition({
-                            lineNumber,
-                            column: safeColumn,
-                          });
-                          monacoEditorRef.current.revealLineInCenter(lineNumber);
-                        }
-
-                        // Clear saved position
-                        savedCursorPositionRef.current = null;
-                      }
-                    }
-                  }, 50);
-                }, 50);
-              }
+              runDeferredAutoFormat(finalStreamedCode);
             },
 
             // Step 4: Message complete - show in chat
@@ -777,11 +863,7 @@ export default function WorkspacePage() {
 
             // Step 5: All done - enable preview and update
             onDone: (data) => {
-              // Clear any pending animation frames
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
+              flushEditorChunks();
 
               // Clean up scroll interval
               if (scrollIntervalRef.current) {
@@ -882,7 +964,6 @@ export default function WorkspacePage() {
 
               // Clear streaming states
               setStreamingMessage("");
-              setStreamingCode("");
               setIsStreaming(false);
 
               // Enable preview and update it (only in EDIT mode)
@@ -897,11 +978,8 @@ export default function WorkspacePage() {
               showToast(t("chat.codeGenerated"), "success");
             },
             onError: (error, remainingUsesOnError, errorCode, details) => {
-              // Clear any pending animation frames
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
+              pendingEditorChunkRef.current = "";
+              clearEditorFlushTimer();
 
               // Clean up scroll interval
               if (scrollIntervalRef.current) {
@@ -922,7 +1000,6 @@ export default function WorkspacePage() {
 
               if (chatMode === "edit") {
                 codeBufferRef.current = codeBeforeGeneration;
-                lastWrittenLengthRef.current = codeBeforeGeneration.length;
                 setCode(codeBeforeGeneration);
 
                 try {
@@ -967,7 +1044,6 @@ export default function WorkspacePage() {
 
               // Clear streaming states
               setStreamingMessage("");
-              setStreamingCode("");
               setIsStreaming(false);
             },
           },
@@ -990,6 +1066,11 @@ export default function WorkspacePage() {
       code,
       t,
       contextMessages,
+      clearEditorFlushTimer,
+      flushEditorChunks,
+      scheduleEditorFlush,
+      syncStreamingBufferToEditor,
+      runDeferredAutoFormat,
       language,
       currentTemplateId,
       isCustomTemplateId,
@@ -1010,10 +1091,8 @@ export default function WorkspacePage() {
       if (abortStreamRef.current) {
         abortStreamRef.current();
       }
-      // Clean up any pending animation frames
-      if (editorUpdateFrameRef.current) {
-        cancelAnimationFrame(editorUpdateFrameRef.current);
-      }
+      clearEditorFlushTimer();
+      pendingEditorChunkRef.current = "";
       // Clean up scroll interval
       if (scrollIntervalRef.current) {
         clearInterval(scrollIntervalRef.current);
@@ -1028,7 +1107,7 @@ export default function WorkspacePage() {
         originalSetValueRef.current = null;
       }
     };
-  }, []);
+  }, [clearEditorFlushTimer]);
 
   // Fallback: if streaming starts before editor is ready/mounted, focus once it becomes available
   useEffect(() => {
@@ -1456,6 +1535,9 @@ export default function WorkspacePage() {
                 }}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming) {
+                    syncStreamingBufferToEditor();
+                  }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
                     editor.focus();
                     shouldFocusEditorForStreamingRef.current = false;
@@ -1524,6 +1606,9 @@ export default function WorkspacePage() {
                 }}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming) {
+                    syncStreamingBufferToEditor();
+                  }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
                     editor.focus();
                     shouldFocusEditorForStreamingRef.current = false;
