@@ -37,6 +37,7 @@ const workshopAuth = asyncHandler(async (req, res, next) => {
   const remaining = Math.max(0, passwordDoc.maxUsesPerUser - currentUsage);
 
   req.workshop = {
+    authMode: "password",
     passwordId: passwordDoc._id,
     visitorId,
     remaining,

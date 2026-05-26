@@ -134,8 +134,53 @@ function calculateCostInCents(promptTokens, billableOutputTokens, pricing, cache
   return totalCostDollars * 100; // Convert to cents
 }
 
-async function getModelPreference(modelPreference) {
-  const allowedPreference = await getAllowedModelPreference(modelPreference, DEFAULT_MODEL_PREFERENCE);
+function countLines(text) {
+  if (!text) return 0;
+  return normalizeLineEndings(text).split("\n").length;
+}
+
+function getCodeChangeSummary({ mode, hasExistingCode, existingCode, finalCode, finalEdits }) {
+  if (mode === "ask") {
+    return { addedLines: 0, removedLines: 0 };
+  }
+
+  if (Array.isArray(finalEdits) && finalEdits.length > 0) {
+    return finalEdits.reduce(
+      (summary, edit) => ({
+        addedLines: summary.addedLines + countLines(edit.newText),
+        removedLines: summary.removedLines + countLines(edit.oldText),
+      }),
+      { addedLines: 0, removedLines: 0 },
+    );
+  }
+
+  return {
+    addedLines: countLines(finalCode),
+    removedLines: hasExistingCode ? countLines(existingCode) : 0,
+  };
+}
+
+function redactSecretLikeText(value) {
+  if (typeof value !== "string") return value;
+  return value.replace(/sk-[A-Za-z0-9_-]{8,}/g, "[redacted]").replace(/AIza[0-9A-Za-z_-]{8,}/g, "[redacted]");
+}
+
+function sanitizeErrorForLog(error) {
+  return {
+    name: error?.name,
+    message: redactSecretLikeText(error?.message),
+    status: error?.status || error?.statusCode,
+    code: redactSecretLikeText(error?.code || error?.errorCode),
+  };
+}
+
+async function getModelPreference(modelPreference, options = {}) {
+  const { restrictToEnabled = true } = options;
+  const allowedPreference = restrictToEnabled
+    ? await getAllowedModelPreference(modelPreference, DEFAULT_MODEL_PREFERENCE)
+    : MODEL_PREFERENCES[modelPreference]
+      ? modelPreference
+      : DEFAULT_MODEL_PREFERENCE;
   const selectedModel = MODEL_PREFERENCES[allowedPreference] || MODEL_PREFERENCES[DEFAULT_MODEL_PREFERENCE];
   const setting = await getModelSetting(allowedPreference);
 
@@ -603,7 +648,22 @@ function applyExactEdits(originalCode, edits, diagnosticContext = {}) {
   return patchedCode;
 }
 
-async function resolveParentVersion(parentVersionId, visitorId) {
+function getVersionOwnerFilter(workshop) {
+  if (workshop?.authMode === "api-key") {
+    return {
+      visitorId: workshop.visitorId,
+      accessMode: "api-key",
+      ownerTokenHash: workshop.ownerTokenHash,
+    };
+  }
+
+  return {
+    visitorId: workshop.visitorId,
+    accessMode: { $ne: "api-key" },
+  };
+}
+
+async function resolveParentVersion(parentVersionId, workshop) {
   if (!parentVersionId) return null;
 
   if (!mongoose.Types.ObjectId.isValid(parentVersionId)) {
@@ -612,7 +672,7 @@ async function resolveParentVersion(parentVersionId, visitorId) {
 
   const parentVersion = await CodeVersion.findOne({
     _id: parentVersionId,
-    visitorId,
+    ...getVersionOwnerFilter(workshop),
   });
 
   if (!parentVersion) {
@@ -933,8 +993,9 @@ function logStreamDiagnostic(event, payload) {
   console.info(`[AI Stream Diagnostic] ${event}`, JSON.stringify(payload));
 }
 
-async function createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase }) {
-  const stream = await genAI.models.generateContentStream({
+async function createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey }) {
+  const client = apiKey ? new GoogleGenAI({ apiKey }) : genAI;
+  const stream = await client.models.generateContentStream({
     model: selectedModel.model,
     contents: userPrompt,
     config: generationConfig,
@@ -977,8 +1038,10 @@ async function createGeminiStream({ selectedModel, userPrompt, generationConfig,
   })();
 }
 
-async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase }) {
-  if (!openAI) {
+async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey }) {
+  const client = apiKey ? new OpenAI({ apiKey }) : openAI;
+
+  if (!client) {
     throw new AppError("OpenAI API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
   }
 
@@ -992,7 +1055,7 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
     store: false,
   };
 
-  const stream = await openAI.responses.create(request);
+  const stream = await client.responses.create(request);
 
   return (async function* () {
     const diagnostics = {
@@ -1047,15 +1110,23 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
   })();
 }
 
-async function createModelTextStream({ selectedModel, generationConfig, userPrompt, isAskMode, requestId, phase = "primary" }) {
+async function createModelTextStream({ selectedModel, generationConfig, userPrompt, isAskMode, requestId, phase = "primary", apiKeys }) {
   if (selectedModel.provider === "openai") {
-    return createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction: generationConfig?.systemInstruction, requestId, phase });
+    return createOpenAIStream({
+      selectedModel,
+      userPrompt,
+      isAskMode,
+      systemInstruction: generationConfig?.systemInstruction,
+      requestId,
+      phase,
+      apiKey: apiKeys?.openai,
+    });
   }
 
-  return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase });
+  return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey: apiKeys?.gemini });
 }
 
-async function generateFullRewriteAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext }) {
+async function generateFullRewriteAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext, apiKeys }) {
   const retryConfig = {
     ...generationConfig,
     systemInstruction: `${SYSTEM_INSTRUCTION}
@@ -1095,6 +1166,7 @@ The previous patch could not be applied safely. Return the complete updated code
     isAskMode: false,
     requestId,
     phase: "patch-retry",
+    apiKeys,
   });
 
   for await (const chunk of stream) {
@@ -1189,18 +1261,24 @@ const generateCode = asyncHandler(async (req, res) => {
   const isAskMode = mode === "ask";
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
   const allowCodeStreaming = !isAskMode;
-  const selectedModel = await getModelPreference(modelPreference);
+  const isApiKeyMode = req.workshop?.authMode === "api-key";
+  const apiKeys = isApiKeyMode ? req.apiKeyAuth?.apiKeys || {} : null;
+  const selectedModel = await getModelPreference(modelPreference, { restrictToEnabled: !isApiKeyMode });
   const requestId = crypto.randomUUID();
 
   if (!prompt) {
     throw new AppError("Prompt is required", 400, ERROR_CODES.PROMPT_REQUIRED);
   }
 
-  if (selectedModel.provider === "gemini" && !config.geminiApiKey) {
+  if (isApiKeyMode && !apiKeys?.[selectedModel.provider]) {
+    throw new AppError(`${selectedModel.label} requires a ${selectedModel.provider === "openai" ? "OpenAI" : "Gemini"} API key`, 400, ERROR_CODES.API_KEY_REQUIRED);
+  }
+
+  if (!isApiKeyMode && selectedModel.provider === "gemini" && !config.geminiApiKey) {
     throw new AppError("Gemini API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
   }
 
-  if (selectedModel.provider === "openai" && !config.openaiApiKey) {
+  if (!isApiKeyMode && selectedModel.provider === "openai" && !config.openaiApiKey) {
     throw new AppError("OpenAI API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
   }
 
@@ -1322,6 +1400,7 @@ Modify or extend the existing code based on the user's request.`;
       isAskMode,
       requestId,
       phase: "primary",
+      apiKeys,
     });
 
     // Process the stream
@@ -1525,6 +1604,7 @@ Modify or extend the existing code based on the user's request.`;
               ...patchDiagnosticContext,
               patchError: patchError.message,
             },
+            apiKeys,
           });
 
           latestUsageMetadata = combineUsageMetadata(latestUsageMetadata, retryResult.usageMetadata);
@@ -1568,11 +1648,13 @@ Modify or extend the existing code based on the user's request.`;
     sendSse({ type: "message-complete", message: finalMessage });
 
     if (!isAskMode && req.workshop?.visitorId) {
-      const parentVersion = await resolveParentVersion(parentVersionId, req.workshop.visitorId);
+      const parentVersion = await resolveParentVersion(parentVersionId, req.workshop);
       const manualEditsSinceParent = Boolean(parentVersion && existingCode && parentVersion.code !== existingCode);
       const version = await CodeVersion.create({
         visitorId: req.workshop.visitorId,
         passwordId: req.workshop.passwordId || null,
+        accessMode: isApiKeyMode ? "api-key" : "password",
+        ownerTokenHash: isApiKeyMode ? req.workshop.ownerTokenHash : null,
         parentVersionId: parentVersion?._id || null,
         rootVersionId: parentVersion?.rootVersionId || parentVersion?._id || null,
         code: finalCode,
@@ -1600,6 +1682,7 @@ Modify or extend the existing code based on the user's request.`;
         id: version._id.toString(),
         visitorId: version.visitorId,
         passwordId: version.passwordId?.toString() || null,
+        accessMode: version.accessMode,
         parentVersionId: version.parentVersionId?.toString() || null,
         rootVersionId: version.rootVersionId?.toString() || null,
         code: version.code,
@@ -1621,6 +1704,8 @@ Modify or extend the existing code based on the user's request.`;
       };
     }
 
+    let usageSummary = null;
+
     // Get token usage metadata from the stream
     try {
       const usageMetadata = latestUsageMetadata || {};
@@ -1635,6 +1720,31 @@ Modify or extend the existing code based on the user's request.`;
 
       // Calculate estimated cost in cents
       const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens, selectedModel.pricing, cachedTokens);
+      const codeChange = getCodeChangeSummary({
+        mode,
+        hasExistingCode,
+        existingCode,
+        finalCode,
+        finalEdits,
+      });
+
+      usageSummary = {
+        provider: selectedModel.provider,
+        modelPreference: selectedModel.id,
+        modelId: selectedModel.model,
+        modelLabel: selectedModel.label,
+        modelThinking: selectedModel.thinking,
+        mode,
+        promptTokens,
+        candidatesTokens,
+        thoughtsTokens,
+        cachedTokens,
+        totalTokens,
+        estimatedCost,
+        addedLines: codeChange.addedLines,
+        removedLines: codeChange.removedLines,
+        createdAt: new Date().toISOString(),
+      };
 
       console.log(
         `[Token Usage] Model: ${selectedModel.model}, Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,
@@ -1684,6 +1794,7 @@ Modify or extend the existing code based on the user's request.`;
       editMode: isAskMode ? undefined : finalEditMode,
       version: savedVersion,
       remaining: req.workshop?.remaining,
+      usage: usageSummary,
     };
 
     sendSse(finalData);
@@ -1695,7 +1806,8 @@ Modify or extend the existing code based on the user's request.`;
       parentVersionId: parentVersionId || null,
       model: selectedModel.model,
       mode,
-      error,
+      authMode: req.workshop?.authMode || "password",
+      error: sanitizeErrorForLog(error),
     });
 
     // Handle specific Gemini API errors
@@ -1703,8 +1815,8 @@ Modify or extend the existing code based on the user's request.`;
     let statusCode = 500;
     let errorCode = ERROR_CODES.AI_GENERATION_FAILED;
 
-    if (error.message?.includes("API key")) {
-      errorMessage = "Invalid API configuration";
+    if (error.message?.includes("API key") || error.status === 401 || error.status === 403) {
+      errorMessage = isApiKeyMode ? "Invalid API key for selected provider" : "Invalid API configuration";
       errorCode = ERROR_CODES.API_KEY_INVALID;
     } else if (error.message?.includes("quota")) {
       errorMessage = "API quota exceeded. Please try again later.";

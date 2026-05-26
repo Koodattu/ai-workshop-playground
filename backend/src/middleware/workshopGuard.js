@@ -51,6 +51,7 @@ const workshopGuard = asyncHandler(async (req, res, next) => {
 
   // Attach password info to request for downstream use
   req.workshop = {
+    authMode: "password",
     passwordId: passwordDoc._id,
     visitorId,
     remaining,

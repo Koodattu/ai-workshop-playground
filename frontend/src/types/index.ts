@@ -14,9 +14,42 @@ export type ChatMode = "edit" | "ask";
 // AI model preference sent as a symbolic value; backend maps it to provider model IDs.
 export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55";
 export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh";
+export type AuthMode = "password" | "api-key";
+export type ApiKeyProvider = "gemini" | "openai";
+
+export interface UserApiKeySettings {
+  gemini: string;
+  openai: string;
+  accessToken: string;
+}
+
+export interface GenerationUsageSummary {
+  provider: ApiKeyProvider;
+  modelPreference: ModelPreference | string;
+  modelId: string;
+  modelLabel: string;
+  modelThinking?: ThinkingLevel | string | null;
+  mode: ChatMode;
+  promptTokens: number;
+  candidatesTokens: number;
+  thoughtsTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  addedLines: number;
+  removedLines: number;
+  createdAt: string;
+}
+
+export interface ApiKeyUsageEntry extends GenerationUsageSummary {
+  id: string;
+}
 
 export interface GenerateRequest {
-  password: string;
+  authMode?: AuthMode;
+  password?: string;
+  apiKeys?: Partial<Record<ApiKeyProvider, string>>;
+  apiKeyAccessToken?: string;
   visitorId: string;
   prompt: string;
   existingCode?: string;
@@ -32,6 +65,15 @@ export interface GenerateResponse {
   projectName?: string;
   editMode?: "replace_all" | "patch";
   version?: CodeVersion;
+  usage?: GenerationUsageSummary | null;
+}
+
+export interface VersionListRequest {
+  authMode?: AuthMode;
+  password?: string;
+  visitorId: string;
+  apiKeyAccessToken?: string;
+  includeCode?: boolean;
 }
 
 export interface ModelSettingsEntry {
@@ -106,7 +148,8 @@ export interface StreamDoneEvent {
   projectName?: string;
   editMode?: "replace_all" | "patch";
   version?: CodeVersion;
-  remaining: number;
+  remaining?: number;
+  usage?: GenerationUsageSummary | null;
 }
 
 export interface StreamErrorEvent {
@@ -146,7 +189,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; projectName?: string; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining: number }) => void;
+  onDone?: (data: { message: string; code: string; projectName?: string; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
@@ -325,6 +368,7 @@ export interface CodeVersion {
   _id?: string;
   visitorId: string;
   passwordId?: string | null;
+  accessMode?: AuthMode | string | null;
   parentVersionId?: string | null;
   rootVersionId?: string | null;
   code: string;

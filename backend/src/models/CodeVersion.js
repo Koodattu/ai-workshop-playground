@@ -13,6 +13,19 @@ const codeVersionSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    accessMode: {
+      type: String,
+      enum: ["password", "api-key"],
+      default: "password",
+      index: true,
+    },
+    ownerTokenHash: {
+      type: String,
+      default: null,
+      maxlength: [128, "Owner token hash cannot exceed 128 characters"],
+      index: true,
+      select: false,
+    },
     parentVersionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CodeVersion",
@@ -113,6 +126,7 @@ const codeVersionSchema = new mongoose.Schema(
 );
 
 codeVersionSchema.index({ visitorId: 1, createdAt: -1 });
+codeVersionSchema.index({ visitorId: 1, accessMode: 1, ownerTokenHash: 1, createdAt: -1 });
 codeVersionSchema.index({ rootVersionId: 1, createdAt: 1 });
 
 codeVersionSchema.set("toJSON", {

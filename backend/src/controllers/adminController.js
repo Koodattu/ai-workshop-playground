@@ -644,7 +644,7 @@ const getShareLinks = asyncHandler(async (req, res) => {
  * Get all generated code versions
  */
 const getCodeVersions = asyncHandler(async (req, res) => {
-  const versions = await CodeVersion.find()
+  const versions = await CodeVersion.find({ accessMode: { $ne: "api-key" } })
     .select(
       "visitorId passwordId parentVersionId rootVersionId code prompt message projectName modelProvider modelPreference modelId modelLabel modelShortLabel modelThinking editMode editCount edits manualEditsSinceParent createdAt",
     )

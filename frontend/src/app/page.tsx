@@ -8,6 +8,7 @@ import { EditorPanel } from "@/components/workspace/EditorPanel";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
 import { PasswordModal } from "@/components/workspace/PasswordModal";
 import { VersionHistoryDialog } from "@/components/workspace/VersionHistoryDialog";
+import { ApiKeyUsageDialog } from "@/components/workspace/ApiKeyUsageDialog";
 import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -18,7 +19,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage } from "@/lib/errorTranslation";
-import type { ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference, CodeVersion } from "@/types";
+import type { ApiKeyProvider, ApiKeyUsageEntry, AuthMode, ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -28,6 +29,19 @@ const getMessages = (lang: string) => {
 };
 
 const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55"] as const satisfies readonly ModelPreference[];
+const MODEL_PROVIDER: Record<ModelPreference, ApiKeyProvider> = {
+  balanced: "gemini",
+  fast: "gemini",
+  accurate: "gemini",
+  gpt54mini: "openai",
+  gpt54: "openai",
+  gpt55: "openai",
+};
+const EMPTY_API_KEYS: UserApiKeySettings = {
+  gemini: "",
+  openai: "",
+  accessToken: "",
+};
 
 const isModelPreference = (value: unknown): value is ModelPreference => {
   return MODEL_PREFERENCE_PRIORITY.includes(value as ModelPreference);
@@ -64,12 +78,17 @@ export default function WorkspacePage() {
   const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
+  const [authMode, setAuthMode] = useLocalStorage<AuthMode>("workshop-auth-mode", "password");
+  const [apiKeySettings, setApiKeySettings] = useLocalStorage<UserApiKeySettings>("workshop-api-keys", EMPTY_API_KEYS);
+  const [apiKeyUsage, setApiKeyUsage] = useLocalStorage<ApiKeyUsageEntry[]>("api-key-usage", []);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [authError, setAuthError] = useState<string | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [authDialogInitialMode, setAuthDialogInitialMode] = useState<AuthMode>("password");
+  const [isApiKeyUsageOpen, setIsApiKeyUsageOpen] = useState(false);
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
@@ -138,14 +157,53 @@ export default function WorkspacePage() {
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
+  const hasApiKey = Boolean(apiKeySettings.gemini.trim() || apiKeySettings.openai.trim());
+  const getOrCreateApiKeyAccessToken = useCallback(() => {
+    if (apiKeySettings.accessToken) {
+      return apiKeySettings.accessToken;
+    }
+
+    const accessToken = crypto.randomUUID();
+    setApiKeySettings((prev) => ({
+      ...prev,
+      accessToken,
+    }));
+    return accessToken;
+  }, [apiKeySettings.accessToken, setApiKeySettings]);
+
+  const getVersionListRequest = useCallback(
+    (includeCode = true): VersionListRequest | null => {
+      if (!visitorId) return null;
+
+      if (authMode === "api-key") {
+        if (!hasApiKey) return null;
+        return {
+          authMode: "api-key",
+          visitorId,
+          apiKeyAccessToken: getOrCreateApiKeyAccessToken(),
+          includeCode,
+        };
+      }
+
+      if (!password) return null;
+      return {
+        authMode: "password",
+        password,
+        visitorId,
+        includeCode,
+      };
+    },
+    [authMode, getOrCreateApiKeyAccessToken, hasApiKey, password, visitorId],
+  );
 
   const fetchVersions = useCallback(
     async (options?: { loadLatest?: boolean }) => {
-      if (!visitorId || !password) return;
+      const request = getVersionListRequest(true);
+      if (!request) return;
 
       setIsLoadingVersions(true);
       try {
-        const fetchedVersions = await api.getMyCodeVersions(password, visitorId, true);
+        const fetchedVersions = await api.getMyCodeVersions(request);
         setVersions(fetchedVersions);
 
         if (options?.loadLatest && fetchedVersions.length > 0) {
@@ -161,7 +219,7 @@ export default function WorkspacePage() {
         setIsLoadingVersions(false);
       }
     },
-    [password, visitorId],
+    [getVersionListRequest],
   );
 
   const currentProjectVersions = useMemo(() => {
@@ -173,6 +231,14 @@ export default function WorkspacePage() {
     const rootVersionId = currentVersion.rootVersionId || currentVersion.id;
     return versions.filter((version) => (version.rootVersionId || version.id) === rootVersionId);
   }, [currentVersionId, versions]);
+
+  const availableModelPreferences = useMemo(() => {
+    if (authMode !== "api-key") {
+      return getAvailableModelPreferences(enabledModelPreferences);
+    }
+
+    return MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(apiKeySettings[MODEL_PROVIDER[preference]].trim()));
+  }, [apiKeySettings, authMode, enabledModelPreferences]);
 
   useEffect(() => {
     let isMounted = true;
@@ -198,12 +264,10 @@ export default function WorkspacePage() {
   }, []);
 
   useEffect(() => {
-    const availableModels = getAvailableModelPreferences(enabledModelPreferences);
-
-    if (!availableModels.includes(modelPreference)) {
-      setModelPreference(availableModels[0]);
+    if (availableModelPreferences.length > 0 && !availableModelPreferences.includes(modelPreference)) {
+      setModelPreference(availableModelPreferences[0]);
     }
-  }, [enabledModelPreferences, modelPreference, setModelPreference]);
+  }, [availableModelPreferences, modelPreference, setModelPreference]);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -341,13 +405,19 @@ export default function WorkspacePage() {
         const result = await api.validatePassword(enteredPassword, visitorId);
 
         if (result.valid) {
+          setAuthMode("password");
           setPassword(enteredPassword);
           setIsAuthenticated(true);
           setIsPasswordModalOpen(false);
           // Set remaining uses from validation response
           setRemainingUses(result.remainingUses);
           try {
-            const fetchedVersions = await api.getMyCodeVersions(enteredPassword, visitorId, true);
+            const fetchedVersions = await api.getMyCodeVersions({
+              authMode: "password",
+              password: enteredPassword,
+              visitorId,
+              includeCode: true,
+            });
             setVersions(fetchedVersions);
             if (fetchedVersions.length > 0) {
               const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
@@ -391,22 +461,32 @@ export default function WorkspacePage() {
         isAuthenticatingRef.current = false;
       }
     },
-    [visitorId, setPassword, showToast, t],
+    [setAuthMode, setPassword, showToast, t, visitorId],
   );
 
   // Auto-validate password on page load (only once)
   useEffect(() => {
-    if (password && visitorId && !isAuthenticated && !hasAttemptedAutoValidationRef.current) {
+    if (authMode === "password" && password && visitorId && !isAuthenticated && !hasAttemptedAutoValidationRef.current) {
       hasAttemptedAutoValidationRef.current = true;
       handleAuthenticate(password);
     }
-  }, [password, visitorId, isAuthenticated, handleAuthenticate]);
+  }, [authMode, password, visitorId, isAuthenticated, handleAuthenticate]);
+
+  useEffect(() => {
+    if (authMode !== "api-key" || !visitorId || !hasApiKey || isAuthenticated) return;
+
+    setIsAuthenticated(true);
+    setRemainingUses(undefined);
+    setCurrentVersionId(null);
+    fetchVersions({ loadLatest: true });
+  }, [authMode, fetchVersions, hasApiKey, isAuthenticated, visitorId]);
 
   // Open password modal automatically if ?p= parameter is present in URL
   useEffect(() => {
     const urlPassword = searchParams.get("p");
     if (urlPassword) {
       // Open the password modal with prefilled password
+      setAuthDialogInitialMode("password");
       setIsPasswordModalOpen(true);
 
       // Remove the ?p= parameter from the URL
@@ -443,7 +523,25 @@ export default function WorkspacePage() {
 
   const handleSendMessage = useCallback(
     async (prompt: string) => {
-      if (!visitorId || !password) return;
+      if (!visitorId || !isAuthenticated) return;
+
+      const authPayload =
+        authMode === "api-key"
+          ? {
+              authMode: "api-key" as const,
+              apiKeys: {
+                gemini: apiKeySettings.gemini.trim(),
+                openai: apiKeySettings.openai.trim(),
+              },
+              apiKeyAccessToken: getOrCreateApiKeyAccessToken(),
+            }
+          : {
+              authMode: "password" as const,
+              password,
+            };
+
+      if (authMode === "password" && !password) return;
+      if (authMode === "api-key" && !apiKeySettings.gemini.trim() && !apiKeySettings.openai.trim()) return;
 
       const codeBeforeGeneration = code;
 
@@ -471,7 +569,7 @@ export default function WorkspacePage() {
         // Use streaming API with new event handlers
         const abort = await api.generateCodeStream(
           {
-            password,
+            ...authPayload,
             visitorId,
             prompt,
             existingCode: code,
@@ -756,7 +854,19 @@ export default function WorkspacePage() {
                   });
                 }
               }
-              setRemainingUses(data.remaining);
+              if (authMode === "password") {
+                setRemainingUses(data.remaining);
+              } else if (data.usage) {
+                setApiKeyUsage((prev) =>
+                  [
+                    {
+                      id: crypto.randomUUID(),
+                      ...data.usage!,
+                    },
+                    ...prev,
+                  ].slice(0, 500),
+                );
+              }
 
               // Add assistant message to chat history
               const assistantMessage: ChatMessage = {
@@ -872,6 +982,10 @@ export default function WorkspacePage() {
     [
       visitorId,
       password,
+      isAuthenticated,
+      authMode,
+      apiKeySettings,
+      getOrCreateApiKeyAccessToken,
       showToast,
       code,
       t,
@@ -885,6 +999,7 @@ export default function WorkspacePage() {
       modelPreference,
       currentVersionId,
       autoSwitchEnabled,
+      setApiKeyUsage,
       setSavedTemplateId,
     ],
   );
@@ -1113,6 +1228,84 @@ export default function WorkspacePage() {
     showToast(t("chat.clearChat"), "success");
   }, [showToast, t]);
 
+  const handleSaveApiKeys = useCallback(
+    async (nextApiKeys: UserApiKeySettings) => {
+      const accessToken = nextApiKeys.accessToken || apiKeySettings.accessToken || crypto.randomUUID();
+      const savedApiKeys = {
+        gemini: nextApiKeys.gemini.trim(),
+        openai: nextApiKeys.openai.trim(),
+        accessToken,
+      };
+
+      setApiKeySettings(savedApiKeys);
+      setAuthMode("api-key");
+      setIsAuthenticated(true);
+      setIsPasswordModalOpen(false);
+      setAuthError(undefined);
+      setRemainingUses(undefined);
+      setVersions([]);
+      setCurrentVersionId(null);
+      setContextMessages([]);
+
+      const availableModels = MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(savedApiKeys[MODEL_PROVIDER[preference]]));
+      if (availableModels.length > 0 && !availableModels.includes(modelPreference)) {
+        setModelPreference(availableModels[0]);
+      }
+
+      if (visitorId) {
+        try {
+          const fetchedVersions = await api.getMyCodeVersions({
+            authMode: "api-key",
+            visitorId,
+            apiKeyAccessToken: accessToken,
+            includeCode: true,
+          });
+          setVersions(fetchedVersions);
+          if (fetchedVersions.length > 0) {
+            const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+            setCode(latest.code);
+            setCurrentVersionId(latest.id);
+            originalCodeSnapshotRef.current = latest.code;
+            previewControlRef.current?.forceRefresh(latest.code);
+          }
+        } catch (versionError) {
+          console.warn("Failed to load API key code versions:", versionError);
+        }
+      }
+
+      showToast(t("apiKeys.saved"), "success");
+    },
+    [apiKeySettings.accessToken, modelPreference, setApiKeySettings, setAuthMode, setModelPreference, showToast, t, visitorId],
+  );
+
+  const handleTestApiKey = useCallback(
+    async (provider: ApiKeyProvider, apiKey: string) => {
+      try {
+        const isValid = await api.testApiKey(provider, apiKey.trim());
+        showToast(isValid ? t("apiKeys.testSuccess") : t("apiKeys.testFailed"), isValid ? "success" : "error");
+        return isValid;
+      } catch (error) {
+        showToast(t("apiKeys.testFailed"), "error");
+        throw error;
+      }
+    },
+    [showToast, t],
+  );
+
+  const handleLogout = useCallback(() => {
+    setIsAuthenticated(false);
+    if (authMode === "password") {
+      setPassword("");
+    } else {
+      setAuthMode("password");
+    }
+    setChatHistory([]);
+    setContextMessages([]);
+    setRemainingUses(undefined);
+    setVersions([]);
+    setCurrentVersionId(null);
+  }, [authMode, setAuthMode, setPassword]);
+
   // Get the current template's projectName for sharing
   const getCurrentProjectName = useCallback((): string | undefined => {
     // Check if current template is a custom template
@@ -1153,6 +1346,13 @@ export default function WorkspacePage() {
   // Handle opening the password modal
   const handleOpenPasswordModal = useCallback(() => {
     setAuthError(undefined);
+    setAuthDialogInitialMode("password");
+    setIsPasswordModalOpen(true);
+  }, []);
+
+  const handleOpenApiKeySettings = useCallback(() => {
+    setAuthError(undefined);
+    setAuthDialogInitialMode("api-key");
     setIsPasswordModalOpen(true);
   }, []);
 
@@ -1186,15 +1386,7 @@ export default function WorkspacePage() {
               <>
                 {/* Mobile: Icon-only logout button */}
                 <button
-                  onClick={() => {
-                    setIsAuthenticated(false);
-                    setPassword("");
-                    setChatHistory([]);
-                    setContextMessages([]);
-                    setRemainingUses(undefined);
-                    setVersions([]);
-                    setCurrentVersionId(null);
-                  }}
+                  onClick={handleLogout}
                   className="md:hidden p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
                   title={t("common.logout")}
                 >
@@ -1206,15 +1398,7 @@ export default function WorkspacePage() {
                 </button>
                 {/* Desktop: Text logout button */}
                 <button
-                  onClick={() => {
-                    setIsAuthenticated(false);
-                    setPassword("");
-                    setChatHistory([]);
-                    setContextMessages([]);
-                    setRemainingUses(undefined);
-                    setVersions([]);
-                    setCurrentVersionId(null);
-                  }}
+                  onClick={handleLogout}
                   className="hidden md:inline text-xs font-mono text-gray-400 hover:text-white transition-colors"
                 >
                   {t("common.logout")}
@@ -1233,10 +1417,12 @@ export default function WorkspacePage() {
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
                 isLoading={isStreaming}
-                remainingUses={remainingUses}
+                remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
                 onClearMessages={handleClearMessages}
+                onOpenSettings={handleOpenApiKeySettings}
+                onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
                 autoSwitchEnabled={autoSwitchEnabled}
                 onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
@@ -1245,7 +1431,7 @@ export default function WorkspacePage() {
                 onModeChange={setChatMode}
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
-                enabledModelPreferences={enabledModelPreferences}
+                enabledModelPreferences={availableModelPreferences}
                 onRetryMessage={handleSendMessage}
               />
             </Panel>
@@ -1303,10 +1489,12 @@ export default function WorkspacePage() {
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
                 isLoading={isStreaming}
-                remainingUses={remainingUses}
+                remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
                 onClearMessages={handleClearMessages}
+                onOpenSettings={handleOpenApiKeySettings}
+                onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
                 autoSwitchEnabled={autoSwitchEnabled}
                 onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
@@ -1315,7 +1503,7 @@ export default function WorkspacePage() {
                 onModeChange={setChatMode}
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
-                enabledModelPreferences={enabledModelPreferences}
+                enabledModelPreferences={availableModelPreferences}
                 onRetryMessage={handleSendMessage}
               />
             )}
@@ -1413,9 +1601,15 @@ export default function WorkspacePage() {
           isValidating={isValidating}
           error={authError}
           initialPassword={urlPassword || undefined}
+          initialMode={authDialogInitialMode}
+          apiKeys={apiKeySettings}
+          onSaveApiKeys={handleSaveApiKeys}
+          onTestApiKey={handleTestApiKey}
           onClose={handleClosePasswordModal}
         />
       )}
+
+      {isApiKeyUsageOpen && <ApiKeyUsageDialog entries={apiKeyUsage} onClose={() => setIsApiKeyUsageOpen(false)} onClear={() => setApiKeyUsage([])} />}
 
       {isVersionHistoryOpen && (
         <VersionHistoryDialog

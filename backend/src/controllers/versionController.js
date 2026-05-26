@@ -7,6 +7,7 @@ const mapVersion = (version, includeCode = false) => {
     id: version._id.toString(),
     visitorId: version.visitorId,
     passwordId: version.passwordId?.toString() || null,
+    accessMode: version.accessMode || "password",
     parentVersionId: version.parentVersionId?.toString() || null,
     rootVersionId: version.rootVersionId?.toString() || null,
     prompt: version.prompt,
@@ -36,9 +37,24 @@ const mapVersion = (version, includeCode = false) => {
   return data;
 };
 
+const getMyVersionFilter = (workshop) => {
+  if (workshop?.authMode === "api-key") {
+    return {
+      visitorId: workshop.visitorId,
+      accessMode: "api-key",
+      ownerTokenHash: workshop.ownerTokenHash,
+    };
+  }
+
+  return {
+    visitorId: workshop.visitorId,
+    accessMode: { $ne: "api-key" },
+  };
+};
+
 const listMyVersions = asyncHandler(async (req, res) => {
   const includeCode = req.body.includeCode !== false;
-  const versions = await CodeVersion.find({ visitorId: req.workshop.visitorId }).sort({ createdAt: 1 }).lean();
+  const versions = await CodeVersion.find(getMyVersionFilter(req.workshop)).sort({ createdAt: 1 }).lean();
 
   res.json({
     count: versions.length,
@@ -55,7 +71,7 @@ const getMyVersion = asyncHandler(async (req, res) => {
 
   const version = await CodeVersion.findOne({
     _id: versionId,
-    visitorId: req.workshop.visitorId,
+    ...getMyVersionFilter(req.workshop),
   }).lean();
 
   if (!version) {
@@ -71,4 +87,5 @@ module.exports = {
   listMyVersions,
   getMyVersion,
   mapVersion,
+  getMyVersionFilter,
 };

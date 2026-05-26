@@ -17,6 +17,8 @@ import type {
   CodeVersion,
   ModelPreference,
   ModelSettings,
+  ApiKeyProvider,
+  VersionListRequest,
 } from "@/types";
 
 class ApiClient {
@@ -251,12 +253,20 @@ class ApiClient {
     return data.models;
   }
 
-  async getMyCodeVersions(password: string, visitorId: string, includeCode = true): Promise<CodeVersion[]> {
+  async getMyCodeVersions(request: VersionListRequest): Promise<CodeVersion[]> {
     const { data } = await this.request<{ count: number; versions: CodeVersion[] }>("/api/versions/list", {
       method: "POST",
-      body: JSON.stringify({ password, visitorId, includeCode }),
+      body: JSON.stringify(request),
     });
     return data.versions;
+  }
+
+  async testApiKey(provider: ApiKeyProvider, apiKey: string): Promise<boolean> {
+    const { data } = await this.request<{ valid: boolean; provider: ApiKeyProvider }>("/api/api-keys/test", {
+      method: "POST",
+      body: JSON.stringify({ provider, apiKey }),
+    });
+    return data.valid;
   }
 
   // Validate password - returns validation result with usage info
