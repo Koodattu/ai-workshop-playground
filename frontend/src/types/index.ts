@@ -14,6 +14,7 @@ export type ChatMode = "edit" | "ask";
 // AI model preference sent as a symbolic value; backend maps it to provider model IDs.
 export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55";
 export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh";
+export type PromptMode = "default" | "website" | "game" | "software";
 export type AuthMode = "password" | "api-key";
 export type ApiKeyProvider = "gemini" | "openai";
 
@@ -29,6 +30,7 @@ export interface GenerationUsageSummary {
   modelId: string;
   modelLabel: string;
   modelThinking?: ThinkingLevel | string | null;
+  promptMode?: PromptMode | string;
   mode: ChatMode;
   promptTokens: number;
   candidatesTokens: number;
@@ -88,6 +90,7 @@ export interface PasswordEntry {
   code: string;
   expiresAt: string;
   maxUsesPerUser: number;
+  promptMode?: PromptMode;
   isActive: boolean;
   createdAt?: string;
 }
@@ -100,6 +103,7 @@ export interface UsageStats {
   passwordCode: string;
   passwordActive: boolean;
   passwordExpires: string;
+  promptMode?: PromptMode;
   avgUsesPerUser: number;
 }
 
@@ -114,6 +118,7 @@ export interface CreatePasswordRequest {
   code: string;
   expiresAt: string;
   maxUsesPerUser: number;
+  promptMode?: PromptMode;
 }
 
 // Streaming types
@@ -266,6 +271,7 @@ export interface PasswordDetailedStats {
     expiresAt: string;
     isExpired: boolean;
     maxUsesPerUser: number;
+    promptMode?: PromptMode;
   };
   stats: TokenBreakdown & {
     totalRequests: number;
@@ -300,6 +306,7 @@ export interface RequestLogEntry {
   estimatedCost: number;
   model: string;
   generationType: string;
+  promptMode?: PromptMode | string;
   mode?: "edit" | "ask";
   createdAt: string;
 }
@@ -383,6 +390,7 @@ export interface CodeVersion {
   modelLabel?: string | null;
   modelShortLabel?: string | null;
   modelThinking?: ThinkingLevel | string | null;
+  promptMode?: PromptMode | string | null;
   editMode: "replace_all" | "patch";
   editCount: number;
   edits?: Array<{ oldText: string; newText: string }>;

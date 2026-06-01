@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel, PromptMode } from "@/types";
 
 // ============================================================================
 // TYPES
@@ -55,6 +55,22 @@ const formatTokens = (n: number): string => {
 /** Truncate visitor ID to first 8 chars */
 const truncateVisitorId = (id: string): string => {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+};
+
+const PROMPT_MODE_LABEL_KEYS: Record<PromptMode, string> = {
+  default: "passwordManager.promptModeDefault",
+  website: "passwordManager.promptModeWebsite",
+  game: "passwordManager.promptModeGame",
+  software: "passwordManager.promptModeSoftware",
+};
+
+const PROMPT_MODE_OPTIONS = (Object.keys(PROMPT_MODE_LABEL_KEYS) as PromptMode[]).map((value) => ({
+  value,
+  labelKey: PROMPT_MODE_LABEL_KEYS[value],
+}));
+
+const getPromptModeLabel = (promptMode: PromptMode | string | undefined, t: (key: string, params?: Record<string, unknown>) => string): string => {
+  return t(PROMPT_MODE_LABEL_KEYS[promptMode as PromptMode] || PROMPT_MODE_LABEL_KEYS.default);
 };
 
 /** Format date to readable string */
@@ -381,6 +397,8 @@ interface PasswordsTabProps {
   setNewMaxUses: (max: number) => void;
   newExpiresAt: string;
   setNewExpiresAt: (date: string) => void;
+  newPromptMode: PromptMode;
+  setNewPromptMode: (mode: PromptMode) => void;
   isCreating: boolean;
   expandedPasswordId: string | null;
   setExpandedPasswordId: (id: string | null) => void;
@@ -402,6 +420,8 @@ const PasswordsTab = ({
   setNewMaxUses,
   newExpiresAt,
   setNewExpiresAt,
+  newPromptMode,
+  setNewPromptMode,
   isCreating,
   expandedPasswordId,
   setExpandedPasswordId,
@@ -420,7 +440,7 @@ const PasswordsTab = ({
       {/* Create form */}
       {showCreateForm && (
         <form onSubmit={onCreatePassword} className="p-4 rounded-xl bg-carbon border border-steel/50 space-y-4 animate-slide-up">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.codeLabel")}</label>
               <input
@@ -471,6 +491,26 @@ const PasswordsTab = ({
                 required
               />
             </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">{t("passwordManager.promptModeLabel")}</label>
+              <select
+                value={newPromptMode}
+                onChange={(e) => setNewPromptMode(e.target.value as PromptMode)}
+                className="
+                  w-full px-3 py-2
+                  bg-graphite border border-steel rounded-lg
+                  font-mono text-sm text-white
+                  focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
+                  transition-colors
+                "
+              >
+                {PROMPT_MODE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {t(option.labelKey)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex justify-end">
             <Button type="submit" isLoading={isCreating}>
@@ -511,6 +551,9 @@ const PasswordsTab = ({
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-gray-400">
                         <span>
                           {t("passwordManager.maxUses")}: {password.maxUsesPerUser}
+                        </span>
+                        <span>
+                          {t("passwordManager.promptModeLabel")}: {getPromptModeLabel(password.promptMode, t)}
                         </span>
                         <span>
                           {t("passwordManager.expires")}: {formatDate(password.expiresAt)}
@@ -775,6 +818,9 @@ const ActivityTab = ({ recentRequests, period, setPeriod, t }: ActivityTabProps)
                     <span className="text-gray-400">
                       {t("passwordManager.generationType")}: <span className="text-white">{request.generationType}</span>
                     </span>
+                    <span className="text-gray-400">
+                      {t("passwordManager.promptModeLabel")}: <span className="text-white">{getPromptModeLabel(request.promptMode, t)}</span>
+                    </span>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 text-xs font-mono shrink-0">
@@ -929,6 +975,7 @@ const CodeVersionsTab = ({ versions, t }: CodeVersionsTabProps) => {
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className="text-sm text-gray-300 font-display font-semibold">{version.projectName || t("versionHistory.untitled")}</span>
                   <span className="px-2 py-0.5 rounded bg-electric/20 text-electric font-mono text-xs uppercase">{version.editMode === "patch" ? t("versionHistory.patch") : t("versionHistory.full")}</span>
+                  <span className="px-2 py-0.5 rounded bg-graphite text-gray-400 font-mono text-xs">{getPromptModeLabel(version.promptMode || "default", t)}</span>
                   {version.parentVersionId && <span className="px-2 py-0.5 rounded bg-graphite text-gray-400 font-mono text-xs">parent {String(version.parentVersionId).slice(-6)}</span>}
                   {version.manualEditsSinceParent && <span className="px-2 py-0.5 rounded bg-ember/15 text-ember font-mono text-xs uppercase">{t("versionHistory.manual")}</span>}
                 </div>
@@ -1075,6 +1122,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [newCode, setNewCode] = useState("");
   const [newMaxUses, setNewMaxUses] = useState(10);
   const [newExpiresAt, setNewExpiresAt] = useState("");
+  const [newPromptMode, setNewPromptMode] = useState<PromptMode>("default");
   const [isCreating, setIsCreating] = useState(false);
   const [isSavingModelSettings, setIsSavingModelSettings] = useState(false);
 
@@ -1166,10 +1214,12 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
           code: newCode.trim(),
           expiresAt: new Date(newExpiresAt).toISOString(),
           maxUsesPerUser: newMaxUses,
+          promptMode: newPromptMode,
         });
         setNewCode("");
         setNewMaxUses(10);
         setNewExpiresAt("");
+        setNewPromptMode("default");
         setShowCreateForm(false);
         await fetchAllData();
       } catch (err) {
@@ -1178,7 +1228,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         setIsCreating(false);
       }
     },
-    [adminSecret, newCode, newExpiresAt, newMaxUses, t, fetchAllData],
+    [adminSecret, newCode, newExpiresAt, newMaxUses, newPromptMode, t, fetchAllData],
   );
 
   const handleTogglePassword = useCallback(
@@ -1337,6 +1387,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
             setNewMaxUses={setNewMaxUses}
             newExpiresAt={newExpiresAt}
             setNewExpiresAt={setNewExpiresAt}
+            newPromptMode={newPromptMode}
+            setNewPromptMode={setNewPromptMode}
             isCreating={isCreating}
             expandedPasswordId={expandedPasswordId}
             setExpandedPasswordId={setExpandedPasswordId}

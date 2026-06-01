@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const CodeVersion = require("../models/CodeVersion");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
+const { normalizePromptMode } = require("../services/promptModes");
 
 const mapVersion = (version, includeCode = false) => {
   const data = {
@@ -19,6 +20,7 @@ const mapVersion = (version, includeCode = false) => {
     modelLabel: version.modelLabel || null,
     modelShortLabel: version.modelShortLabel || null,
     modelThinking: version.modelThinking || null,
+    promptMode: normalizePromptMode(version.promptMode),
     editMode: version.editMode,
     editCount: version.editCount,
     edits: version.edits || [],

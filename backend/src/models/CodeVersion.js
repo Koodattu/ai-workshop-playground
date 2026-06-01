@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { DEFAULT_PROMPT_MODE, PROMPT_MODE_IDS } = require("../services/promptModes");
 
 const codeVersionSchema = new mongoose.Schema(
   {
@@ -87,6 +88,11 @@ const codeVersionSchema = new mongoose.Schema(
       type: String,
       default: null,
       maxlength: [30, "Model thinking setting cannot exceed 30 characters"],
+    },
+    promptMode: {
+      type: String,
+      enum: PROMPT_MODE_IDS,
+      default: DEFAULT_PROMPT_MODE,
     },
     editMode: {
       type: String,

@@ -4,6 +4,7 @@
  */
 
 const mongoose = require("mongoose");
+const { DEFAULT_PROMPT_MODE, PROMPT_MODE_IDS } = require("../services/promptModes");
 
 const passwordSchema = new mongoose.Schema(
   {
@@ -22,6 +23,11 @@ const passwordSchema = new mongoose.Schema(
       type: Number,
       default: 20,
       min: [1, "Max uses per user must be at least 1"],
+    },
+    promptMode: {
+      type: String,
+      enum: PROMPT_MODE_IDS,
+      default: DEFAULT_PROMPT_MODE,
     },
     isActive: {
       type: Boolean,

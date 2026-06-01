@@ -14,6 +14,7 @@ const RequestLog = require("../models/RequestLog");
 const Usage = require("../models/Usage");
 const CodeVersion = require("../models/CodeVersion");
 const { getAllowedModelPreference, getModelSetting, normalizeThinkingLevel } = require("../services/modelSettings");
+const { DEFAULT_PROMPT_MODE, buildSystemInstruction, normalizePromptMode } = require("../services/promptModes");
 
 const MODEL_PREFERENCES = {
   fast: {
@@ -1178,7 +1179,7 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
 async function generateFullRewriteAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext, apiKeys }) {
   const retryConfig = {
     ...generationConfig,
-    systemInstruction: `${SYSTEM_INSTRUCTION}
+    systemInstruction: `${generationConfig?.systemInstruction || SYSTEM_INSTRUCTION}
 
 PATCH RETRY MODE:
 - A previous patch response could not be applied safely to the current code.
@@ -1323,6 +1324,7 @@ const generateCode = asyncHandler(async (req, res) => {
   const isApiKeyMode = req.workshop?.authMode === "api-key";
   const apiKeys = isApiKeyMode ? req.apiKeyAuth?.apiKeys || {} : null;
   const selectedModel = await getModelPreference(modelPreference, { restrictToEnabled: !isApiKeyMode });
+  const promptMode = normalizePromptMode(isApiKeyMode ? DEFAULT_PROMPT_MODE : req.workshop?.promptMode);
   const requestId = crypto.randomUUID();
 
   if (!prompt) {
@@ -1410,8 +1412,9 @@ const generateCode = asyncHandler(async (req, res) => {
 
   try {
     // Configure generation with system instruction based on mode
+    const baseSystemInstruction = isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION;
     const generationConfig = {
-      systemInstruction: isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION,
+      systemInstruction: buildSystemInstruction(baseSystemInstruction, promptMode),
       responseMimeType: "application/json",
       responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
     };
@@ -1735,6 +1738,7 @@ Modify or extend the existing code based on the user's request.`;
         modelLabel: selectedModel.label,
         modelShortLabel: selectedModel.shortLabel,
         modelThinking: selectedModel.thinking,
+        promptMode,
         editMode: finalEditMode,
         editCount: finalEdits.length,
         edits: finalEdits,
@@ -1763,6 +1767,7 @@ Modify or extend the existing code based on the user's request.`;
         modelLabel: version.modelLabel,
         modelShortLabel: version.modelShortLabel,
         modelThinking: version.modelThinking,
+        promptMode: normalizePromptMode(version.promptMode),
         editMode: version.editMode,
         editCount: version.editCount,
         edits: version.edits,
@@ -1802,6 +1807,7 @@ Modify or extend the existing code based on the user's request.`;
         modelId: selectedModel.model,
         modelLabel: selectedModel.label,
         modelThinking: selectedModel.thinking,
+        promptMode,
         mode,
         promptTokens,
         candidatesTokens,
@@ -1840,6 +1846,7 @@ Modify or extend the existing code based on the user's request.`;
           estimatedCost,
           model: selectedModel.model,
           generationType: isAskMode ? "ask" : "code-generation",
+          promptMode,
           mode: mode,
         });
 

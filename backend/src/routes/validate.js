@@ -10,6 +10,7 @@ const { AppError, asyncHandler } = require("../middleware/errorHandler");
 const { ERROR_CODES } = require("../constants/errorCodes");
 const Password = require("../models/Password");
 const Usage = require("../models/Usage");
+const { normalizePromptMode } = require("../services/promptModes");
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ const router = express.Router();
  * - message: Success or error message
  * - remainingUses: Number of uses left for this visitor
  * - maxUses: Maximum uses allowed per visitor
+ * - promptMode: Password-linked generation mode
  */
 router.post(
   "/",
@@ -64,6 +66,7 @@ router.post(
       message: isRateLimited ? "Password is valid but rate limit reached" : "Password is valid",
       remainingUses,
       maxUses: passwordDoc.maxUsesPerUser,
+      promptMode: normalizePromptMode(passwordDoc.promptMode),
       isRateLimited,
     });
   }),

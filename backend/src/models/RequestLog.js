@@ -4,6 +4,7 @@
  */
 
 const mongoose = require("mongoose");
+const { DEFAULT_PROMPT_MODE, PROMPT_MODE_IDS } = require("../services/promptModes");
 const { Schema } = mongoose;
 
 const requestLogSchema = new mongoose.Schema(
@@ -57,6 +58,11 @@ const requestLogSchema = new mongoose.Schema(
       type: String,
       required: [true, "Generation type is required"],
       trim: true,
+    },
+    promptMode: {
+      type: String,
+      enum: PROMPT_MODE_IDS,
+      default: DEFAULT_PROMPT_MODE,
     },
     mode: {
       type: String,

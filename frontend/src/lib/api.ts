@@ -18,6 +18,7 @@ import type {
   ModelPreference,
   ModelSettings,
   ApiKeyProvider,
+  PromptMode,
   VersionListRequest,
 } from "@/types";
 
@@ -271,12 +272,13 @@ class ApiClient {
   }
 
   // Validate password - returns validation result with usage info
-  async validatePassword(password: string, visitorId: string): Promise<{ valid: boolean; remainingUses: number; maxUses: number; isRateLimited: boolean }> {
+  async validatePassword(password: string, visitorId: string): Promise<{ valid: boolean; remainingUses: number; maxUses: number; promptMode: PromptMode; isRateLimited: boolean }> {
     const { data } = await this.request<{
       valid: boolean;
       message: string;
       remainingUses: number;
       maxUses: number;
+      promptMode?: PromptMode;
       isRateLimited: boolean;
     }>("/api/validate", {
       method: "POST",
@@ -289,6 +291,7 @@ class ApiClient {
       valid: data.valid,
       remainingUses: data.remainingUses,
       maxUses: data.maxUses,
+      promptMode: data.promptMode || "default",
       isRateLimited: data.isRateLimited,
     };
   }
@@ -338,14 +341,14 @@ class ApiClient {
   }
 
   async createPassword(adminSecret: string, request: CreatePasswordRequest): Promise<PasswordEntry> {
-    const { data } = await this.request<PasswordEntry>("/api/admin/passwords", {
+    const { data } = await this.request<{ password: PasswordEntry }>("/api/admin/passwords", {
       method: "POST",
       headers: {
         "X-Admin-Secret": adminSecret,
       },
       body: JSON.stringify(request),
     });
-    return data;
+    return data.password;
   }
 
   async deletePassword(adminSecret: string, passwordId: string): Promise<void> {
@@ -358,14 +361,14 @@ class ApiClient {
   }
 
   async togglePassword(adminSecret: string, passwordId: string, isActive: boolean): Promise<PasswordEntry> {
-    const { data } = await this.request<PasswordEntry>(`/api/admin/passwords/${passwordId}`, {
+    const { data } = await this.request<{ password: PasswordEntry }>(`/api/admin/passwords/${passwordId}`, {
       method: "PUT",
       headers: {
         "X-Admin-Secret": adminSecret,
       },
       body: JSON.stringify({ isActive }),
     });
-    return data;
+    return data.password;
   }
 
   async getUsageStats(adminSecret: string): Promise<UsageStats[]> {

@@ -24,6 +24,7 @@ const {
   getCodeVersions,
 } = require("../controllers/adminController");
 const { MODEL_PREFERENCE_IDS, MODEL_DEFAULTS } = require("../services/modelSettings");
+const { PROMPT_MODE_IDS } = require("../services/promptModes");
 const validateRequest = require("../middleware/validateRequest");
 
 const router = express.Router();
@@ -95,6 +96,7 @@ router.post(
         return true;
       }),
     body("maxUsesPerUser").optional().isInt({ min: 1, max: 1000 }).withMessage("Max uses per user must be between 1 and 1000"),
+    body("promptMode").optional().isIn(PROMPT_MODE_IDS).withMessage("Prompt mode is invalid"),
     body("isActive").optional().isBoolean().withMessage("isActive must be a boolean"),
     validateRequest,
   ],
@@ -123,6 +125,7 @@ router.put(
     param("id").isMongoId().withMessage("Invalid password ID"),
     body("expiresAt").optional().isISO8601().withMessage("Invalid date format. Use ISO 8601 format."),
     body("maxUsesPerUser").optional().isInt({ min: 1, max: 1000 }).withMessage("Max uses per user must be between 1 and 1000"),
+    body("promptMode").optional().isIn(PROMPT_MODE_IDS).withMessage("Prompt mode is invalid"),
     body("isActive").optional().isBoolean().withMessage("isActive must be a boolean"),
     validateRequest,
   ],

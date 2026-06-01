@@ -12,6 +12,7 @@ const CodeVersion = require("../models/CodeVersion");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const { getModelSettings, updateModelSettings } = require("../services/modelSettings");
+const { normalizePromptMode } = require("../services/promptModes");
 
 /**
  * Middleware to verify admin access
@@ -54,22 +55,25 @@ const updateAdminModelSettings = asyncHandler(async (req, res) => {
  * Create a new workshop password
  */
 const createPassword = asyncHandler(async (req, res) => {
-  const { code, expiresAt, maxUsesPerUser, isActive } = req.body;
+  const { code, expiresAt, maxUsesPerUser, promptMode, isActive } = req.body;
 
   const password = await Password.create({
     code,
     expiresAt: new Date(expiresAt),
     maxUsesPerUser: maxUsesPerUser || 20,
+    promptMode: normalizePromptMode(promptMode),
     isActive: isActive !== undefined ? isActive : true,
   });
 
   res.status(201).json({
     message: "Password created successfully",
     password: {
+      _id: password._id,
       id: password._id,
       code: password.code,
       expiresAt: password.expiresAt,
       maxUsesPerUser: password.maxUsesPerUser,
+      promptMode: normalizePromptMode(password.promptMode),
       isActive: password.isActive,
     },
   });
@@ -99,6 +103,7 @@ const listPasswords = asyncHandler(async (req, res) => {
 
       return {
         ...password,
+        promptMode: normalizePromptMode(password.promptMode),
         isExpired: new Date() > new Date(password.expiresAt),
         stats: {
           totalUses: stats.totalUses,
@@ -149,6 +154,7 @@ const getUsageStats = asyncHandler(async (req, res) => {
         passwordCode: "$password.code",
         passwordActive: "$password.isActive",
         passwordExpires: "$password.expiresAt",
+        promptMode: { $ifNull: ["$password.promptMode", "default"] },
         totalUses: 1,
         uniqueUsers: 1,
         avgUsesPerUser: { $round: ["$avgUsesPerUser", 2] },
@@ -186,11 +192,12 @@ const getUsageStats = asyncHandler(async (req, res) => {
  */
 const updatePassword = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { expiresAt, maxUsesPerUser, isActive } = req.body;
+  const { expiresAt, maxUsesPerUser, promptMode, isActive } = req.body;
 
   const updateData = {};
   if (expiresAt) updateData.expiresAt = new Date(expiresAt);
   if (maxUsesPerUser !== undefined) updateData.maxUsesPerUser = maxUsesPerUser;
+  if (promptMode !== undefined) updateData.promptMode = normalizePromptMode(promptMode);
   if (isActive !== undefined) updateData.isActive = isActive;
 
   const password = await Password.findByIdAndUpdate(id, updateData, {
@@ -383,6 +390,7 @@ const getPasswordDetailedStats = asyncHandler(async (req, res) => {
       expiresAt: password.expiresAt,
       isExpired: new Date() > new Date(password.expiresAt),
       maxUsesPerUser: password.maxUsesPerUser,
+      promptMode: normalizePromptMode(password.promptMode),
     },
     stats: {
       totalRequests: stats.totalRequests,
@@ -509,6 +517,7 @@ const getRecentRequests = asyncHandler(async (req, res) => {
         estimatedCost: 1,
         model: 1,
         generationType: 1,
+        promptMode: { $ifNull: ["$promptMode", "default"] },
         mode: { $ifNull: ["$mode", "edit"] },
         createdAt: 1,
       },
@@ -646,7 +655,7 @@ const getShareLinks = asyncHandler(async (req, res) => {
 const getCodeVersions = asyncHandler(async (req, res) => {
   const versions = await CodeVersion.find({ accessMode: { $ne: "api-key" } })
     .select(
-      "visitorId passwordId parentVersionId rootVersionId code prompt message projectName modelProvider modelPreference modelId modelLabel modelShortLabel modelThinking editMode editCount edits manualEditsSinceParent createdAt",
+      "visitorId passwordId parentVersionId rootVersionId code prompt message projectName modelProvider modelPreference modelId modelLabel modelShortLabel modelThinking promptMode editMode editCount edits manualEditsSinceParent createdAt",
     )
     .sort({ createdAt: -1 })
     .limit(500)
@@ -670,6 +679,7 @@ const getCodeVersions = asyncHandler(async (req, res) => {
       modelLabel: version.modelLabel || null,
       modelShortLabel: version.modelShortLabel || null,
       modelThinking: version.modelThinking || null,
+      promptMode: normalizePromptMode(version.promptMode),
       editMode: version.editMode,
       editCount: version.editCount,
       edits: version.edits || [],

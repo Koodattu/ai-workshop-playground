@@ -7,6 +7,7 @@ const Password = require("../models/Password");
 const Usage = require("../models/Usage");
 const { AppError, asyncHandler } = require("./errorHandler");
 const { ERROR_CODES } = require("../constants/errorCodes");
+const { normalizePromptMode } = require("../services/promptModes");
 
 /**
  * Middleware to validate workshop access
@@ -54,6 +55,7 @@ const workshopGuard = asyncHandler(async (req, res, next) => {
     authMode: "password",
     passwordId: passwordDoc._id,
     visitorId,
+    promptMode: normalizePromptMode(passwordDoc.promptMode),
     remaining,
     maxUses: passwordDoc.maxUsesPerUser,
   };
