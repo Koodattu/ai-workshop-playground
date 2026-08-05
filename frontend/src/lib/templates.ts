@@ -1220,7 +1220,7 @@ export const TEMPLATES: Template[] = [
   },
 ];
 
-export const DEFAULT_TEMPLATE_ID = "simple-welcome";
+export const DEFAULT_TEMPLATE_ID = "welcome";
 
 export function getTemplateById(id: string): Template | undefined {
   return TEMPLATES.find((template) => template.id === id);

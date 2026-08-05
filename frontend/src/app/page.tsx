@@ -103,9 +103,10 @@ export default function WorkspacePage() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [mobileActivePanel, setMobileActivePanel] = useState<"chat" | "editor" | "preview">("chat");
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
-  const [isEditorPanelAnimating, setIsEditorPanelAnimating] = useState(false);
   const editorPanelRef = usePanelRef();
-  const editorPanelAnimationTimeoutRef = useRef<number | null>(null);
+  const panelGroupElementRef = useRef<HTMLDivElement | null>(null);
+  const panelResizeAnimationsRef = useRef<Animation[]>([]);
+  const panelResizeAnimationFrameRef = useRef<number | null>(null);
   const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
   const [showThoughts, setShowThoughts] = useLocalStorage<boolean>("show-ai-thoughts", false);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
@@ -128,29 +129,40 @@ export default function WorkspacePage() {
       return;
     }
 
-    if (editorPanelAnimationTimeoutRef.current !== null) {
-      window.clearTimeout(editorPanelAnimationTimeoutRef.current);
+    const panelElements = panelGroupElementRef.current ? Array.from(panelGroupElementRef.current.querySelectorAll<HTMLElement>(":scope > [data-panel]")) : [];
+    const startFlexGrow = panelElements.map((panel) => getComputedStyle(panel).flexGrow);
+
+    panelResizeAnimationsRef.current.forEach((animation) => animation.cancel());
+    if (panelResizeAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(panelResizeAnimationFrameRef.current);
     }
 
-    setIsEditorPanelAnimating(true);
-    window.requestAnimationFrame(() => {
-      if (editorPanel.isCollapsed()) {
-        editorPanel.expand();
-      } else {
-        editorPanel.collapse();
-      }
+    if (editorPanel.isCollapsed()) {
+      editorPanel.expand();
+    } else {
+      editorPanel.collapse();
+    }
 
-      editorPanelAnimationTimeoutRef.current = window.setTimeout(() => {
-        setIsEditorPanelAnimating(false);
-        editorPanelAnimationTimeoutRef.current = null;
-      }, 180);
+    if (panelElements.length === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    panelResizeAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      panelResizeAnimationsRef.current = panelElements.map((panel, index) =>
+        panel.animate([{ flexGrow: startFlexGrow[index] }, { flexGrow: getComputedStyle(panel).flexGrow }], {
+          duration: 160,
+          easing: "cubic-bezier(0.2, 0, 0, 1)",
+        }),
+      );
+      panelResizeAnimationFrameRef.current = null;
     });
   }, [editorPanelRef]);
 
   useEffect(() => {
     return () => {
-      if (editorPanelAnimationTimeoutRef.current !== null) {
-        window.clearTimeout(editorPanelAnimationTimeoutRef.current);
+      panelResizeAnimationsRef.current.forEach((animation) => animation.cancel());
+      if (panelResizeAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(panelResizeAnimationFrameRef.current);
       }
     };
   }, []);
@@ -1556,7 +1568,7 @@ export default function WorkspacePage() {
 
         {/* Desktop: 3 column resizable layout */}
         <main className="flex-1 hidden md:flex overflow-hidden">
-          <Group orientation="horizontal" className={`flex-1 ${isEditorPanelAnimating ? "panel-group-animating" : ""}`}>
+          <Group orientation="horizontal" elementRef={panelGroupElementRef} className="flex-1">
             {/* Chat Panel */}
             <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
               <ChatPanel

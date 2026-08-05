@@ -683,7 +683,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
 
   return (
     <>
-      <div ref={containerRef} className={`flex flex-col h-full bg-white ${isFullscreen ? "fixed inset-0 z-50" : ""}`}>
+      <div ref={containerRef} className={`flex flex-col h-full bg-white ${isFullscreen ? "fixed inset-x-0 bottom-0 top-[49px] z-50" : ""}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-steel/50 bg-obsidian">
           <div className="flex items-center gap-2">
@@ -955,7 +955,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
       )}
 
       {/* Fullscreen overlay backdrop */}
-      {isFullscreen && <div className="fixed inset-0 bg-black/50 z-40" onClick={handleToggleFullscreen} />}
+      {isFullscreen && <div className="fixed inset-x-0 bottom-0 top-[49px] bg-black/50 z-40" onClick={handleToggleFullscreen} />}
     </>
   );
 }
