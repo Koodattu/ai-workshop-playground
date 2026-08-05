@@ -290,7 +290,7 @@ function getOpenAIReasoningConfig(selectedModel, includeSummary = false) {
   if (selectedModel.thinkingMode !== "openai-reasoning") return null;
   return {
     effort: selectedModel.thinking,
-    ...(includeSummary ? { summary: "auto" } : {}),
+    ...(includeSummary ? { summary: "concise" } : {}),
   };
 }
 

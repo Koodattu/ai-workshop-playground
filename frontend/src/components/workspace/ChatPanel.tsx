@@ -39,38 +39,97 @@ const FUN_STATUS_KEYS = [
   "chat.workingPhrases.tameSemicolons",
 ] as const;
 
-function AnimatedStatusText({ text, transitionKey }: { text: string; transitionKey: string | number }) {
-  const [currentText, setCurrentText] = useState(text);
-  const [previousText, setPreviousText] = useState<string | null>(null);
-  const currentTextRef = useRef(text);
-  const transitionKeyRef = useRef(transitionKey);
+const STATUS_EXIT_MS = 220;
+const STATUS_HOLD_MIN_MS = 5200;
+const STATUS_HOLD_VARIANCE_MS = 3600;
+const STATUS_CHARACTER_MIN_MS = 24;
+const STATUS_CHARACTER_VARIANCE_MS = 28;
+
+function PlayfulStatusText() {
+  const [phraseIndex, setPhraseIndex] = useState(() => Math.floor(Math.random() * FUN_STATUS_KEYS.length));
+  const [visibleCharacters, setVisibleCharacters] = useState(0);
+  const [isExiting, setIsExiting] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
-    if (transitionKeyRef.current === transitionKey) {
-      currentTextRef.current = text;
-      setCurrentText(text);
-      return;
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    updatePreference();
+    mediaQuery.addEventListener("change", updatePreference);
+    return () => mediaQuery.removeEventListener("change", updatePreference);
+  }, []);
+
+  useEffect(() => {
+    const phrase = t(FUN_STATUS_KEYS[phraseIndex]);
+    let timeout: ReturnType<typeof setTimeout>;
+    let characterIndex = 0;
+    let cancelled = false;
+
+    const scheduleNextPhrase = () => {
+      const holdDuration = STATUS_HOLD_MIN_MS + Math.random() * STATUS_HOLD_VARIANCE_MS;
+      timeout = setTimeout(() => {
+        if (prefersReducedMotion) {
+          setPhraseIndex((current) => (current + 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1))) % FUN_STATUS_KEYS.length);
+          return;
+        }
+
+        setIsExiting(true);
+        timeout = setTimeout(() => {
+          setPhraseIndex((current) => (current + 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1))) % FUN_STATUS_KEYS.length);
+        }, STATUS_EXIT_MS);
+      }, holdDuration);
+    };
+
+    const revealNextCharacter = () => {
+      if (cancelled) return;
+
+      characterIndex += 1;
+      setVisibleCharacters(characterIndex);
+
+      if (characterIndex < phrase.length) {
+        const characterDelay = STATUS_CHARACTER_MIN_MS + Math.random() * STATUS_CHARACTER_VARIANCE_MS;
+        timeout = setTimeout(revealNextCharacter, characterDelay);
+      } else {
+        scheduleNextPhrase();
+      }
+    };
+
+    setIsExiting(false);
+    if (prefersReducedMotion) {
+      setVisibleCharacters(phrase.length);
+      scheduleNextPhrase();
+    } else {
+      setVisibleCharacters(0);
+      timeout = setTimeout(revealNextCharacter, 120);
     }
 
-    setPreviousText(currentTextRef.current);
-    currentTextRef.current = text;
-    transitionKeyRef.current = transitionKey;
-    setCurrentText(text);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [phraseIndex, prefersReducedMotion, t]);
 
-    const timer = setTimeout(() => setPreviousText(null), 180);
-    return () => clearTimeout(timer);
-  }, [text, transitionKey]);
+  const phrase = t(FUN_STATUS_KEYS[phraseIndex]);
+  const visibleText = phrase.slice(0, visibleCharacters);
 
   return (
-    <span className="relative grid min-w-0 flex-1">
-      {previousText && (
-        <span className="col-start-1 row-start-1 status-text-exit" aria-hidden="true">
-          {previousText}
+    <span className={`whitespace-pre-wrap text-pretty ${isExiting ? "status-text-exit" : ""}`}>
+      {Array.from(visibleText).map((character, index) => (
+        <span key={`${phraseIndex}-${index}`} className="status-character-enter">
+          {character}
         </span>
-      )}
-      <span key={transitionKey} className="col-start-1 row-start-1 status-text-enter whitespace-pre-wrap text-pretty">
-        {currentText}
-      </span>
+      ))}
+      <span className="sr-only">{phrase.slice(visibleCharacters)}</span>
+    </span>
+  );
+}
+
+function ProviderStatusText({ text, hasProgress }: { text: string; hasProgress: boolean }) {
+  return (
+    <span key={hasProgress ? "provider-progress" : "provider-waiting"} className="status-text-enter whitespace-pre-wrap text-pretty">
+      {text}
     </span>
   );
 }
@@ -99,7 +158,6 @@ export function ChatPanel({
   onRetryMessage,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
-  const [funStatusIndex, setFunStatusIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const progressScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -128,24 +186,6 @@ export function ChatPanel({
       progressContainer.scrollTop = progressContainer.scrollHeight;
     }
   }, [progressMessage, showThoughts]);
-
-  useEffect(() => {
-    if (!isLoading || showThoughts || streamingMessage) return;
-
-    const chooseNextPhrase = () => {
-      setFunStatusIndex((current) => {
-        const offset = 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1));
-        return (current + offset) % FUN_STATUS_KEYS.length;
-      });
-    };
-
-    chooseNextPhrase();
-    const interval = setInterval(chooseNextPhrase, 2400);
-    return () => clearInterval(interval);
-  }, [isLoading, showThoughts, streamingMessage]);
-
-  const loadingText = showThoughts ? progressMessage || t("chat.generating") : t(FUN_STATUS_KEYS[funStatusIndex]);
-  const loadingTextKey = showThoughts ? (progressMessage ? "provider-progress" : "provider-waiting") : funStatusIndex;
 
   // Auto-resize textarea
   useEffect(() => {
@@ -358,7 +398,7 @@ export function ChatPanel({
               <div className="flex items-start gap-2">
                 <Spinner size="sm" />
                 <div ref={progressScrollRef} className="max-h-48 min-w-0 overflow-y-auto text-sm text-gray-400 font-mono leading-relaxed scrollbar-thin">
-                  <AnimatedStatusText text={loadingText} transitionKey={loadingTextKey} />
+                  {showThoughts ? <ProviderStatusText text={progressMessage || t("chat.generating")} hasProgress={Boolean(progressMessage)} /> : <PlayfulStatusText />}
                 </div>
               </div>
             </div>
