@@ -58,6 +58,7 @@ export interface GenerateRequest {
   messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   mode?: ChatMode;
   modelPreference?: ModelPreference;
+  showThoughts?: boolean;
 }
 
 export interface GenerateResponse {
@@ -171,6 +172,11 @@ export interface StreamCodeUpdate {
   code: string;
 }
 
+export interface StreamProgress {
+  type: "progress";
+  delta: string;
+}
+
 export type StreamEvent =
   | StreamChunk
   | StreamCodeStart
@@ -180,11 +186,13 @@ export type StreamEvent =
   | StreamDoneEvent
   | StreamErrorEvent
   | StreamMessageUpdate
-  | StreamCodeUpdate;
+  | StreamCodeUpdate
+  | StreamProgress;
 
 export interface StreamCallbacks {
   onChunk?: (chunk: string, accumulated: string) => void;
   onMessageUpdate?: (message: string) => void;
+  onProgress?: (delta: string) => void;
   onCodeUpdate?: (code: string) => void;
   onCodeStart?: () => void;
   onCodeChunk?: (chunk: string) => void;

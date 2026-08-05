@@ -13,6 +13,8 @@ interface ChatPanelProps {
   remainingUses?: number;
   showToast: (message: string, type: "success" | "error" | "info") => void;
   streamingMessage?: string;
+  progressMessage?: string;
+  showThoughts?: boolean;
   onClearMessages?: () => void;
   onOpenSettings?: () => void;
   onOpenUsage?: () => void;
@@ -28,6 +30,51 @@ interface ChatPanelProps {
   onRetryMessage?: (prompt: string) => Promise<void>;
 }
 
+const FUN_STATUS_KEYS = [
+  "chat.workingPhrases.pixelClouds",
+  "chat.workingPhrases.byteOrigami",
+  "chat.workingPhrases.semanticSoup",
+  "chat.workingPhrases.quantumButtons",
+  "chat.workingPhrases.cosmicCss",
+  "chat.workingPhrases.tameSemicolons",
+] as const;
+
+function AnimatedStatusText({ text, transitionKey }: { text: string; transitionKey: string | number }) {
+  const [currentText, setCurrentText] = useState(text);
+  const [previousText, setPreviousText] = useState<string | null>(null);
+  const currentTextRef = useRef(text);
+  const transitionKeyRef = useRef(transitionKey);
+
+  useEffect(() => {
+    if (transitionKeyRef.current === transitionKey) {
+      currentTextRef.current = text;
+      setCurrentText(text);
+      return;
+    }
+
+    setPreviousText(currentTextRef.current);
+    currentTextRef.current = text;
+    transitionKeyRef.current = transitionKey;
+    setCurrentText(text);
+
+    const timer = setTimeout(() => setPreviousText(null), 180);
+    return () => clearTimeout(timer);
+  }, [text, transitionKey]);
+
+  return (
+    <span className="relative grid min-w-0 flex-1">
+      {previousText && (
+        <span className="col-start-1 row-start-1 status-text-exit" aria-hidden="true">
+          {previousText}
+        </span>
+      )}
+      <span key={transitionKey} className="col-start-1 row-start-1 status-text-enter whitespace-pre-wrap text-pretty">
+        {currentText}
+      </span>
+    </span>
+  );
+}
+
 export function ChatPanel({
   messages,
   onSendMessage,
@@ -35,6 +82,8 @@ export function ChatPanel({
   remainingUses,
   showToast,
   streamingMessage,
+  progressMessage = "",
+  showThoughts = false,
   onClearMessages,
   onOpenSettings,
   onOpenUsage,
@@ -50,7 +99,9 @@ export function ChatPanel({
   onRetryMessage,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
+  const [funStatusIndex, setFunStatusIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const progressScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
   const modelOptions = [
@@ -69,7 +120,32 @@ export function ChatPanel({
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingMessage]);
+  }, [messages, streamingMessage, progressMessage]);
+
+  useEffect(() => {
+    const progressContainer = progressScrollRef.current;
+    if (progressContainer && showThoughts) {
+      progressContainer.scrollTop = progressContainer.scrollHeight;
+    }
+  }, [progressMessage, showThoughts]);
+
+  useEffect(() => {
+    if (!isLoading || showThoughts || streamingMessage) return;
+
+    const chooseNextPhrase = () => {
+      setFunStatusIndex((current) => {
+        const offset = 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1));
+        return (current + offset) % FUN_STATUS_KEYS.length;
+      });
+    };
+
+    chooseNextPhrase();
+    const interval = setInterval(chooseNextPhrase, 2400);
+    return () => clearInterval(interval);
+  }, [isLoading, showThoughts, streamingMessage]);
+
+  const loadingText = showThoughts ? progressMessage || t("chat.generating") : t(FUN_STATUS_KEYS[funStatusIndex]);
+  const loadingTextKey = showThoughts ? (progressMessage ? "provider-progress" : "provider-waiting") : funStatusIndex;
 
   // Auto-resize textarea
   useEffect(() => {
@@ -278,10 +354,12 @@ export function ChatPanel({
 
         {isLoading && !streamingMessage && (
           <div className="flex items-center gap-3 animate-fade-in">
-            <div className="bg-carbon border border-steel/50 rounded-xl px-4 py-3">
-              <div className="flex items-center gap-2">
+            <div className="max-w-[90%] bg-carbon border border-steel/50 rounded-xl px-4 py-3">
+              <div className="flex items-start gap-2">
                 <Spinner size="sm" />
-                <span className="text-sm text-gray-400 font-mono">{t("chat.generating")}</span>
+                <div ref={progressScrollRef} className="max-h-48 min-w-0 overflow-y-auto text-sm text-gray-400 font-mono leading-relaxed scrollbar-thin">
+                  <AnimatedStatusText text={loadingText} transitionKey={loadingTextKey} />
+                </div>
               </div>
             </div>
           </div>

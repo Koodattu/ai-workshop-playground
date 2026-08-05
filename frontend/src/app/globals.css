@@ -66,6 +66,47 @@
   }
 }
 
+@keyframes statusTextEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes statusTextExit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+    filter: blur(4px);
+  }
+}
+
+.status-text-enter {
+  animation: statusTextEnter 260ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.status-text-exit {
+  animation: statusTextExit 150ms ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-text-enter,
+  .status-text-exit {
+    animation: none;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

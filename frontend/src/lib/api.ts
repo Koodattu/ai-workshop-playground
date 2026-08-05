@@ -202,6 +202,9 @@ class ApiClient {
                     case "message-update":
                       callbacks.onMessageUpdate?.(event.message);
                       break;
+                    case "progress":
+                      callbacks.onProgress?.(event.delta);
+                      break;
                     case "code-update":
                       callbacks.onCodeUpdate?.(event.code);
                       break;

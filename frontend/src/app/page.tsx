@@ -100,6 +100,7 @@ export default function WorkspacePage() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [mobileActivePanel, setMobileActivePanel] = useState<"chat" | "editor" | "preview">("chat");
   const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
+  const [showThoughts, setShowThoughts] = useLocalStorage<boolean>("show-ai-thoughts", false);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
   const [authMode, setAuthMode] = useLocalStorage<AuthMode>("workshop-auth-mode", "password");
@@ -134,6 +135,7 @@ export default function WorkspacePage() {
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [progressMessage, setProgressMessage] = useState<string>("");
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
@@ -711,6 +713,7 @@ export default function WorkspacePage() {
       setIsGenerating(true);
       setIsStreaming(true);
       setStreamingMessage("");
+      setProgressMessage("");
       codeBufferRef.current = "";
       pendingEditorChunkRef.current = "";
       clearEditorFlushTimer();
@@ -733,8 +736,13 @@ export default function WorkspacePage() {
             messageHistory,
             mode: chatMode,
             modelPreference,
+            showThoughts,
           },
           {
+            onProgress: (delta: string) => {
+              setProgressMessage((previous) => previous + delta);
+            },
+
             // Step 0: Code starts - disable preview and clear editor
             onCodeStart: () => {
               // In ASK mode, we don't modify code, so skip all editor operations
@@ -862,6 +870,7 @@ export default function WorkspacePage() {
 
             // Step 4: Message complete - show in chat
             onMessageComplete: (message: string) => {
+              setProgressMessage("");
               setStreamingMessage(message);
             },
 
@@ -968,6 +977,7 @@ export default function WorkspacePage() {
 
               // Clear streaming states
               setStreamingMessage("");
+              setProgressMessage("");
               setIsStreaming(false);
 
               // Enable preview and update it (only in EDIT mode)
@@ -1048,6 +1058,7 @@ export default function WorkspacePage() {
 
               // Clear streaming states
               setStreamingMessage("");
+              setProgressMessage("");
               setIsStreaming(false);
             },
           },
@@ -1084,6 +1095,7 @@ export default function WorkspacePage() {
       modelPreference,
       currentVersionId,
       autoSwitchEnabled,
+      showThoughts,
       setApiKeyUsage,
       setSavedTemplateId,
     ],
@@ -1504,6 +1516,8 @@ export default function WorkspacePage() {
                 remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
+                progressMessage={progressMessage}
+                showThoughts={showThoughts}
                 onClearMessages={handleClearMessages}
                 onOpenSettings={handleOpenApiKeySettings}
                 onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
@@ -1579,6 +1593,8 @@ export default function WorkspacePage() {
                 remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
+                progressMessage={progressMessage}
+                showThoughts={showThoughts}
                 onClearMessages={handleClearMessages}
                 onOpenSettings={handleOpenApiKeySettings}
                 onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
@@ -1693,6 +1709,8 @@ export default function WorkspacePage() {
           initialPassword={urlPassword || undefined}
           initialMode={authDialogInitialMode}
           apiKeys={apiKeySettings}
+          showThoughts={showThoughts}
+          onShowThoughtsChange={setShowThoughts}
           onSaveApiKeys={handleSaveApiKeys}
           onTestApiKey={handleTestApiKey}
           onClose={handleClosePasswordModal}

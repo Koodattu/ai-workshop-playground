@@ -69,7 +69,7 @@
     "streaming": "streaming...",
     "clearChat": "Clear chat",
     "clearChatTitle": "Clear all messages",
-    "apiSettingsTitle": "API key settings",
+    "apiSettingsTitle": "Settings",
     "usageHistoryTitle": "API key usage",
     "usageTooltip": "{count} uses remaining",
     "askMode": "ASK",
@@ -89,6 +89,14 @@
     "modelGpt56Luna": "GPT-5.6 Luna",
     "modelDeepSeekV4Flash": "DeepSeek V4 Flash",
     "askButton": "Ask",
+    "workingPhrases": {
+      "pixelClouds": "Pixelating clouds...",
+      "byteOrigami": "Folding byte origami...",
+      "semanticSoup": "Stirring semantic soup...",
+      "quantumButtons": "Polishing quantum buttons...",
+      "cosmicCss": "Aligning cosmic CSS...",
+      "tameSemicolons": "Taming wild semicolons..."
+    },
     "errors": {
       "VALIDATION_FAILED": "Validation failed",
       "PASSWORD_REQUIRED": "Workshop password is required",
@@ -159,6 +167,10 @@
     "added": "added",
     "deleted": "deleted",
     "changed": "changed"
+  },
+  "settings": {
+    "showThoughts": "Show thoughts",
+    "showThoughtsDescription": "Show live reasoning or thought summaries returned by the selected AI model."
   },
   "apiKeys": {
     "title": "Use Your API Key",

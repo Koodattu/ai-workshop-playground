@@ -271,24 +271,26 @@ async function getModelPreference(modelPreference, options = {}) {
   };
 }
 
-function getGeminiThinkingConfig(selectedModel) {
+function getGeminiThinkingConfig(selectedModel, includeThoughts = false) {
   if (selectedModel.thinkingMode === "gemini-budget") {
-    return { thinkingBudget: 0 };
+    return { thinkingBudget: 0, ...(includeThoughts ? { includeThoughts: true } : {}) };
   }
 
   if (selectedModel.thinkingMode === "gemini-level") {
     return {
       thinkingLevel: GEMINI_THINKING_LEVELS[selectedModel.thinking] || ThinkingLevel.LOW,
+      ...(includeThoughts ? { includeThoughts: true } : {}),
     };
   }
 
   return null;
 }
 
-function getOpenAIReasoningConfig(selectedModel) {
+function getOpenAIReasoningConfig(selectedModel, includeSummary = false) {
   if (selectedModel.thinkingMode !== "openai-reasoning") return null;
   return {
     effort: selectedModel.thinking,
+    ...(includeSummary ? { summary: "auto" } : {}),
   };
 }
 
@@ -1104,7 +1106,7 @@ function logStreamDiagnostic(event, payload) {
   console.info(`[AI Stream Diagnostic] ${event}`, JSON.stringify(payload));
 }
 
-async function createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey }) {
+async function createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey, showThoughts = false }) {
   const client = apiKey ? new GoogleGenAI({ apiKey }) : genAI;
   const stream = await client.models.generateContentStream({
     model: selectedModel.model,
@@ -1127,7 +1129,18 @@ async function createGeminiStream({ selectedModel, userPrompt, generationConfig,
 
     try {
       for await (const chunk of stream) {
-        const text = chunk.text || chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const parts = chunk.candidates?.[0]?.content?.parts || [];
+        const thought = showThoughts
+          ? parts
+              .filter((part) => part.thought && typeof part.text === "string")
+              .map((part) => part.text)
+              .join("")
+          : "";
+        const responseText = parts
+          .filter((part) => !part.thought && typeof part.text === "string")
+          .map((part) => part.text)
+          .join("");
+        const text = responseText || (!thought ? chunk.text || "" : "");
         if (text) {
           diagnostics.textChunks += 1;
           diagnostics.textChars += text.length;
@@ -1137,6 +1150,7 @@ async function createGeminiStream({ selectedModel, userPrompt, generationConfig,
 
         yield {
           text,
+          thought,
           usageMetadata: chunk.usageMetadata || null,
         };
       }
@@ -1149,7 +1163,7 @@ async function createGeminiStream({ selectedModel, userPrompt, generationConfig,
   })();
 }
 
-async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey }) {
+async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey, showThoughts = false }) {
   const client = apiKey ? new OpenAI({ apiKey }) : openAI;
 
   if (!client) {
@@ -1161,7 +1175,7 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
     instructions: systemInstruction || (isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION),
     input: userPrompt,
     text: buildOpenAITextFormat(isAskMode),
-    reasoning: getOpenAIReasoningConfig(selectedModel),
+    reasoning: getOpenAIReasoningConfig(selectedModel, showThoughts),
     stream: true,
     store: false,
   };
@@ -1196,12 +1210,20 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
 
           yield {
             text,
+            thought: "",
+            usageMetadata: null,
+          };
+        } else if (showThoughts && event.type === "response.reasoning_summary_text.delta") {
+          yield {
+            text: "",
+            thought: event.delta || "",
             usageMetadata: null,
           };
         } else if (event.type === "response.completed") {
           diagnostics.completed = true;
           yield {
             text: "",
+            thought: "",
             usageMetadata: toGeminiUsageMetadata(event.response?.usage || {}),
           };
         } else if (event.type === "response.failed") {
@@ -1221,7 +1243,7 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
   })();
 }
 
-async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey }) {
+async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey, showThoughts = false }) {
   const client = apiKey ? new OpenAI({ apiKey, baseURL: "https://api.deepseek.com" }) : deepSeek;
 
   if (!client) {
@@ -1262,6 +1284,7 @@ async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, syst
     try {
       for await (const chunk of stream) {
         const text = chunk.choices?.[0]?.delta?.content || "";
+        const thought = showThoughts ? chunk.choices?.[0]?.delta?.reasoning_content || "" : "";
         if (text) {
           diagnostics.textChunks += 1;
           diagnostics.textChars += text.length;
@@ -1271,6 +1294,7 @@ async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, syst
 
         yield {
           text,
+          thought,
           usageMetadata: chunk.usage ? toNormalizedUsageMetadataFromChatCompletion(chunk.usage) : null,
         };
       }
@@ -1283,7 +1307,7 @@ async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, syst
   })();
 }
 
-async function createModelTextStream({ selectedModel, generationConfig, userPrompt, isAskMode, requestId, phase = "primary", apiKeys }) {
+async function createModelTextStream({ selectedModel, generationConfig, userPrompt, isAskMode, requestId, phase = "primary", apiKeys, showThoughts = false }) {
   if (selectedModel.provider === "openai") {
     return createOpenAIStream({
       selectedModel,
@@ -1293,6 +1317,7 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
       requestId,
       phase,
       apiKey: apiKeys?.openai,
+      showThoughts,
     });
   }
 
@@ -1305,10 +1330,11 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
       requestId,
       phase,
       apiKey: apiKeys?.deepseek,
+      showThoughts,
     });
   }
 
-  return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey: apiKeys?.gemini });
+  return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey: apiKeys?.gemini, showThoughts });
 }
 
 async function generateFullRewriteAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext, apiKeys }) {
@@ -1452,7 +1478,7 @@ The previous patch could not be applied safely. Return the complete updated code
  * Generate code using the selected provider with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
-  const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE, parentVersionId } = req.body;
+  const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE, parentVersionId, showThoughts = false } = req.body;
   const isAskMode = mode === "ask";
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
   const allowCodeStreaming = !isAskMode;
@@ -1561,7 +1587,7 @@ const generateCode = asyncHandler(async (req, res) => {
       responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
     };
 
-    const geminiThinkingConfig = getGeminiThinkingConfig(selectedModel);
+    const geminiThinkingConfig = getGeminiThinkingConfig(selectedModel, showThoughts);
     if (geminiThinkingConfig) {
       generationConfig.thinkingConfig = geminiThinkingConfig;
     }
@@ -1607,6 +1633,7 @@ Modify or extend the existing code based on the user's request.`;
       requestId,
       phase: "primary",
       apiKeys,
+      showThoughts,
     });
 
     // Process the stream
@@ -1614,6 +1641,10 @@ Modify or extend the existing code based on the user's request.`;
       try {
         if (chunk.usageMetadata) {
           latestUsageMetadata = chunk.usageMetadata;
+        }
+
+        if (showThoughts && chunk.thought) {
+          sendSse({ type: "progress", delta: chunk.thought });
         }
 
         // Extract text from the provider-normalized chunk

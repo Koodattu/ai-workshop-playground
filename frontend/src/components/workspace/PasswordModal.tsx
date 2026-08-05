@@ -14,6 +14,8 @@ interface PasswordModalProps {
   initialPassword?: string;
   initialMode?: AuthMode;
   apiKeys: UserApiKeySettings;
+  showThoughts: boolean;
+  onShowThoughtsChange: (showThoughts: boolean) => void;
   onSaveApiKeys: (apiKeys: UserApiKeySettings) => void;
   onTestApiKey: (provider: ApiKeyProvider, apiKey: string) => Promise<boolean>;
   onClose: () => void;
@@ -41,6 +43,8 @@ export function PasswordModal({
   initialPassword,
   initialMode = "password",
   apiKeys: initialApiKeys,
+  showThoughts,
+  onShowThoughtsChange,
   onSaveApiKeys,
   onTestApiKey,
   onClose,
@@ -295,6 +299,29 @@ export function PasswordModal({
               </button>
             </form>
           )}
+
+          <div className="mt-6 border-t border-steel/40 pt-5">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showThoughts}
+              onClick={() => onShowThoughtsChange(!showThoughts)}
+              className="flex min-h-12 w-full items-center justify-between gap-4 rounded-xl bg-carbon/60 px-4 py-3 text-left transition-[background-color,box-shadow,scale] duration-200 ease-out hover:bg-carbon hover:shadow-inner-glow active:scale-[0.96]"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-white">{t("settings.showThoughts")}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-gray-400 text-pretty">{t("settings.showThoughtsDescription")}</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${showThoughts ? "bg-electric" : "bg-steel"}`}
+              >
+                <span
+                  className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${showThoughts ? "translate-x-6" : "translate-x-1"}`}
+                />
+              </span>
+            </button>
+          </div>
 
           <div className="mt-6 space-y-3">
             <div className="flex justify-center">
