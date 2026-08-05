@@ -830,7 +830,7 @@ const appendCode = useCallback((text: string) => {
 
 - Render user code in sandboxed iframe
 - Handle auto-refresh toggle
-- Capture and restore opt-in, project-scoped app state through `postMessage`
+- Capture and restore project-scoped app state through `postMessage` (enabled by default)
 - Provide fullscreen mode
 - Display compilation errors (if any)
 

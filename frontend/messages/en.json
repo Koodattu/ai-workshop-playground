@@ -313,7 +313,7 @@
     "settingsTitle": "Preview settings",
     "settingsDescription": "Configure how this project behaves in the preview.",
     "statePersistence": "Preserve app state",
-    "statePersistenceDescription": "Save supported progress before preview reloads. This is off by default for each project.",
+    "statePersistenceDescription": "Save supported progress before preview reloads. This is on by default for each project.",
     "stateUnsupported": "This app does not support saved state yet",
     "stateTooLarge": "Saved state is too large",
     "stateSaveError": "Progress could not be saved",

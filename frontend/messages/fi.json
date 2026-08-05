@@ -313,7 +313,7 @@
     "settingsTitle": "Esikatselun asetukset",
     "settingsDescription": "Määritä, miten tämä projekti toimii esikatselussa.",
     "statePersistence": "Säilytä sovelluksen tila",
-    "statePersistenceDescription": "Tallenna tuettu edistyminen ennen esikatselun päivittymistä. Asetus on oletuksena pois käytöstä jokaisessa projektissa.",
+    "statePersistenceDescription": "Tallenna tuettu edistyminen ennen esikatselun päivittymistä. Asetus on oletuksena käytössä jokaisessa projektissa.",
     "stateUnsupported": "Tämä sovellus ei vielä tue tilan tallennusta",
     "stateTooLarge": "Tallennettava tila on liian suuri",
     "stateSaveError": "Edistymisen tallentaminen epäonnistui",

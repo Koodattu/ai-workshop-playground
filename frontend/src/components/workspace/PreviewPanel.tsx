@@ -56,9 +56,9 @@ function getStateSettingKey(projectId: string) {
 
 function readStateSetting(projectId: string) {
   try {
-    return window.localStorage.getItem(getStateSettingKey(projectId)) === "true";
+    return window.localStorage.getItem(getStateSettingKey(projectId)) !== "false";
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -129,7 +129,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
   const [key, setKey] = useState(0);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isStatePersistenceEnabled, setIsStatePersistenceEnabled] = useState(false);
+  const [isStatePersistenceEnabled, setIsStatePersistenceEnabled] = useState(true);
   const [savedState, setSavedState] = useState<SavedPreviewState | null>(null);
   const [stateStatus, setStateStatus] = useState<StateStatus>("idle");
   const { language, t } = useLanguage();
@@ -729,9 +729,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
             <button
               ref={settingsButtonRef}
               onClick={() => setIsSettingsOpen(true)}
-              className={`relative flex size-8 items-center justify-center rounded transition-[color,background-color,scale] duration-150 ease-out active:scale-[0.96] ${
-                isStatePersistenceEnabled ? "bg-electric/15 text-electric" : "text-gray-400 hover:bg-graphite hover:text-white"
-              }`}
+              className="flex size-8 items-center justify-center rounded text-gray-400 transition-[color,background-color,scale] duration-150 ease-out hover:bg-graphite hover:text-white active:scale-[0.96]"
               title={t("preview.settingsTitle")}
               aria-label={t("preview.settingsTitle")}
               aria-haspopup="dialog"
@@ -746,7 +744,6 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
                 />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              {isStatePersistenceEnabled && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-success" aria-hidden="true" />}
             </button>
 
             {/* Share button */}
