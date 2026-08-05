@@ -60,7 +60,7 @@ const codeVersionSchema = new mongoose.Schema(
     },
     modelProvider: {
       type: String,
-      enum: ["gemini", "openai", null],
+      enum: ["gemini", "openai", "deepseek", null],
       default: null,
     },
     modelPreference: {

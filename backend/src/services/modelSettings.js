@@ -1,7 +1,7 @@
 const SystemSetting = require("../models/SystemSetting");
 
-const MODEL_PREFERENCE_IDS = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55"];
-const THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
+const MODEL_PREFERENCE_IDS = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55", "gpt56luna", "deepseekv4flash"];
+const THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh", "max"];
 const MODEL_SETTINGS_KEY = "model-settings";
 
 const THINKING_ALIASES = {
@@ -39,6 +39,16 @@ const MODEL_DEFAULTS = {
     enabled: false,
     thinking: "medium",
     thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
+  },
+  gpt56luna: {
+    enabled: false,
+    thinking: "medium",
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh", "max"],
+  },
+  deepseekv4flash: {
+    enabled: false,
+    thinking: "high",
+    thinkingOptions: ["none", "high", "max"],
   },
 };
 

@@ -1,6 +1,6 @@
 /**
  * AI Controller
- * Handles Gemini API integration for code generation
+ * Handles provider API integrations for code generation
  */
 
 const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
@@ -105,6 +105,37 @@ const MODEL_PREFERENCES = {
     thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
     defaultThinking: "medium",
     thinkingMode: "openai-reasoning",
+  },
+  gpt56luna: {
+    provider: "openai",
+    model: "gpt-5.6-luna",
+    label: "GPT-5.6 Luna",
+    shortLabel: "5.6 Luna",
+    pricing: {
+      inputPerToken: 1 / 1000000,
+      cachedInputPerToken: 0.1 / 1000000,
+      outputPerToken: 6 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh", "max"],
+    defaultThinking: "medium",
+    thinkingMode: "openai-reasoning",
+  },
+  deepseekv4flash: {
+    provider: "deepseek",
+    model: "deepseek-v4-flash",
+    label: "DeepSeek V4 Flash",
+    shortLabel: "V4 Flash",
+    pricing: {
+      inputPerToken: 0.14 / 1000000,
+      cachedInputPerToken: 0.0028 / 1000000,
+      outputPerToken: 0.28 / 1000000,
+    },
+    thinkingOptions: ["none", "high", "max"],
+    defaultThinking: "high",
+    thinkingMode: "deepseek-thinking",
   },
 };
 
@@ -258,6 +289,21 @@ function getOpenAIReasoningConfig(selectedModel) {
   if (selectedModel.thinkingMode !== "openai-reasoning") return null;
   return {
     effort: selectedModel.thinking,
+  };
+}
+
+function getDeepSeekThinkingConfig(selectedModel) {
+  if (selectedModel.thinkingMode !== "deepseek-thinking") return null;
+
+  if (selectedModel.thinking === "none") {
+    return {
+      thinking: { type: "disabled" },
+    };
+  }
+
+  return {
+    thinking: { type: "enabled" },
+    reasoning_effort: selectedModel.thinking,
   };
 }
 
@@ -853,9 +899,10 @@ function createJsonStringDecoder() {
   return { decode, hasPending, reset };
 }
 
-// Initialize Gemini AI client
+// Initialize server-managed provider clients
 const genAI = new GoogleGenAI({ apiKey: config.geminiApiKey });
 const openAI = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey }) : null;
+const deepSeek = config.deepseekApiKey ? new OpenAI({ apiKey: config.deepseekApiKey, baseURL: "https://api.deepseek.com" }) : null;
 
 // System instruction for clean code output
 const SYSTEM_INSTRUCTION = `You are an expert web developer assistant. Your task is to generate or modify clean, production-ready HTML, CSS, and JavaScript code.
@@ -1038,6 +1085,21 @@ function toGeminiUsageMetadata(openAIUsage = {}) {
   };
 }
 
+function toNormalizedUsageMetadataFromChatCompletion(usage = {}) {
+  const promptTokenCount = usage.prompt_tokens || 0;
+  const thoughtsTokenCount = usage.completion_tokens_details?.reasoning_tokens || 0;
+  const outputTokenCount = usage.completion_tokens || 0;
+  const candidatesTokenCount = Math.max(0, outputTokenCount - thoughtsTokenCount);
+
+  return {
+    promptTokenCount,
+    candidatesTokenCount,
+    thoughtsTokenCount,
+    cachedContentTokenCount: usage.prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens || 0,
+    totalTokenCount: usage.total_tokens || promptTokenCount + outputTokenCount,
+  };
+}
+
 function logStreamDiagnostic(event, payload) {
   console.info(`[AI Stream Diagnostic] ${event}`, JSON.stringify(payload));
 }
@@ -1159,6 +1221,68 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
   })();
 }
 
+async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey }) {
+  const client = apiKey ? new OpenAI({ apiKey, baseURL: "https://api.deepseek.com" }) : deepSeek;
+
+  if (!client) {
+    throw new AppError("DeepSeek API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
+  }
+
+  const request = {
+    model: selectedModel.model,
+    messages: [
+      {
+        role: "system",
+        content: systemInstruction || (isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION),
+      },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+    ...getDeepSeekThinkingConfig(selectedModel),
+    max_tokens: 128000,
+    stream: true,
+    stream_options: { include_usage: true },
+  };
+
+  const stream = await client.chat.completions.create(request);
+
+  return (async function* () {
+    const diagnostics = {
+      requestId,
+      phase,
+      provider: selectedModel.provider,
+      model: selectedModel.model,
+      textChunks: 0,
+      textChars: 0,
+      maxChunkChars: 0,
+      usageChunks: 0,
+      startedAt: Date.now(),
+    };
+
+    try {
+      for await (const chunk of stream) {
+        const text = chunk.choices?.[0]?.delta?.content || "";
+        if (text) {
+          diagnostics.textChunks += 1;
+          diagnostics.textChars += text.length;
+          diagnostics.maxChunkChars = Math.max(diagnostics.maxChunkChars, text.length);
+        }
+        if (chunk.usage) diagnostics.usageChunks += 1;
+
+        yield {
+          text,
+          usageMetadata: chunk.usage ? toNormalizedUsageMetadataFromChatCompletion(chunk.usage) : null,
+        };
+      }
+    } finally {
+      logStreamDiagnostic("provider-summary", {
+        ...diagnostics,
+        durationMs: Date.now() - diagnostics.startedAt,
+      });
+    }
+  })();
+}
+
 async function createModelTextStream({ selectedModel, generationConfig, userPrompt, isAskMode, requestId, phase = "primary", apiKeys }) {
   if (selectedModel.provider === "openai") {
     return createOpenAIStream({
@@ -1169,6 +1293,18 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
       requestId,
       phase,
       apiKey: apiKeys?.openai,
+    });
+  }
+
+  if (selectedModel.provider === "deepseek") {
+    return createDeepSeekStream({
+      selectedModel,
+      userPrompt,
+      isAskMode,
+      systemInstruction: generationConfig?.systemInstruction,
+      requestId,
+      phase,
+      apiKey: apiKeys?.deepseek,
     });
   }
 
@@ -1313,7 +1449,7 @@ The previous patch could not be applied safely. Return the complete updated code
 }
 
 /**
- * Generate code using Gemini API with streaming structured outputs
+ * Generate code using the selected provider with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
   const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE, parentVersionId } = req.body;
@@ -1330,7 +1466,12 @@ const generateCode = asyncHandler(async (req, res) => {
   }
 
   if (isApiKeyMode && !apiKeys?.[selectedModel.provider]) {
-    throw new AppError(`${selectedModel.label} requires a ${selectedModel.provider === "openai" ? "OpenAI" : "Gemini"} API key`, 400, ERROR_CODES.API_KEY_REQUIRED);
+    const providerLabel = {
+      gemini: "Gemini",
+      openai: "OpenAI",
+      deepseek: "DeepSeek",
+    }[selectedModel.provider];
+    throw new AppError(`${selectedModel.label} requires a ${providerLabel} API key`, 400, ERROR_CODES.API_KEY_REQUIRED);
   }
 
   if (!isApiKeyMode && selectedModel.provider === "gemini" && !config.geminiApiKey) {
@@ -1339,6 +1480,10 @@ const generateCode = asyncHandler(async (req, res) => {
 
   if (!isApiKeyMode && selectedModel.provider === "openai" && !config.openaiApiKey) {
     throw new AppError("OpenAI API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
+  }
+
+  if (!isApiKeyMode && selectedModel.provider === "deepseek" && !config.deepseekApiKey) {
+    throw new AppError("DeepSeek API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
   }
 
   // Set up SSE headers

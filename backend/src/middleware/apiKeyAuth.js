@@ -14,6 +14,7 @@ const getApiKeyAuthPayload = (req) => {
     apiKeys: {
       gemini: trimKey(apiKeys.gemini),
       openai: trimKey(apiKeys.openai),
+      deepseek: trimKey(apiKeys.deepseek),
     },
   };
 };
@@ -29,7 +30,7 @@ const apiKeyAuth = asyncHandler(async (req, res, next) => {
     throw new AppError("API key session token is required", 400, ERROR_CODES.VALIDATION_FAILED);
   }
 
-  if (!apiKeys.gemini && !apiKeys.openai) {
+  if (!apiKeys.gemini && !apiKeys.openai && !apiKeys.deepseek) {
     throw new AppError("At least one API key is required", 400, ERROR_CODES.API_KEY_REQUIRED);
   }
 
@@ -45,6 +46,7 @@ const apiKeyAuth = asyncHandler(async (req, res, next) => {
   req.apiKeyAuth = {
     hasGeminiKey: Boolean(apiKeys.gemini),
     hasOpenAIKey: Boolean(apiKeys.openai),
+    hasDeepSeekKey: Boolean(apiKeys.deepseek),
     apiKeys,
   };
 

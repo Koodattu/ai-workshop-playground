@@ -24,7 +24,15 @@ type TestState = "idle" | "testing" | "valid" | "invalid";
 const PROVIDERS: Array<{ id: ApiKeyProvider; label: string }> = [
   { id: "gemini", label: "Gemini" },
   { id: "openai", label: "OpenAI" },
+  { id: "deepseek", label: "DeepSeek" },
 ];
+
+const normalizeApiKeys = (apiKeys: UserApiKeySettings): UserApiKeySettings => ({
+  gemini: apiKeys.gemini || "",
+  openai: apiKeys.openai || "",
+  deepseek: apiKeys.deepseek || "",
+  accessToken: apiKeys.accessToken || "",
+});
 
 export function PasswordModal({
   onAuthenticate,
@@ -39,11 +47,12 @@ export function PasswordModal({
 }: PasswordModalProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [password, setPassword] = useState(initialPassword || "");
-  const [apiKeys, setApiKeys] = useState<UserApiKeySettings>(initialApiKeys);
+  const [apiKeys, setApiKeys] = useState<UserApiKeySettings>(() => normalizeApiKeys(initialApiKeys));
   const [apiKeyError, setApiKeyError] = useState<string | undefined>();
   const [testStates, setTestStates] = useState<Record<ApiKeyProvider, TestState>>({
     gemini: "idle",
     openai: "idle",
+    deepseek: "idle",
   });
   const { t } = useLanguage();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -54,7 +63,7 @@ export function PasswordModal({
   }, [initialMode]);
 
   useEffect(() => {
-    setApiKeys(initialApiKeys);
+    setApiKeys(normalizeApiKeys(initialApiKeys));
   }, [initialApiKeys]);
 
   useEffect(() => {
@@ -138,9 +147,10 @@ export function PasswordModal({
       ...apiKeys,
       gemini: apiKeys.gemini.trim(),
       openai: apiKeys.openai.trim(),
+      deepseek: apiKeys.deepseek.trim(),
     };
 
-    if (!nextKeys.gemini && !nextKeys.openai) {
+    if (!nextKeys.gemini && !nextKeys.openai && !nextKeys.deepseek) {
       setApiKeyError(t("apiKeys.oneKeyRequired"));
       return;
     }
@@ -172,7 +182,7 @@ export function PasswordModal({
     return t("apiKeys.test");
   };
 
-  const hasAnyApiKey = Boolean(apiKeys.gemini.trim() || apiKeys.openai.trim());
+  const hasAnyApiKey = Boolean(apiKeys.gemini.trim() || apiKeys.openai.trim() || apiKeys.deepseek.trim());
   const isTesting = Object.values(testStates).includes("testing");
 
   return (

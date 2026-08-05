@@ -965,6 +965,8 @@ const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   gpt54mini: { enabled: false, thinking: "none" },
   gpt54: { enabled: false, thinking: "none" },
   gpt55: { enabled: false, thinking: "medium" },
+  gpt56luna: { enabled: false, thinking: "medium" },
+  deepseekv4flash: { enabled: false, thinking: "high" },
 };
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
@@ -973,6 +975,7 @@ const THINKING_LABELS: Record<ThinkingLevel, string> = {
   medium: "Medium",
   high: "High",
   xhigh: "Extra high",
+  max: "Maximum",
 };
 
 const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTabProps) => {
@@ -983,6 +986,8 @@ const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTa
     { id: "gpt54mini", label: "OpenAI Fast", description: "GPT-5.4 mini - cheapest and fastest OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
     { id: "gpt54", label: "OpenAI Balanced", description: "GPT-5.4 - OpenAI tier comparable to Gemini 3", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
     { id: "gpt55", label: "OpenAI Premium", description: "GPT-5.5 - highest-cost OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
+    { id: "gpt56luna", label: "OpenAI Efficient", description: "GPT-5.6 Luna - cost-efficient, high-volume OpenAI model", thinkingOptions: ["none", "low", "medium", "high", "xhigh", "max"] },
+    { id: "deepseekv4flash", label: "DeepSeek Fast", description: "DeepSeek V4 Flash - official DeepSeek API", thinkingOptions: ["none", "high", "max"] },
   ];
 
   return (

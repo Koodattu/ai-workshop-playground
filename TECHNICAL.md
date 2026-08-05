@@ -1058,6 +1058,7 @@ npm start
 
 - `GEMINI_API_KEY` - Required for Gemini AI generation
 - `OPENAI_API_KEY` - Required only when OpenAI models are enabled
+- `DEEPSEEK_API_KEY` - Required only when DeepSeek models are enabled
 - `ADMIN_SECRET` - Secure random string for admin access
 - `MONGO_URI` - Production MongoDB connection string
 - `FRONTEND_URL` - Must match actual frontend URL for CORS
@@ -1089,6 +1090,7 @@ MONGO_URI=mongodb://username:password@host:27017/workshop?authSource=admin
 # AI Configuration
 GEMINI_API_KEY=your_gemini_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
 
 # Security
 ADMIN_SECRET=your_secure_random_secret_here

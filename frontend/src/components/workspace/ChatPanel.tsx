@@ -60,6 +60,8 @@ export function ChatPanel({
     { value: "gpt54mini", label: t("chat.modelGpt54Mini") },
     { value: "gpt54", label: t("chat.modelGpt54") },
     { value: "gpt55", label: t("chat.modelGpt55") },
+    { value: "gpt56luna", label: t("chat.modelGpt56Luna") },
+    { value: "deepseekv4flash", label: t("chat.modelDeepSeekV4Flash") },
   ] satisfies Array<{ value: ModelPreference; label: string }>;
   const enabledModelOptions = modelOptions.filter((option) => enabledModelPreferences.includes(option.value));
   const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : modelOptions;

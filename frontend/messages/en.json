@@ -86,6 +86,8 @@
     "modelGpt54Mini": "GPT-5.4 mini",
     "modelGpt54": "GPT-5.4",
     "modelGpt55": "GPT-5.5",
+    "modelGpt56Luna": "GPT-5.6 Luna",
+    "modelDeepSeekV4Flash": "DeepSeek V4 Flash",
     "askButton": "Ask",
     "errors": {
       "VALIDATION_FAILED": "Validation failed",
@@ -160,7 +162,7 @@
   },
   "apiKeys": {
     "title": "Use Your API Key",
-    "description": "Connect Gemini, OpenAI, or both.",
+    "description": "Connect Gemini, OpenAI, or DeepSeek.",
     "passwordTab": "Password",
     "apiKeyTab": "API keys",
     "orUseApiKey": "Or use your own API key",

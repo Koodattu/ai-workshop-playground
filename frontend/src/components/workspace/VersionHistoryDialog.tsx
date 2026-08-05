@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { CodeVersion } from "@/types";
+import type { ApiKeyProvider, CodeVersion } from "@/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface VersionHistoryDialogProps {
@@ -42,14 +42,16 @@ const findStartLine = (code: string | undefined, snippet: string): number | null
   return code.slice(0, index).split("\n").length;
 };
 
-const getModelBadge = (version: CodeVersion): { provider: "gemini" | "openai"; shortLabel: string; title: string } | null => {
+const getModelBadge = (version: CodeVersion): { provider: ApiKeyProvider; shortLabel: string; title: string } | null => {
   const modelId = (version.modelId || "").toLowerCase();
-  const provider = version.modelProvider || (modelId.includes("gpt") ? "openai" : modelId.includes("gemini") ? "gemini" : null);
-  if (provider !== "gemini" && provider !== "openai") return null;
+  const provider = version.modelProvider || (modelId.includes("gpt") ? "openai" : modelId.includes("gemini") ? "gemini" : modelId.includes("deepseek") ? "deepseek" : null);
+  if (provider !== "gemini" && provider !== "openai" && provider !== "deepseek") return null;
 
   let shortLabel = version.modelShortLabel || "";
   if (!shortLabel) {
-    if (modelId.includes("5.4-mini")) shortLabel = "5.4-mini";
+    if (modelId.includes("5.6-luna")) shortLabel = "5.6 Luna";
+    else if (modelId.includes("v4-flash")) shortLabel = "V4 Flash";
+    else if (modelId.includes("5.4-mini")) shortLabel = "5.4-mini";
     else if (modelId.includes("5.5")) shortLabel = "5.5";
     else if (modelId.includes("5.4")) shortLabel = "5.4";
     else if (modelId.includes("3.5")) shortLabel = "3.5";
@@ -71,16 +73,25 @@ const ModelBadge = ({ version }: { version: CodeVersion }) => {
   if (!badge) return null;
 
   const isOpenAI = badge.provider === "openai";
+  const isDeepSeek = badge.provider === "deepseek";
+  const badgeClassName = isOpenAI
+    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+    : isDeepSeek
+      ? "border-sky-400/30 bg-sky-400/10 text-sky-200"
+      : "border-violet-400/30 bg-violet-400/10 text-violet-200";
+  const iconClassName = isOpenAI
+    ? "w-5 bg-emerald-300 text-obsidian"
+    : isDeepSeek
+      ? "w-5 bg-sky-300 text-obsidian"
+      : "w-3.5 bg-violet-300 text-obsidian";
 
   return (
     <span
       title={badge.title}
-      className={`shrink-0 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono leading-none ${
-        isOpenAI ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-violet-400/30 bg-violet-400/10 text-violet-200"
-      }`}
+      className={`shrink-0 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono leading-none ${badgeClassName}`}
     >
-      <span className={`grid h-3.5 place-items-center rounded-full text-[8px] font-bold ${isOpenAI ? "w-5 bg-emerald-300 text-obsidian" : "w-3.5 bg-violet-300 text-obsidian"}`}>
-        {isOpenAI ? "GPT" : "G"}
+      <span className={`grid h-3.5 place-items-center rounded-full text-[8px] font-bold ${iconClassName}`}>
+        {isOpenAI ? "GPT" : isDeepSeek ? "DS" : "G"}
       </span>
       {badge.shortLabel}
     </span>

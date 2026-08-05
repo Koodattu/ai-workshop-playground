@@ -33,7 +33,7 @@ const STREAM_EDITOR_FLUSH_MS = 100;
 const STREAM_AUTO_FORMAT_MAX_CHARS = 60_000;
 const STREAM_AUTO_FORMAT_MAX_LINES = 1000;
 
-const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55"] as const satisfies readonly ModelPreference[];
+const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55", "gpt56luna", "deepseekv4flash"] as const satisfies readonly ModelPreference[];
 const MODEL_PROVIDER: Record<ModelPreference, ApiKeyProvider> = {
   balanced: "gemini",
   fast: "gemini",
@@ -41,10 +41,13 @@ const MODEL_PROVIDER: Record<ModelPreference, ApiKeyProvider> = {
   gpt54mini: "openai",
   gpt54: "openai",
   gpt55: "openai",
+  gpt56luna: "openai",
+  deepseekv4flash: "deepseek",
 };
 const EMPTY_API_KEYS: UserApiKeySettings = {
   gemini: "",
   openai: "",
+  deepseek: "",
   accessToken: "",
 };
 
@@ -177,7 +180,7 @@ export default function WorkspacePage() {
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
-  const hasApiKey = Boolean(apiKeySettings.gemini.trim() || apiKeySettings.openai.trim());
+  const hasApiKey = Boolean(apiKeySettings.gemini?.trim() || apiKeySettings.openai?.trim() || apiKeySettings.deepseek?.trim());
 
   const clearEditorFlushTimer = useCallback(() => {
     if (editorFlushTimerRef.current) {
@@ -388,7 +391,7 @@ export default function WorkspacePage() {
       return getAvailableModelPreferences(enabledModelPreferences);
     }
 
-    return MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(apiKeySettings[MODEL_PROVIDER[preference]].trim()));
+    return MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(apiKeySettings[MODEL_PROVIDER[preference]]?.trim()));
   }, [apiKeySettings, authMode, enabledModelPreferences]);
 
   useEffect(() => {
@@ -683,6 +686,7 @@ export default function WorkspacePage() {
               apiKeys: {
                 gemini: apiKeySettings.gemini.trim(),
                 openai: apiKeySettings.openai.trim(),
+                deepseek: apiKeySettings.deepseek?.trim() || "",
               },
               apiKeyAccessToken: getOrCreateApiKeyAccessToken(),
             }
@@ -692,7 +696,7 @@ export default function WorkspacePage() {
             };
 
       if (authMode === "password" && !password) return;
-      if (authMode === "api-key" && !apiKeySettings.gemini.trim() && !apiKeySettings.openai.trim()) return;
+      if (authMode === "api-key" && !apiKeySettings.gemini.trim() && !apiKeySettings.openai.trim() && !apiKeySettings.deepseek?.trim()) return;
 
       const codeBeforeGeneration = code;
 
@@ -1313,6 +1317,7 @@ export default function WorkspacePage() {
       const savedApiKeys = {
         gemini: nextApiKeys.gemini.trim(),
         openai: nextApiKeys.openai.trim(),
+        deepseek: nextApiKeys.deepseek?.trim() || "",
         accessToken,
       };
 

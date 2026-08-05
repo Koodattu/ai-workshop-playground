@@ -23,7 +23,7 @@ const sanitizeProviderError = (error) => ({
 router.post(
   "/test",
   [
-    body("provider").isIn(["gemini", "openai"]).withMessage({ msg: "Provider must be gemini or openai", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("provider").isIn(["gemini", "openai", "deepseek"]).withMessage({ msg: "Provider must be gemini, openai, or deepseek", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("apiKey")
       .trim()
       .notEmpty()
@@ -37,8 +37,11 @@ router.post(
     const { provider, apiKey } = req.body;
 
     try {
-      if (provider === "openai") {
-        const client = new OpenAI({ apiKey });
+      if (provider === "openai" || provider === "deepseek") {
+        const client = new OpenAI({
+          apiKey,
+          ...(provider === "deepseek" ? { baseURL: "https://api.deepseek.com" } : {}),
+        });
         await client.models.list({ timeout: 10000 });
       } else {
         const client = new GoogleGenAI({ apiKey });

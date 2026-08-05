@@ -10,6 +10,7 @@ const workshopGuard = require("../middleware/workshopGuard");
 const { apiKeyAuth } = require("../middleware/apiKeyAuth");
 const validateRequest = require("../middleware/validateRequest");
 const { ERROR_CODES } = require("../constants/errorCodes");
+const { MODEL_PREFERENCE_IDS } = require("../services/modelSettings");
 
 const router = express.Router();
 const isApiKeyMode = (value, { req }) => req.body.authMode === "api-key";
@@ -36,14 +37,14 @@ const withCode = (validationChain, errorCode) => {
 
 /**
  * POST /api/generate
- * Generate code using Gemini AI
+ * Generate code using the selected AI model
  *
  * Request body:
  * - password: Workshop access password
  * - visitorId: Unique identifier for the visitor/machine
  * - prompt: The code generation prompt
  * - messageHistory: (optional) Array of previous messages for context
- * - modelPreference: (optional) "fast", "balanced", "accurate", "gpt54mini", "gpt54", or "gpt55"
+ * - modelPreference: (optional) model preference ID exposed by the model settings service
  *
  * Response:
  * - code: Generated HTML/CSS/JS code
@@ -79,6 +80,12 @@ router.post(
       .trim()
       .isLength({ max: 4096 })
       .withMessage({ msg: "OpenAI API key is too long", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("apiKeys.deepseek")
+      .if(isApiKeyMode)
+      .optional({ checkFalsy: true })
+      .trim()
+      .isLength({ max: 4096 })
+      .withMessage({ msg: "DeepSeek API key is too long", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("visitorId")
       .trim()
       .notEmpty()
@@ -113,8 +120,8 @@ router.post(
     body("mode").optional().isIn(["edit", "ask"]).withMessage({ msg: "Mode must be either 'edit' or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("modelPreference")
       .optional()
-      .isIn(["fast", "balanced", "accurate", "gpt54mini", "gpt54", "gpt55"])
-      .withMessage({ msg: "Model preference must be one of 'fast', 'balanced', 'accurate', 'gpt54mini', 'gpt54', or 'gpt55'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+      .isIn(MODEL_PREFERENCE_IDS)
+      .withMessage({ msg: "Model preference is invalid", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     validateRequest,
   ],
   generationAuth,

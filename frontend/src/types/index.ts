@@ -12,14 +12,15 @@ export interface ChatMessage {
 export type ChatMode = "edit" | "ask";
 
 // AI model preference sent as a symbolic value; backend maps it to provider model IDs.
-export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55";
-export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh";
+export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55" | "gpt56luna" | "deepseekv4flash";
+export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AuthMode = "password" | "api-key";
-export type ApiKeyProvider = "gemini" | "openai";
+export type ApiKeyProvider = "gemini" | "openai" | "deepseek";
 
 export interface UserApiKeySettings {
   gemini: string;
   openai: string;
+  deepseek: string;
   accessToken: string;
 }
 
@@ -377,7 +378,7 @@ export interface CodeVersion {
   prompt: string;
   message: string;
   projectName?: string | null;
-  modelProvider?: "gemini" | "openai" | null;
+  modelProvider?: ApiKeyProvider | null;
   modelPreference?: ModelPreference | string | null;
   modelId?: string | null;
   modelLabel?: string | null;
