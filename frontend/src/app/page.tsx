@@ -86,6 +86,9 @@ export default function WorkspacePage() {
   const { templates: sharedTemplates, addSharedTemplate, removeTemplate: removeSharedTemplate, isSharedTemplateId, getTemplate: getSharedTemplate } = useSharedTemplates();
 
   const { language } = useLanguage();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isSafeStart = searchParams.has("safe") || searchParams.has("debug") || searchParams.has("recover");
 
   // Persist template selection to localStorage with validation
   const [savedTemplateId, setSavedTemplateId] = useLocalStorage<string>("current-template-id", DEFAULT_TEMPLATE_ID);
@@ -169,6 +172,7 @@ export default function WorkspacePage() {
   // Guard to prevent template loading effect from reverting code after streaming completes
   // When streaming ends, onDone sets the final code - we don't want the template effect to override it
   const skipTemplateLoadRef = useRef<boolean>(false);
+  const hasAppliedSafeStartRef = useRef(false);
 
   // Interval ref for forceful continuous polling scroll to bottom during streaming
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -362,7 +366,7 @@ export default function WorkspacePage() {
         const fetchedVersions = await api.getMyCodeVersions(request);
         setVersions(fetchedVersions);
 
-        if (options?.loadLatest && fetchedVersions.length > 0) {
+        if (options?.loadLatest && !isSafeStart && fetchedVersions.length > 0) {
           const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
           setCode(latest.code);
           setCurrentVersionId(latest.id);
@@ -375,7 +379,7 @@ export default function WorkspacePage() {
         setIsLoadingVersions(false);
       }
     },
-    [getVersionListRequest],
+    [getVersionListRequest, isSafeStart],
   );
 
   const currentProjectVersions = useMemo(() => {
@@ -424,9 +428,6 @@ export default function WorkspacePage() {
       setModelPreference(availableModelPreferences[0]);
     }
   }, [availableModelPreferences, modelPreference, setModelPreference]);
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
   // Check if code is dirty (different from original snapshot)
   const isCodeDirty = useCallback(() => {
     return code !== originalCodeSnapshotRef.current;
@@ -479,8 +480,18 @@ export default function WorkspacePage() {
     return () => clearTimeout(saveTimer);
   }, [code, currentTemplateId, isCustomTemplateId, isStreaming, isCodeDirty, updateTemplate]);
 
+  useEffect(() => {
+    if (!isSafeStart || hasAppliedSafeStartRef.current) return;
+
+    hasAppliedSafeStartRef.current = true;
+    setSavedTemplateId(DEFAULT_TEMPLATE_ID);
+  }, [isSafeStart, setSavedTemplateId]);
+
   // Load saved template from localStorage once templates are loaded
   useEffect(() => {
+    // Emergency safe start: keep the saved project intact, but do not execute it automatically.
+    if (isSafeStart) return;
+
     // Skip if streaming just completed - onDone handles the code state
     // This prevents the effect from reverting to old template code after AI generation
     if (skipTemplateLoadRef.current) {
@@ -525,7 +536,7 @@ export default function WorkspacePage() {
       setCode(templateCode);
       originalCodeSnapshotRef.current = templateCode;
     }
-  }, [customTemplates, sharedTemplates, savedTemplateId, language]); // Only run when templates or savedTemplateId changes
+  }, [customTemplates, sharedTemplates, savedTemplateId, language, isSafeStart]); // Only run when templates or savedTemplateId changes
 
   // Update template code when language changes (for built-in templates only)
   useEffect(() => {
@@ -575,7 +586,7 @@ export default function WorkspacePage() {
               includeCode: true,
             });
             setVersions(fetchedVersions);
-            if (fetchedVersions.length > 0) {
+            if (!isSafeStart && fetchedVersions.length > 0) {
               const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
               setCode(latest.code);
               setCurrentVersionId(latest.id);
@@ -617,7 +628,7 @@ export default function WorkspacePage() {
         isAuthenticatingRef.current = false;
       }
     },
-    [setAuthMode, setPassword, showToast, t, visitorId],
+    [isSafeStart, setAuthMode, setPassword, showToast, t, visitorId],
   );
 
   // Auto-validate password on page load (only once)
@@ -655,6 +666,8 @@ export default function WorkspacePage() {
 
   // Check for pending shared template from share link
   useEffect(() => {
+    if (isSafeStart) return;
+
     const pendingShareStr = sessionStorage.getItem("pending-shared-template");
     if (pendingShareStr) {
       try {
@@ -675,7 +688,7 @@ export default function WorkspacePage() {
         console.error("Failed to load pending shared template:", e);
       }
     }
-  }, [addSharedTemplate, showToast, t]);
+  }, [addSharedTemplate, isSafeStart, showToast, t]);
 
   const handleSendMessage = useCallback(
     async (prompt: string) => {
@@ -1357,7 +1370,7 @@ export default function WorkspacePage() {
             includeCode: true,
           });
           setVersions(fetchedVersions);
-          if (fetchedVersions.length > 0) {
+          if (!isSafeStart && fetchedVersions.length > 0) {
             const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
             setCode(latest.code);
             setCurrentVersionId(latest.id);
@@ -1371,7 +1384,7 @@ export default function WorkspacePage() {
 
       showToast(t("apiKeys.saved"), "success");
     },
-    [apiKeySettings.accessToken, modelPreference, setApiKeySettings, setAuthMode, setModelPreference, showToast, t, visitorId],
+    [apiKeySettings.accessToken, isSafeStart, modelPreference, setApiKeySettings, setAuthMode, setModelPreference, showToast, t, visitorId],
   );
 
   const handleTestApiKey = useCallback(
