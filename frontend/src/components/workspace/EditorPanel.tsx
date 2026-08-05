@@ -21,6 +21,8 @@ interface EditorPanelProps {
   onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
   isStreaming?: boolean;
   onOpenVersionHistory?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export function EditorPanel({
@@ -35,6 +37,8 @@ export function EditorPanel({
   onEditorReady,
   isStreaming = false,
   onOpenVersionHistory,
+  isCollapsed = false,
+  onToggleCollapse,
 }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -166,16 +170,52 @@ export function EditorPanel({
     return t("templates.customCode");
   }, [currentTemplateId, customTemplates, sharedTemplates, t]);
 
+  const collapseToggle = onToggleCollapse && (
+    <button
+      type="button"
+      onClick={onToggleCollapse}
+      className="relative shrink-0 rounded p-1.5 text-gray-400 transition-colors hover:bg-graphite hover:text-white after:absolute after:left-1/2 after:top-1/2 after:size-10 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']"
+      aria-label={t("editor.collapseEditor")}
+      aria-expanded="true"
+      title={t("editor.collapseEditor")}
+    >
+      <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v18" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m16 15-3-3 3-3" />
+      </svg>
+    </button>
+  );
+
   return (
-    <div className="flex flex-col h-full bg-void">
+    <div className="relative flex h-full flex-col overflow-hidden bg-void">
+      {isCollapsed && onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="absolute inset-0 flex cursor-pointer flex-col items-center justify-start bg-obsidian transition-colors hover:bg-graphite focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-electric"
+          aria-label={t("editor.expandEditor")}
+          aria-expanded="false"
+          title={t("editor.expandEditor")}
+        >
+          <div className="mt-16 flex rotate-90 items-center gap-2 whitespace-nowrap">
+            <svg className="h-4 w-4 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            <h2 className="font-display text-sm font-semibold tracking-wide text-white">{t("editor.header")}</h2>
+          </div>
+        </button>
+      )}
+
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.25 border-b border-steel/50 bg-obsidian">
+      <div className={`flex items-center justify-between px-4 py-2.25 border-b border-steel/50 bg-obsidian ${isCollapsed ? "invisible" : ""}`}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
             <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("editor.header")}</h2>
+            {collapseToggle}
           </div>
         </div>
 
@@ -647,7 +687,7 @@ export function EditorPanel({
       </div>
 
       {/* Editor */}
-      <div className="flex-1 overflow-hidden">
+      <div className={`flex-1 overflow-hidden ${isCollapsed ? "invisible" : ""}`}>
         <Editor
           defaultLanguage="html"
           value={code}

@@ -138,6 +138,8 @@
     "download": "Lataa",
     "language": "Kieli",
     "loadingEditor": "Ladataan editoria...",
+    "collapseEditor": "Pienennä koodieditori",
+    "expandEditor": "Laajenna koodieditori",
     "selectTemplate": "Valitse Pohja",
     "actionsMenu": "Toiminnot",
     "undo": "Kumoa",

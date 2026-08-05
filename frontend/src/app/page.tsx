@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Panel, Group, Separator } from "react-resizable-panels";
+import { Panel, Group, Separator, usePanelRef } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
@@ -102,6 +102,8 @@ export default function WorkspacePage() {
   });
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [mobileActivePanel, setMobileActivePanel] = useState<"chat" | "editor" | "preview">("chat");
+  const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
+  const editorPanelRef = usePanelRef();
   const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
   const [showThoughts, setShowThoughts] = useLocalStorage<boolean>("show-ai-thoughts", false);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
@@ -117,6 +119,14 @@ export default function WorkspacePage() {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [authDialogInitialMode, setAuthDialogInitialMode] = useState<AuthMode>("password");
   const [isApiKeyUsageOpen, setIsApiKeyUsageOpen] = useState(false);
+
+  const handleEditorCollapseToggle = useCallback(() => {
+    if (editorPanelRef.current?.isCollapsed()) {
+      editorPanelRef.current.expand();
+    } else {
+      editorPanelRef.current?.collapse();
+    }
+  }, [editorPanelRef]);
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
@@ -1550,7 +1560,16 @@ export default function WorkspacePage() {
             <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />
 
             {/* Editor Panel */}
-            <Panel defaultSize={500} minSize={200} className="border-r border-steel/30 panel-animate" style={{ animationDelay: "0.1s" }}>
+            <Panel
+              panelRef={editorPanelRef}
+              defaultSize={500}
+              minSize={200}
+              collapsedSize={48}
+              collapsible
+              onResize={({ inPixels }) => setIsEditorCollapsed(inPixels < 200)}
+              className="border-r border-steel/30 panel-animate"
+              style={{ animationDelay: "0.1s" }}
+            >
               <EditorPanel
                 code={code}
                 onChange={handleCodeChange}
@@ -1561,6 +1580,8 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
+                isCollapsed={isEditorCollapsed}
+                onToggleCollapse={handleEditorCollapseToggle}
                 onOpenVersionHistory={() => {
                   setIsVersionHistoryOpen(true);
                   fetchVersions();

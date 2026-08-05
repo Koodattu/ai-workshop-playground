@@ -138,6 +138,8 @@
     "download": "Download",
     "language": "Language",
     "loadingEditor": "Loading Editor...",
+    "collapseEditor": "Collapse code editor",
+    "expandEditor": "Expand code editor",
     "selectTemplate": "Select Template",
     "actionsMenu": "Actions",
     "undo": "Undo",
