@@ -103,7 +103,9 @@ export default function WorkspacePage() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [mobileActivePanel, setMobileActivePanel] = useState<"chat" | "editor" | "preview">("chat");
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
+  const [isEditorPanelAnimating, setIsEditorPanelAnimating] = useState(false);
   const editorPanelRef = usePanelRef();
+  const editorPanelAnimationTimeoutRef = useRef<number | null>(null);
   const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
   const [showThoughts, setShowThoughts] = useLocalStorage<boolean>("show-ai-thoughts", false);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
@@ -121,12 +123,37 @@ export default function WorkspacePage() {
   const [isApiKeyUsageOpen, setIsApiKeyUsageOpen] = useState(false);
 
   const handleEditorCollapseToggle = useCallback(() => {
-    if (editorPanelRef.current?.isCollapsed()) {
-      editorPanelRef.current.expand();
-    } else {
-      editorPanelRef.current?.collapse();
+    const editorPanel = editorPanelRef.current;
+    if (!editorPanel) {
+      return;
     }
+
+    if (editorPanelAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(editorPanelAnimationTimeoutRef.current);
+    }
+
+    setIsEditorPanelAnimating(true);
+    window.requestAnimationFrame(() => {
+      if (editorPanel.isCollapsed()) {
+        editorPanel.expand();
+      } else {
+        editorPanel.collapse();
+      }
+
+      editorPanelAnimationTimeoutRef.current = window.setTimeout(() => {
+        setIsEditorPanelAnimating(false);
+        editorPanelAnimationTimeoutRef.current = null;
+      }, 180);
+    });
   }, [editorPanelRef]);
+
+  useEffect(() => {
+    return () => {
+      if (editorPanelAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(editorPanelAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
@@ -1529,7 +1556,7 @@ export default function WorkspacePage() {
 
         {/* Desktop: 3 column resizable layout */}
         <main className="flex-1 hidden md:flex overflow-hidden">
-          <Group orientation="horizontal" className="flex-1">
+          <Group orientation="horizontal" className={`flex-1 ${isEditorPanelAnimating ? "panel-group-animating" : ""}`}>
             {/* Chat Panel */}
             <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
               <ChatPanel

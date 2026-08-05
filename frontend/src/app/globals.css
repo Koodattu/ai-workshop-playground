@@ -205,6 +205,10 @@ body {
 }
 
 /* Panel resize handle */
+.panel-group-animating > [data-panel] {
+  transition: flex-grow 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
 .resize-handle {
   width: 4px;
   cursor: col-resize;
