@@ -952,6 +952,14 @@ CODE GENERATION RULES:
 7. Make interactive elements functional with proper JavaScript
 8. Format code with proper indentation - each tag, style rule, and script line should be on its own line
 
+STATE PRESERVATION CONTRACT:
+- For every interactive app with meaningful user progress or current UI/game state, expose window.workshopState with exportState() and importState(state) functions
+- exportState() must return a JSON-serializable object containing a numeric schemaVersion and every value needed to resume the experience; never include DOM nodes, functions, timers, or class instances
+- importState(state) must accept either a previously exported object or null. Validate fields, restore internal variables, and redraw or rerender the UI. A null value must reset the app to its initial state
+- After meaningful state changes, call window.workshopPreview?.saveState() so the workshop can persist progress promptly
+- Keep this contract working when modifying an existing interactive app, and migrate older schema versions when practical
+- Do not use cookies, localStorage, or sessionStorage for app progress. The workshop host owns persistence through this contract
+
 REMEMBER: Return JSON fields in this exact order: "editMode", "code", "edits", "message", "projectName".`;
 
 // JSON schema for structured output

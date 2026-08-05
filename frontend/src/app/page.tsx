@@ -1236,7 +1236,7 @@ export default function WorkspacePage() {
         // Clear context messages when switching templates
         setContextMessages([]);
         // Force instant preview update with the new code
-        previewControlRef.current?.forceRefresh(sharedTemplate.code);
+        previewControlRef.current?.forceRefresh(sharedTemplate.code, templateId);
         return;
       }
 
@@ -1251,7 +1251,7 @@ export default function WorkspacePage() {
           // Clear context messages when switching templates
           setContextMessages([]);
           // Force instant preview update with the new code
-          previewControlRef.current?.forceRefresh(customTemplate.code);
+          previewControlRef.current?.forceRefresh(customTemplate.code, templateId);
         }
       } else {
         // Switch to a built-in template
@@ -1267,7 +1267,7 @@ export default function WorkspacePage() {
           // Clear context messages when switching templates
           setContextMessages([]);
           // Force instant preview update with the new code
-          previewControlRef.current?.forceRefresh(newCode);
+          previewControlRef.current?.forceRefresh(newCode, templateId);
         }
       }
     },
@@ -1571,6 +1571,7 @@ export default function WorkspacePage() {
             <Panel defaultSize={500} minSize={200} className="panel-animate" style={{ animationDelay: "0.2s" }}>
               <PreviewPanel
                 code={code}
+                projectId={currentTemplateId}
                 onControlReady={(control) => {
                   previewControlRef.current = control;
                 }}
@@ -1640,6 +1641,7 @@ export default function WorkspacePage() {
             {mobileActivePanel === "preview" && (
               <PreviewPanel
                 code={code}
+                projectId={currentTemplateId}
                 onControlReady={(control) => {
                   previewControlRef.current = control;
                 }}

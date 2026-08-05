@@ -830,6 +830,7 @@ const appendCode = useCallback((text: string) => {
 
 - Render user code in sandboxed iframe
 - Handle auto-refresh toggle
+- Capture and restore opt-in, project-scoped app state through `postMessage`
 - Provide fullscreen mode
 - Display compilation errors (if any)
 
@@ -851,7 +852,8 @@ Security features:
 
 - Workshop password (persistent across sessions)
 - Visitor ID (persistent across sessions)
-- Code state (not persistent - resets on reload)
+- Generated code state (persistent only when the project opts into the preview state protocol)
+- Preview state protocol preference and serialized state (namespaced per project)
 - Language preference (persistent)
 
 **React State:**
@@ -1174,7 +1176,7 @@ app.use(
 **Mitigations:**
 
 - Timeout on code execution (manual refresh)
-- No persistent state across refreshes
+- Arbitrary runtime state cannot be preserved unless the generated app implements the preview state protocol
 - Iframe isolated from parent document
 
 ### 5. Rate Limiting

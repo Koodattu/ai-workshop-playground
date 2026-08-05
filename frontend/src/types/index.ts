@@ -206,7 +206,7 @@ export interface StreamCallbacks {
 export interface PreviewControl {
   disableAutoRefresh: () => void;
   enableAutoRefresh: () => void;
-  forceRefresh: (newCode?: string) => void;
+  forceRefresh: (newCode?: string, projectId?: string) => void;
 }
 
 // Custom template interface for user-created templates
