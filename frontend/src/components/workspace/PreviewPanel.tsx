@@ -907,7 +907,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
                     aria-hidden="true"
                   >
                     <span
-                      className={`absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+                      className={`absolute left-0 top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
                         isStatePersistenceEnabled ? "translate-x-5" : "translate-x-0.5"
                       }`}
                     />
