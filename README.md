@@ -34,9 +34,9 @@ The easiest way to get started:
 git clone https://github.com/yourusername/ai-workshop-playground.git
 cd ai-workshop-playground
 
-# 2. Set up your environment
-cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY and ADMIN_SECRET
+# 2. Set up your backend environment
+cp backend/.env.example backend/.env
+# Edit backend/.env and add your GEMINI_API_KEY and ADMIN_SECRET
 # Add OPENAI_API_KEY and/or DEEPSEEK_API_KEY if you enable those models in the admin panel
 
 # 3. Start everything with Docker Compose
@@ -77,6 +77,7 @@ npm run dev
 # In another terminal, start the frontend
 cd frontend
 npm install
+cp .env.example .env
 npm run dev
 ```
 
@@ -164,7 +165,8 @@ ai-workshop-playground/
 │   │   └── lib/          # API client & utilities
 │   └── Dockerfile
 ├── docker-compose.yml # Run everything together
-└── .env.example       # Configuration template
+├── backend/.env.example  # Backend configuration template
+└── frontend/.env.example # Frontend configuration template
 ```
 
 ## 🛠️ Technology Stack
