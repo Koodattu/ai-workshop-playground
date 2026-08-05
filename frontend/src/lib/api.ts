@@ -14,6 +14,11 @@ import type {
   CreateShareResponse,
   GetShareResponse,
   ShareLinkEntry,
+  CodeVersion,
+  ModelPreference,
+  ModelSettings,
+  ApiKeyProvider,
+  VersionListRequest,
 } from "@/types";
 
 class ApiClient {
@@ -125,6 +130,17 @@ class ApiClient {
 
       const decoder = new TextDecoder();
       let buffer = "";
+      const streamDiagnostics = {
+        eventTypes: {} as Record<string, number>,
+        codeChunks: 0,
+        codeChars: 0,
+        firstCodeChunkChars: null as number | null,
+        startedAt: Date.now(),
+      };
+
+      const logStreamDiagnostic = (event: string, payload: Record<string, unknown>) => {
+        console.info(`[SSE Stream Diagnostic] ${event}`, payload);
+      };
 
       // Start reading the stream
       (async () => {
@@ -151,6 +167,7 @@ class ApiClient {
                 try {
                   const jsonData = line.slice(6); // Remove "data: " prefix
                   const event = JSON.parse(jsonData);
+                  streamDiagnostics.eventTypes[event.type] = (streamDiagnostics.eventTypes[event.type] || 0) + 1;
 
                   // Handle different event types
                   switch (event.type) {
@@ -158,9 +175,22 @@ class ApiClient {
                       callbacks.onChunk?.(event.chunk, event.accumulated);
                       break;
                     case "code-start":
+                      logStreamDiagnostic("code-start", {
+                        codeChunks: streamDiagnostics.codeChunks,
+                        elapsedMs: Date.now() - streamDiagnostics.startedAt,
+                      });
                       callbacks.onCodeStart?.();
                       break;
                     case "code-chunk":
+                      streamDiagnostics.codeChunks += 1;
+                      streamDiagnostics.codeChars += event.chunk?.length || 0;
+                      if (streamDiagnostics.firstCodeChunkChars === null) {
+                        streamDiagnostics.firstCodeChunkChars = event.chunk?.length || 0;
+                        logStreamDiagnostic("first-code-chunk", {
+                          chunkChars: streamDiagnostics.firstCodeChunkChars,
+                          elapsedMs: Date.now() - streamDiagnostics.startedAt,
+                        });
+                      }
                       callbacks.onCodeChunk?.(event.chunk);
                       break;
                     case "code-complete":
@@ -176,11 +206,18 @@ class ApiClient {
                       callbacks.onCodeUpdate?.(event.code);
                       break;
                     case "done":
+                      logStreamDiagnostic("summary", {
+                        ...streamDiagnostics,
+                        elapsedMs: Date.now() - streamDiagnostics.startedAt,
+                      });
                       callbacks.onDone?.({
                         message: event.message,
                         code: event.code,
                         projectName: event.projectName,
+                        editMode: event.editMode,
+                        version: event.version,
                         remaining: event.remaining,
+                        usage: event.usage,
                       });
                       break;
                     case "error":
@@ -210,6 +247,27 @@ class ApiClient {
       }
       return () => abortController.abort();
     }
+  }
+
+  async getEnabledModels(): Promise<ModelPreference[]> {
+    const { data } = await this.request<{ models: ModelPreference[] }>("/api/models");
+    return data.models;
+  }
+
+  async getMyCodeVersions(request: VersionListRequest): Promise<CodeVersion[]> {
+    const { data } = await this.request<{ count: number; versions: CodeVersion[] }>("/api/versions/list", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return data.versions;
+  }
+
+  async testApiKey(provider: ApiKeyProvider, apiKey: string): Promise<boolean> {
+    const { data } = await this.request<{ valid: boolean; provider: ApiKeyProvider }>("/api/api-keys/test", {
+      method: "POST",
+      body: JSON.stringify({ provider, apiKey }),
+    });
+    return data.valid;
   }
 
   // Validate password - returns validation result with usage info
@@ -248,6 +306,26 @@ class ApiClient {
     } catch {
       return false;
     }
+  }
+
+  async getModelSettings(adminSecret: string): Promise<ModelSettings> {
+    const { data } = await this.request<{ models: ModelSettings }>("/api/admin/model-settings", {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data.models;
+  }
+
+  async updateModelSettings(adminSecret: string, models: ModelSettings): Promise<ModelSettings> {
+    const { data } = await this.request<{ models: ModelSettings }>("/api/admin/model-settings", {
+      method: "PUT",
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+      body: JSON.stringify({ models }),
+    });
+    return data.models;
   }
 
   async getPasswords(adminSecret: string): Promise<PasswordEntry[]> {
@@ -384,6 +462,18 @@ class ApiClient {
       },
     });
     return data.shareLinks;
+  }
+
+  async getCodeVersions(adminSecret: string): Promise<CodeVersion[]> {
+    const { data } = await this.request<{ count: number; versions: CodeVersion[] }>("/api/admin/code-versions", {
+      headers: {
+        "X-Admin-Secret": adminSecret,
+      },
+    });
+    return data.versions.map((version) => ({
+      ...version,
+      id: version.id || version._id || "",
+    }));
   }
 }
 

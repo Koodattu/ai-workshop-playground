@@ -20,6 +20,7 @@ interface EditorPanelProps {
   onRemoveSharedTemplate?: (id: string) => void;
   onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
   isStreaming?: boolean;
+  onOpenVersionHistory?: () => void;
 }
 
 export function EditorPanel({
@@ -33,6 +34,7 @@ export function EditorPanel({
   onRemoveSharedTemplate,
   onEditorReady,
   isStreaming = false,
+  onOpenVersionHistory,
 }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -494,6 +496,18 @@ export function EditorPanel({
                 document.body,
               )}
           </div>
+
+          {onOpenVersionHistory && (
+            <button
+              onClick={onOpenVersionHistory}
+              className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors relative"
+              title={t("versionHistory.open")}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-3-6.708M21 3v6h-6" />
+              </svg>
+            </button>
+          )}
 
           {/* Mobile: Actions dropdown menu */}
           <div className="md:hidden relative">

@@ -8,8 +8,10 @@ const Password = require("../models/Password");
 const Usage = require("../models/Usage");
 const RequestLog = require("../models/RequestLog");
 const SharedCode = require("../models/SharedCode");
+const CodeVersion = require("../models/CodeVersion");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
+const { getModelSettings, updateModelSettings } = require("../services/modelSettings");
 
 /**
  * Middleware to verify admin access
@@ -33,6 +35,18 @@ const verifyAdminCredentials = asyncHandler(async (req, res) => {
   res.json({
     message: "Admin credentials verified successfully",
     authenticated: true,
+  });
+});
+
+const getAdminModelSettings = asyncHandler(async (req, res) => {
+  res.json({
+    models: await getModelSettings(),
+  });
+});
+
+const updateAdminModelSettings = asyncHandler(async (req, res) => {
+  res.json({
+    models: await updateModelSettings(req.body.models || {}),
   });
 });
 
@@ -180,7 +194,7 @@ const updatePassword = asyncHandler(async (req, res) => {
   if (isActive !== undefined) updateData.isActive = isActive;
 
   const password = await Password.findByIdAndUpdate(id, updateData, {
-    new: true,
+    returnDocument: "after",
     runValidators: true,
   });
 
@@ -626,9 +640,50 @@ const getShareLinks = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get all generated code versions
+ */
+const getCodeVersions = asyncHandler(async (req, res) => {
+  const versions = await CodeVersion.find({ accessMode: { $ne: "api-key" } })
+    .select(
+      "visitorId passwordId parentVersionId rootVersionId code prompt message projectName modelProvider modelPreference modelId modelLabel modelShortLabel modelThinking editMode editCount edits manualEditsSinceParent createdAt",
+    )
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .lean();
+
+  res.json({
+    count: versions.length,
+    versions: versions.map((version) => ({
+      _id: version._id,
+      visitorId: version.visitorId,
+      passwordId: version.passwordId,
+      parentVersionId: version.parentVersionId,
+      rootVersionId: version.rootVersionId,
+      code: version.code,
+      prompt: version.prompt,
+      message: version.message,
+      projectName: version.projectName,
+      modelProvider: version.modelProvider || null,
+      modelPreference: version.modelPreference || null,
+      modelId: version.modelId || null,
+      modelLabel: version.modelLabel || null,
+      modelShortLabel: version.modelShortLabel || null,
+      modelThinking: version.modelThinking || null,
+      editMode: version.editMode,
+      editCount: version.editCount,
+      edits: version.edits || [],
+      manualEditsSinceParent: version.manualEditsSinceParent,
+      createdAt: version.createdAt,
+    })),
+  });
+});
+
 module.exports = {
   verifyAdmin,
   verifyAdminCredentials,
+  getAdminModelSettings,
+  updateAdminModelSettings,
   createPassword,
   listPasswords,
   getUsageStats,
@@ -640,4 +695,5 @@ module.exports = {
   getRecentRequests,
   getTokenTimeSeries,
   getShareLinks,
+  getCodeVersions,
 };

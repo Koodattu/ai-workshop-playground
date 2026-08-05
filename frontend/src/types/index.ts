@@ -5,24 +5,83 @@ export interface ChatMessage {
   timestamp: Date;
   errorDetails?: string;
   errorCode?: string;
+  failedPrompt?: string;
 }
 
 // Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)
 export type ChatMode = "edit" | "ask";
 
+// AI model preference sent as a symbolic value; backend maps it to provider model IDs.
+export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55";
+export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh";
+export type AuthMode = "password" | "api-key";
+export type ApiKeyProvider = "gemini" | "openai";
+
+export interface UserApiKeySettings {
+  gemini: string;
+  openai: string;
+  accessToken: string;
+}
+
+export interface GenerationUsageSummary {
+  provider: ApiKeyProvider;
+  modelPreference: ModelPreference | string;
+  modelId: string;
+  modelLabel: string;
+  modelThinking?: ThinkingLevel | string | null;
+  mode: ChatMode;
+  promptTokens: number;
+  candidatesTokens: number;
+  thoughtsTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  addedLines: number;
+  removedLines: number;
+  createdAt: string;
+}
+
+export interface ApiKeyUsageEntry extends GenerationUsageSummary {
+  id: string;
+}
+
 export interface GenerateRequest {
-  password: string;
+  authMode?: AuthMode;
+  password?: string;
+  apiKeys?: Partial<Record<ApiKeyProvider, string>>;
+  apiKeyAccessToken?: string;
   visitorId: string;
   prompt: string;
   existingCode?: string;
+  parentVersionId?: string | null;
   messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   mode?: ChatMode;
+  modelPreference?: ModelPreference;
 }
 
 export interface GenerateResponse {
   message: string;
   code: string;
+  projectName?: string;
+  editMode?: "replace_all" | "patch";
+  version?: CodeVersion;
+  usage?: GenerationUsageSummary | null;
 }
+
+export interface VersionListRequest {
+  authMode?: AuthMode;
+  password?: string;
+  visitorId: string;
+  apiKeyAccessToken?: string;
+  includeCode?: boolean;
+}
+
+export interface ModelSettingsEntry {
+  enabled: boolean;
+  thinking: ThinkingLevel;
+}
+
+export type ModelSettings = Record<ModelPreference, ModelSettingsEntry>;
 
 export interface PasswordEntry {
   _id: string;
@@ -87,7 +146,10 @@ export interface StreamDoneEvent {
   message: string;
   code: string;
   projectName?: string;
-  remaining: number;
+  editMode?: "replace_all" | "patch";
+  version?: CodeVersion;
+  remaining?: number;
+  usage?: GenerationUsageSummary | null;
 }
 
 export interface StreamErrorEvent {
@@ -127,7 +189,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; projectName?: string; remaining: number }) => void;
+  onDone?: (data: { message: string; code: string; projectName?: string; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
@@ -144,6 +206,8 @@ export interface CustomTemplate {
   name: string;
   code: string;
   projectName?: string; // LLM-provided project name
+  currentVersionId?: string | null; // latest AI version for this creation
+  rootVersionId?: string | null; // root version tree for this creation
   createdAt: number; // timestamp for sorting/deletion
   updatedAt: number; // timestamp for tracking last modification
 }
@@ -297,4 +361,32 @@ export interface ShareLinkEntry {
   title: string | null;
   projectName: string | null;
   createdAt: string;
+}
+
+export interface CodeVersion {
+  id: string;
+  _id?: string;
+  visitorId: string;
+  passwordId?: string | null;
+  accessMode?: AuthMode | string | null;
+  parentVersionId?: string | null;
+  rootVersionId?: string | null;
+  code: string;
+  codePreview?: string;
+  codeLength?: number;
+  prompt: string;
+  message: string;
+  projectName?: string | null;
+  modelProvider?: "gemini" | "openai" | null;
+  modelPreference?: ModelPreference | string | null;
+  modelId?: string | null;
+  modelLabel?: string | null;
+  modelShortLabel?: string | null;
+  modelThinking?: ThinkingLevel | string | null;
+  editMode: "replace_all" | "patch";
+  editCount: number;
+  edits?: Array<{ oldText: string; newText: string }>;
+  manualEditsSinceParent?: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }

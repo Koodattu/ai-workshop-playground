@@ -8,6 +8,8 @@ const { body, param, query } = require("express-validator");
 const {
   verifyAdmin,
   verifyAdminCredentials,
+  getAdminModelSettings,
+  updateAdminModelSettings,
   createPassword,
   listPasswords,
   getUsageStats,
@@ -19,7 +21,9 @@ const {
   getRecentRequests,
   getTokenTimeSeries,
   getShareLinks,
+  getCodeVersions,
 } = require("../controllers/adminController");
+const { MODEL_PREFERENCE_IDS, MODEL_DEFAULTS } = require("../services/modelSettings");
 const validateRequest = require("../middleware/validateRequest");
 
 const router = express.Router();
@@ -32,6 +36,44 @@ router.post("/verify", verifyAdmin, verifyAdminCredentials);
 
 // All other admin routes require admin authentication
 router.use(verifyAdmin);
+
+router.get("/model-settings", getAdminModelSettings);
+router.put(
+  "/model-settings",
+  [
+    body("models")
+      .isObject()
+      .withMessage("Model settings are required")
+      .bail()
+      .custom((models) => {
+        for (const [id, setting] of Object.entries(models || {})) {
+          if (!MODEL_PREFERENCE_IDS.includes(id)) {
+            throw new Error(`Unknown model setting: ${id}`);
+          }
+
+          if (typeof setting === "boolean") {
+            continue;
+          }
+
+          if (!setting || typeof setting !== "object" || Array.isArray(setting)) {
+            throw new Error(`${id} must be a boolean or settings object`);
+          }
+
+          if ("enabled" in setting && typeof setting.enabled !== "boolean") {
+            throw new Error(`${id}.enabled must be a boolean`);
+          }
+
+          if ("thinking" in setting && !MODEL_DEFAULTS[id].thinkingOptions.includes(setting.thinking)) {
+            throw new Error(`${id}.thinking is not supported`);
+          }
+        }
+
+        return true;
+      }),
+    validateRequest,
+  ],
+  updateAdminModelSettings,
+);
 
 /**
  * POST /api/admin/passwords
@@ -153,5 +195,11 @@ router.get(
  * Get all share links
  */
 router.get("/share-links", getShareLinks);
+
+/**
+ * GET /api/admin/code-versions
+ * Get all generated code versions
+ */
+router.get("/code-versions", getCodeVersions);
 
 module.exports = router;

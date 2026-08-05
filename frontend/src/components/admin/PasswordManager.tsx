@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel } from "@/types";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type TabId = "overview" | "passwords" | "usage" | "activity" | "shares";
+type TabId = "overview" | "passwords" | "usage" | "activity" | "models" | "shares" | "versions";
 type ActivityPeriod = "24h" | "7d" | "30d";
 
 interface PasswordManagerProps {
@@ -893,6 +893,157 @@ const ShareLinksTab = ({ shareLinks, t }: ShareLinksTabProps) => {
   );
 };
 
+interface CodeVersionsTabProps {
+  versions: CodeVersion[];
+  t: (key: string, params?: Record<string, unknown>) => string;
+}
+
+const CodeVersionsTab = ({ versions, t }: CodeVersionsTabProps) => {
+  if (!versions || versions.length === 0) {
+    return (
+      <div className="text-center py-12 animate-fade-in">
+        <ActivityIcon />
+        <p className="mt-2 text-gray-400 font-body">{t("passwordManager.noVersions")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-lg font-semibold text-white">{t("passwordManager.versionsTitle")}</h3>
+        <span className="text-xs font-mono text-gray-400">
+          {versions.length} {t("passwordManager.versionsCount")}
+        </span>
+      </div>
+
+      <div className="space-y-2 max-h-150 overflow-y-auto scrollbar-thin pr-2">
+        {versions.map((version, index) => (
+          <div
+            key={version.id}
+            className="p-4 rounded-xl bg-carbon border border-steel/50 hover:border-electric/30 transition-all animate-fade-in"
+            style={{ animationDelay: `${index * 20}ms` }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-sm text-gray-300 font-display font-semibold">{version.projectName || t("versionHistory.untitled")}</span>
+                  <span className="px-2 py-0.5 rounded bg-electric/20 text-electric font-mono text-xs uppercase">{version.editMode === "patch" ? t("versionHistory.patch") : t("versionHistory.full")}</span>
+                  {version.parentVersionId && <span className="px-2 py-0.5 rounded bg-graphite text-gray-400 font-mono text-xs">parent {String(version.parentVersionId).slice(-6)}</span>}
+                  {version.manualEditsSinceParent && <span className="px-2 py-0.5 rounded bg-ember/15 text-ember font-mono text-xs uppercase">{t("versionHistory.manual")}</span>}
+                </div>
+                <p className="text-xs font-mono text-gray-500">
+                  {t("passwordManager.visitorId")}: <span className="text-gray-300">{truncateVisitorId(version.visitorId)}</span> - {formatDate(version.createdAt)}
+                </p>
+                <p className="text-xs text-gray-400 mt-2 line-clamp-2">{version.prompt || version.message}</p>
+                <p className="text-xs font-mono text-gray-600 mt-2 truncate" title={version.code?.slice(0, 120)}>
+                  {(version.code || version.codePreview || "").slice(0, 100)}...
+                </p>
+              </div>
+              <div className="text-right shrink-0 text-xs font-mono text-gray-500">
+                <p>{formatTokens((version.code || "").length)} chars</p>
+                <p className="mt-1">{version.editCount || 0} edits</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+interface ModelSettingsTabProps {
+  modelSettings: ModelSettings;
+  isSaving: boolean;
+  onChange: (model: ModelPreference, nextSetting: ModelSettings[ModelPreference]) => Promise<void>;
+}
+
+const DEFAULT_MODEL_SETTINGS: ModelSettings = {
+  fast: { enabled: true, thinking: "none" },
+  balanced: { enabled: true, thinking: "low" },
+  accurate: { enabled: true, thinking: "low" },
+  gpt54mini: { enabled: false, thinking: "none" },
+  gpt54: { enabled: false, thinking: "none" },
+  gpt55: { enabled: false, thinking: "medium" },
+};
+
+const THINKING_LABELS: Record<ThinkingLevel, string> = {
+  none: "None",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra high",
+};
+
+const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTabProps) => {
+  const models: Array<{ id: ModelPreference; label: string; description: string; thinkingOptions: ThinkingLevel[] }> = [
+    { id: "balanced", label: "Gemini Balanced", description: "Gemini 3 Flash - balanced cost and quality", thinkingOptions: ["low", "medium", "high"] },
+    { id: "fast", label: "Gemini Fast", description: "Gemini 2.5 Flash - cheapest and fastest Gemini option", thinkingOptions: ["none"] },
+    { id: "accurate", label: "Gemini Premium", description: "Gemini 3.5 Flash - highest-cost Gemini option", thinkingOptions: ["low", "medium", "high"] },
+    { id: "gpt54mini", label: "OpenAI Fast", description: "GPT-5.4 mini - cheapest and fastest OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
+    { id: "gpt54", label: "OpenAI Balanced", description: "GPT-5.4 - OpenAI tier comparable to Gemini 3", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
+    { id: "gpt55", label: "OpenAI Premium", description: "GPT-5.5 - highest-cost OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
+  ];
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div>
+        <h3 className="font-display text-lg font-semibold text-white">Model dropdown</h3>
+        <p className="mt-1 text-sm text-gray-400 font-body">Enabled models appear in the participant chat dropdown. At least one model stays enabled.</p>
+      </div>
+
+      <div className="grid gap-3">
+        {models.map((model) => {
+          const setting = modelSettings[model.id] || DEFAULT_MODEL_SETTINGS[model.id];
+          const isEnabled = setting.enabled;
+
+          return (
+            <div
+              key={model.id}
+              className={`
+                flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border text-left transition-all
+                ${isEnabled ? "bg-electric/10 border-electric/30" : "bg-carbon border-steel/50 hover:border-steel"}
+                ${isSaving ? "opacity-50" : ""}
+              `}
+            >
+              <div>
+                <p className={`font-display text-sm font-semibold ${isEnabled ? "text-electric" : "text-white"}`}>{model.label}</p>
+                <p className="mt-1 text-xs font-mono text-gray-500">{model.description}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="sr-only" htmlFor={`thinking-${model.id}`}>
+                  Thinking level for {model.label}
+                </label>
+                <select
+                  id={`thinking-${model.id}`}
+                  value={setting.thinking}
+                  onChange={(event) => onChange(model.id, { ...setting, thinking: event.target.value as ThinkingLevel })}
+                  disabled={isSaving || model.thinkingOptions.length === 1}
+                  className="px-2.5 py-1.5 rounded bg-void border border-steel/50 text-gray-200 font-mono text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {model.thinkingOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {THINKING_LABELS[option]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => onChange(model.id, { ...setting, enabled: !isEnabled })}
+                  disabled={isSaving}
+                  className={`px-2.5 py-1 rounded font-mono text-xs transition-all disabled:cursor-not-allowed ${isEnabled ? "bg-electric/20 text-electric" : "bg-graphite text-gray-400"}`}
+                >
+                  {isEnabled ? "Enabled" : "Disabled"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -909,6 +1060,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [recentRequests, setRecentRequests] = useState<RequestLogEntry[]>([]);
   const [shareLinks, setShareLinks] = useState<ShareLinkEntry[]>([]);
+  const [codeVersions, setCodeVersions] = useState<CodeVersion[]>([]);
+  const [modelSettings, setModelSettings] = useState<ModelSettings>(DEFAULT_MODEL_SETTINGS);
   const [passwordStats, setPasswordStats] = useState<Map<string, PasswordDetailedStats>>(new Map());
 
   // Single unified loading state for initial data load
@@ -923,6 +1076,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [newMaxUses, setNewMaxUses] = useState(10);
   const [newExpiresAt, setNewExpiresAt] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isSavingModelSettings, setIsSavingModelSettings] = useState(false);
 
   // Expanded state
   const [expandedPasswordId, setExpandedPasswordId] = useState<string | null>(null);
@@ -948,12 +1102,14 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       };
 
       // Load everything in parallel
-      const [statsData, passwordsData, usageData, logsData, shareLinksData] = await Promise.all([
+      const [statsData, passwordsData, usageData, logsData, shareLinksData, codeVersionsData, modelSettingsData] = await Promise.all([
         api.getSystemStats(adminSecret),
         api.getPasswords(adminSecret),
         api.getUsageStats(adminSecret),
         api.getRecentRequests(adminSecret, limitMap[activityPeriod]),
         api.getShareLinks(adminSecret),
+        api.getCodeVersions(adminSecret),
+        api.getModelSettings(adminSecret),
       ]);
 
       // Update all state at once
@@ -962,6 +1118,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       setUsage(usageData);
       setRecentRequests(logsData);
       setShareLinks(shareLinksData);
+      setCodeVersions(codeVersionsData);
+      setModelSettings(modelSettingsData);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t("api.dataFetchError"));
     } finally {
@@ -1078,6 +1236,33 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
     fetchAllData();
   }, [fetchAllData]);
 
+  const handleChangeModelSetting = useCallback(
+    async (model: ModelPreference, nextSetting: ModelSettings[ModelPreference]) => {
+      const nextSettings = {
+        ...modelSettings,
+        [model]: nextSetting,
+      };
+
+      if (!Object.values(nextSettings).some((setting) => setting.enabled)) {
+        nextSettings.balanced = { ...nextSettings.balanced, enabled: true };
+      }
+
+      setIsSavingModelSettings(true);
+      setModelSettings(nextSettings);
+
+      try {
+        const savedSettings = await api.updateModelSettings(adminSecret, nextSettings);
+        setModelSettings(savedSettings);
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "Failed to update model settings");
+        await fetchAllData();
+      } finally {
+        setIsSavingModelSettings(false);
+      }
+    },
+    [adminSecret, fetchAllData, modelSettings],
+  );
+
   // ============================================================================
   // TAB CONFIGURATION
   // ============================================================================
@@ -1088,9 +1273,11 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       { id: "passwords" as TabId, label: t("passwordManager.passwordsTab", { count: passwords.length }), icon: <KeyIcon /> },
       { id: "usage" as TabId, label: t("passwordManager.usageTab", { count: usage.length }), icon: <UsersIcon /> },
       { id: "activity" as TabId, label: t("passwordManager.activityTab"), icon: <ActivityIcon /> },
+      { id: "models" as TabId, label: "Models", icon: <TokenIcon /> },
       { id: "shares" as TabId, label: t("passwordManager.sharesTab", { count: shareLinks.length }), icon: <ShareIcon /> },
+      { id: "versions" as TabId, label: t("passwordManager.versionsTab", { count: codeVersions.length }), icon: <ActivityIcon /> },
     ],
-    [t, passwords.length, usage.length, shareLinks.length],
+    [t, passwords.length, usage.length, shareLinks.length, codeVersions.length],
   );
 
   // ============================================================================
@@ -1170,7 +1357,11 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
         {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={setActivityPeriod} t={t} />}
 
+        {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} isSaving={isSavingModelSettings} onChange={handleChangeModelSetting} />}
+
         {activeTab === "shares" && <ShareLinksTab shareLinks={shareLinks} t={t} />}
+
+        {activeTab === "versions" && <CodeVersionsTab versions={codeVersions} t={t} />}
       </div>
 
       {/* Refresh button */}

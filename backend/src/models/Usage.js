@@ -81,7 +81,7 @@ usageSchema.statics.incrementUsage = async function (passwordId, visitorId, maxU
     }
   }
 
-  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, updateOps, { new: true, upsert: true, setDefaultsOnInsert: true });
+  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, updateOps, { returnDocument: "after", upsert: true, setDefaultsOnInsert: true });
 
   return {
     usage,
@@ -116,7 +116,7 @@ usageSchema.statics.trackTokenUsage = async function (passwordId, visitorId, tok
     updateOps.$inc.estimatedCost = tokenData.estimatedCost;
   }
 
-  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, updateOps, { new: true, upsert: true, setDefaultsOnInsert: true });
+  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, updateOps, { returnDocument: "after", upsert: true, setDefaultsOnInsert: true });
 
   return usage;
 };

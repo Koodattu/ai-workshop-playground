@@ -46,7 +46,7 @@ If you want to get this running quickly for a workshop, I recommend:
 | **Frontend Framework** | **React** or **Next.js**                               | Great for managing the state of the code and chat.       |
 | **Code Editor**        | **Monaco Editor** (VS Code's engine) or **CodeMirror** | These have React wrappers that are very easy to drop in. |
 | **Styling**            | **Tailwind CSS**                                       | Perfect for building a 3-column layout in minutes.       |
-| **Backend**            | **Node.js (Express)**                                  | You can use the `@google/generative-ai` SDK easily.      |
+| **Backend**            | **Node.js (Express)**                                  | You can use the `@google/genai` SDK easily.              |
 
 ---
 

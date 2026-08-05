@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ChatMessage, ChatMode } from "@/types";
+import type { ChatMessage, ChatMode, ModelPreference } from "@/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -14,12 +14,18 @@ interface ChatPanelProps {
   showToast: (message: string, type: "success" | "error" | "info") => void;
   streamingMessage?: string;
   onClearMessages?: () => void;
+  onOpenSettings?: () => void;
+  onOpenUsage?: () => void;
   autoSwitchEnabled?: boolean;
   onAutoSwitchChange?: (enabled: boolean) => void;
   isAuthenticated: boolean;
   onUnlockClick: () => void;
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
+  modelPreference: ModelPreference;
+  onModelPreferenceChange: (modelPreference: ModelPreference) => void;
+  enabledModelPreferences: ModelPreference[];
+  onRetryMessage?: (prompt: string) => Promise<void>;
 }
 
 export function ChatPanel({
@@ -30,17 +36,33 @@ export function ChatPanel({
   showToast,
   streamingMessage,
   onClearMessages,
+  onOpenSettings,
+  onOpenUsage,
   autoSwitchEnabled = true,
   onAutoSwitchChange,
   isAuthenticated,
   onUnlockClick,
   mode,
   onModeChange,
+  modelPreference,
+  onModelPreferenceChange,
+  enabledModelPreferences,
+  onRetryMessage,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
+  const modelOptions = [
+    { value: "balanced", label: t("chat.modelGemini3") },
+    { value: "fast", label: t("chat.modelGemini25") },
+    { value: "accurate", label: t("chat.modelGemini35") },
+    { value: "gpt54mini", label: t("chat.modelGpt54Mini") },
+    { value: "gpt54", label: t("chat.modelGpt54") },
+    { value: "gpt55", label: t("chat.modelGpt55") },
+  ] satisfies Array<{ value: ModelPreference; label: string }>;
+  const enabledModelOptions = modelOptions.filter((option) => enabledModelPreferences.includes(option.value));
+  const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : modelOptions;
 
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
@@ -90,6 +112,16 @@ export function ChatPanel({
     showToast(errorDetails, "error");
   };
 
+  const handleRetry = async (failedPrompt: string) => {
+    if (isLoading) return;
+
+    try {
+      await (onRetryMessage || onSendMessage)(failedPrompt);
+    } catch {
+      setPrompt(failedPrompt);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-obsidian">
       {/* Header */}
@@ -110,6 +142,38 @@ export function ChatPanel({
           )}
 
           {/* Clear chat button */}
+          {onOpenUsage && (
+            <button
+              onClick={onOpenUsage}
+              className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
+              title={t("chat.usageHistoryTitle")}
+              disabled={isLoading}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19V5m0 14h16M8 16V9m4 7V6m4 10v-4" />
+              </svg>
+            </button>
+          )}
+
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
+              title={t("chat.apiSettingsTitle")}
+              disabled={isLoading}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z"
+                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          )}
+
           {onClearMessages && (
             <button
               onClick={onClearMessages}
@@ -166,14 +230,28 @@ export function ChatPanel({
                       hour12: false,
                     })}
                   </span>
-                  {message.errorDetails && (
-                    <button
-                      onClick={() => handleShowErrorDetails(message.errorDetails!)}
-                      className="px-2 py-0.5 rounded bg-carbon border border-steel/50 text-[10px] font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
-                      title={t("chat.errorDetailsTitle")}
-                    >
-                      {t("chat.errorDetails")}
-                    </button>
+                  {(message.failedPrompt || message.errorDetails) && (
+                    <div className="flex items-center gap-1.5">
+                      {message.failedPrompt && (
+                        <button
+                          onClick={() => handleRetry(message.failedPrompt!)}
+                          disabled={isLoading}
+                          className="px-2 py-0.5 rounded bg-electric/10 border border-electric/30 text-[10px] font-mono text-electric hover:text-white hover:border-electric/60 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                          title={t("chat.retryFailedTitle")}
+                        >
+                          {t("chat.retryFailed")}
+                        </button>
+                      )}
+                      {message.errorDetails && (
+                        <button
+                          onClick={() => handleShowErrorDetails(message.errorDetails!)}
+                          className="px-2 py-0.5 rounded bg-carbon border border-steel/50 text-[10px] font-mono text-gray-400 hover:text-white hover:border-electric/50 transition-all duration-200"
+                          title={t("chat.errorDetailsTitle")}
+                        >
+                          {t("chat.errorDetails")}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -294,7 +372,7 @@ export function ChatPanel({
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-end justify-between gap-2 flex-wrap">
               {/* Left side: Mode toggle + auto-switch (mobile only) */}
               <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
                 {/* ASK/EDIT Mode Toggle */}
@@ -362,6 +440,33 @@ export function ChatPanel({
                     <span className="text-[9px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
                   </label>
                 )}
+              </div>
+
+              <div className="flex-1 min-w-36 max-w-48">
+                <label htmlFor="model-preference" className="sr-only">
+                  {t("chat.modelSelectLabel")}
+                </label>
+                <select
+                  id="model-preference"
+                  value={modelPreference}
+                  onChange={(e) => onModelPreferenceChange(e.target.value as ModelPreference)}
+                  disabled={isLoading}
+                  className="
+                    w-full px-2.5 py-1.5
+                    bg-carbon border border-steel/50 rounded-lg
+                    font-mono text-[10px] md:text-xs text-gray-200
+                    focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    transition-all duration-200
+                  "
+                  title={t("chat.modelSelectLabel")}
+                >
+                  {visibleModelOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>

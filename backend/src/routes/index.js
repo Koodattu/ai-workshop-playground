@@ -18,6 +18,9 @@ router.get("/health", (req, res) => {
 // Mount route modules
 router.use("/validate", require("./validate"));
 router.use("/generate", require("./generate"));
+router.use("/versions", require("./versions"));
+router.use("/models", require("./models"));
+router.use("/api-keys", require("./apiKeys"));
 router.use("/admin", require("./admin"));
 router.use("/share", require("./share"));
 

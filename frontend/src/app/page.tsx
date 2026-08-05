@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
 import { PreviewPanel } from "@/components/workspace/PreviewPanel";
 import { PasswordModal } from "@/components/workspace/PasswordModal";
+import { VersionHistoryDialog } from "@/components/workspace/VersionHistoryDialog";
+import { ApiKeyUsageDialog } from "@/components/workspace/ApiKeyUsageDialog";
 import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -17,13 +19,60 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage } from "@/lib/errorTranslation";
-import type { ChatMessage, PreviewControl, CustomTemplate, ChatMode } from "@/types";
+import type { ApiKeyProvider, ApiKeyUsageEntry, AuthMode, ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
 // Get messages based on language
 const getMessages = (lang: string) => {
   return lang === "fi" ? fiMessages : enMessages;
+};
+
+const STREAM_EDITOR_FLUSH_CHARS = 1024;
+const STREAM_EDITOR_FLUSH_MS = 100;
+const STREAM_AUTO_FORMAT_MAX_CHARS = 60_000;
+const STREAM_AUTO_FORMAT_MAX_LINES = 1000;
+
+const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55"] as const satisfies readonly ModelPreference[];
+const MODEL_PROVIDER: Record<ModelPreference, ApiKeyProvider> = {
+  balanced: "gemini",
+  fast: "gemini",
+  accurate: "gemini",
+  gpt54mini: "openai",
+  gpt54: "openai",
+  gpt55: "openai",
+};
+const EMPTY_API_KEYS: UserApiKeySettings = {
+  gemini: "",
+  openai: "",
+  accessToken: "",
+};
+
+const isModelPreference = (value: unknown): value is ModelPreference => {
+  return MODEL_PREFERENCE_PRIORITY.includes(value as ModelPreference);
+};
+
+const getAvailableModelPreferences = (models: unknown): ModelPreference[] => {
+  const enabledPreferences = new Set((Array.isArray(models) ? models : []).filter(isModelPreference));
+  const orderedPreferences = MODEL_PREFERENCE_PRIORITY.filter((preference) => enabledPreferences.has(preference));
+
+  return orderedPreferences.length > 0 ? orderedPreferences : [...MODEL_PREFERENCE_PRIORITY];
+};
+
+const countLines = (text: string) => {
+  let lines = 1;
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) === 10) {
+      lines += 1;
+    }
+  }
+
+  return lines;
+};
+
+const shouldAutoFormatStreamedCode = (text: string) => {
+  return text.length <= STREAM_AUTO_FORMAT_MAX_CHARS && countLines(text) <= STREAM_AUTO_FORMAT_MAX_LINES;
 };
 
 export default function WorkspacePage() {
@@ -50,15 +99,22 @@ export default function WorkspacePage() {
   const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
+  const [authMode, setAuthMode] = useLocalStorage<AuthMode>("workshop-auth-mode", "password");
+  const [apiKeySettings, setApiKeySettings] = useLocalStorage<UserApiKeySettings>("workshop-api-keys", EMPTY_API_KEYS);
+  const [apiKeyUsage, setApiKeyUsage] = useLocalStorage<ApiKeyUsageEntry[]>("api-key-usage", []);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [authError, setAuthError] = useState<string | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [authDialogInitialMode, setAuthDialogInitialMode] = useState<AuthMode>("password");
+  const [isApiKeyUsageOpen, setIsApiKeyUsageOpen] = useState(false);
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
-  const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "ask");
+  const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
+  const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "balanced");
+  const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>([...MODEL_PREFERENCE_PRIORITY]);
 
   // Original code snapshot for dirty checking
   const originalCodeSnapshotRef = useRef<string>(code);
@@ -75,10 +131,13 @@ export default function WorkspacePage() {
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
-  const [streamingCode, setStreamingCode] = useState<string>("");
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
+  const [versions, setVersions] = useState<CodeVersion[]>([]);
+  const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
+  const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const abortStreamRef = useRef<(() => void) | null>(null);
 
   // Preview control ref
@@ -96,11 +155,11 @@ export default function WorkspacePage() {
   // Code buffer for streaming
   const codeBufferRef = useRef<string>("");
 
-  // Track how much of the buffer has been written to editor (for delta appends)
-  const lastWrittenLengthRef = useRef<number>(0);
+  // Pending streamed text waiting to be appended to Monaco.
+  const pendingEditorChunkRef = useRef<string>("");
 
-  // Throttling ref for editor updates (using requestAnimationFrame)
-  const editorUpdateFrameRef = useRef<number | null>(null);
+  // Timer for coalescing tiny provider deltas before touching Monaco.
+  const editorFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Guard to prevent template loading effect from reverting code after streaming completes
   // When streaming ends, onDone sets the final code - we don't want the template effect to override it
@@ -118,6 +177,248 @@ export default function WorkspacePage() {
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
   const { t } = useLanguage();
+  const hasApiKey = Boolean(apiKeySettings.gemini.trim() || apiKeySettings.openai.trim());
+
+  const clearEditorFlushTimer = useCallback(() => {
+    if (editorFlushTimerRef.current) {
+      clearTimeout(editorFlushTimerRef.current);
+      editorFlushTimerRef.current = null;
+    }
+  }, []);
+
+  const flushEditorChunks = useCallback(() => {
+    clearEditorFlushTimer();
+
+    const pendingChunk = pendingEditorChunkRef.current;
+    if (!pendingChunk) return;
+
+    const editor = monacoEditorRef.current;
+    const model = editor?.getModel?.();
+    if (!model) return;
+
+    pendingEditorChunkRef.current = "";
+
+    try {
+      const lineNumber = model.getLineCount();
+      const column = model.getLineMaxColumn(lineNumber);
+      model.applyEdits(
+        [
+          {
+            range: {
+              startLineNumber: lineNumber,
+              startColumn: column,
+              endLineNumber: lineNumber,
+              endColumn: column,
+            },
+            text: pendingChunk,
+          },
+        ],
+        false,
+      );
+    } catch (error) {
+      console.warn("Failed to append streamed code to editor:", error);
+      try {
+        model.setValue(codeBufferRef.current);
+      } catch (restoreError) {
+        console.warn("Failed to restore streamed code in editor:", restoreError);
+      }
+    }
+  }, [clearEditorFlushTimer]);
+
+  const scheduleEditorFlush = useCallback(() => {
+    if (pendingEditorChunkRef.current.length >= STREAM_EDITOR_FLUSH_CHARS) {
+      flushEditorChunks();
+      return;
+    }
+
+    if (editorFlushTimerRef.current) return;
+
+    editorFlushTimerRef.current = setTimeout(() => {
+      editorFlushTimerRef.current = null;
+      flushEditorChunks();
+    }, STREAM_EDITOR_FLUSH_MS);
+  }, [flushEditorChunks]);
+
+  const syncStreamingBufferToEditor = useCallback(() => {
+    const editor = monacoEditorRef.current;
+    const model = editor?.getModel?.();
+    if (!model) return;
+
+    const bufferedCode = codeBufferRef.current;
+    if (model.getValue() === bufferedCode) {
+      pendingEditorChunkRef.current = "";
+      clearEditorFlushTimer();
+      return;
+    }
+
+    pendingEditorChunkRef.current = "";
+    clearEditorFlushTimer();
+
+    try {
+      model.setValue(bufferedCode);
+      editor.layout?.();
+    } catch (error) {
+      console.warn("Failed to sync streamed code to editor:", error);
+    }
+  }, [clearEditorFlushTimer]);
+
+  const restoreSavedCursorPosition = useCallback(() => {
+    if (!savedCursorPositionRef.current) return;
+
+    const model = monacoEditorRef.current?.getModel?.();
+    if (!model) {
+      savedCursorPositionRef.current = null;
+      return;
+    }
+
+    const { lineNumber, column } = savedCursorPositionRef.current;
+    const newLineCount = model.getLineCount();
+
+    if (lineNumber <= newLineCount) {
+      const lineLength = model.getLineContent(lineNumber).length;
+      const safeColumn = Math.min(column, lineLength + 1);
+
+      monacoEditorRef.current?.setPosition({
+        lineNumber,
+        column: safeColumn,
+      });
+      monacoEditorRef.current?.revealLineInCenter(lineNumber);
+    }
+
+    savedCursorPositionRef.current = null;
+  }, []);
+
+  const runDeferredAutoFormat = useCallback(
+    (streamedCode: string) => {
+      if (!monacoEditorRef.current || !shouldAutoFormatStreamedCode(streamedCode)) {
+        restoreSavedCursorPosition();
+        return;
+      }
+
+      setTimeout(() => {
+        const formatAction = monacoEditorRef.current?.getAction("editor.action.formatDocument");
+        Promise.resolve(formatAction?.run())
+          .catch((error) => {
+            console.warn("Failed to auto-format streamed code:", error);
+          })
+          .finally(() => {
+            setTimeout(restoreSavedCursorPosition, 50);
+          });
+      }, 50);
+    },
+    [restoreSavedCursorPosition],
+  );
+
+  const getOrCreateApiKeyAccessToken = useCallback(() => {
+    if (apiKeySettings.accessToken) {
+      return apiKeySettings.accessToken;
+    }
+
+    const accessToken = crypto.randomUUID();
+    setApiKeySettings((prev) => ({
+      ...prev,
+      accessToken,
+    }));
+    return accessToken;
+  }, [apiKeySettings.accessToken, setApiKeySettings]);
+
+  const getVersionListRequest = useCallback(
+    (includeCode = true): VersionListRequest | null => {
+      if (!visitorId) return null;
+
+      if (authMode === "api-key") {
+        if (!hasApiKey) return null;
+        return {
+          authMode: "api-key",
+          visitorId,
+          apiKeyAccessToken: getOrCreateApiKeyAccessToken(),
+          includeCode,
+        };
+      }
+
+      if (!password) return null;
+      return {
+        authMode: "password",
+        password,
+        visitorId,
+        includeCode,
+      };
+    },
+    [authMode, getOrCreateApiKeyAccessToken, hasApiKey, password, visitorId],
+  );
+
+  const fetchVersions = useCallback(
+    async (options?: { loadLatest?: boolean }) => {
+      const request = getVersionListRequest(true);
+      if (!request) return;
+
+      setIsLoadingVersions(true);
+      try {
+        const fetchedVersions = await api.getMyCodeVersions(request);
+        setVersions(fetchedVersions);
+
+        if (options?.loadLatest && fetchedVersions.length > 0) {
+          const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+          setCode(latest.code);
+          setCurrentVersionId(latest.id);
+          originalCodeSnapshotRef.current = latest.code;
+          previewControlRef.current?.forceRefresh(latest.code);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch code versions:", error);
+      } finally {
+        setIsLoadingVersions(false);
+      }
+    },
+    [getVersionListRequest],
+  );
+
+  const currentProjectVersions = useMemo(() => {
+    if (!currentVersionId) return [];
+
+    const currentVersion = versions.find((version) => version.id === currentVersionId);
+    if (!currentVersion) return [];
+
+    const rootVersionId = currentVersion.rootVersionId || currentVersion.id;
+    return versions.filter((version) => (version.rootVersionId || version.id) === rootVersionId);
+  }, [currentVersionId, versions]);
+
+  const availableModelPreferences = useMemo(() => {
+    if (authMode !== "api-key") {
+      return getAvailableModelPreferences(enabledModelPreferences);
+    }
+
+    return MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(apiKeySettings[MODEL_PROVIDER[preference]].trim()));
+  }, [apiKeySettings, authMode, enabledModelPreferences]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchEnabledModels = async () => {
+      try {
+        const models = await api.getEnabledModels();
+        if (!isMounted) return;
+
+        const availableModels = getAvailableModelPreferences(models);
+        setEnabledModelPreferences(availableModels);
+        setModelPreference(availableModels[0]);
+      } catch (error) {
+        console.warn("Failed to fetch enabled models:", error);
+      }
+    };
+
+    fetchEnabledModels();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (availableModelPreferences.length > 0 && !availableModelPreferences.includes(modelPreference)) {
+      setModelPreference(availableModelPreferences[0]);
+    }
+  }, [availableModelPreferences, modelPreference, setModelPreference]);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -145,6 +446,7 @@ export default function WorkspacePage() {
         const newTemplate = addTemplate(templateName, newCode);
 
         // Switch to the newly created custom template
+        setSavedTemplateId(newTemplate.id);
         setCurrentTemplateId(newTemplate.id);
         originalCodeSnapshotRef.current = newCode;
         setCode(newCode);
@@ -153,7 +455,7 @@ export default function WorkspacePage() {
         setCode(newCode);
       }
     },
-    [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming],
+    [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming, setSavedTemplateId],
   );
 
   // Auto-save code changes to custom templates (debounced)
@@ -254,11 +556,30 @@ export default function WorkspacePage() {
         const result = await api.validatePassword(enteredPassword, visitorId);
 
         if (result.valid) {
+          setAuthMode("password");
           setPassword(enteredPassword);
           setIsAuthenticated(true);
           setIsPasswordModalOpen(false);
           // Set remaining uses from validation response
           setRemainingUses(result.remainingUses);
+          try {
+            const fetchedVersions = await api.getMyCodeVersions({
+              authMode: "password",
+              password: enteredPassword,
+              visitorId,
+              includeCode: true,
+            });
+            setVersions(fetchedVersions);
+            if (fetchedVersions.length > 0) {
+              const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+              setCode(latest.code);
+              setCurrentVersionId(latest.id);
+              originalCodeSnapshotRef.current = latest.code;
+              previewControlRef.current?.forceRefresh(latest.code);
+            }
+          } catch (versionError) {
+            console.warn("Failed to load code versions:", versionError);
+          }
           showToast(t("workspace.welcomeBack"), "success");
         } else {
           // Clear invalid password from localStorage
@@ -291,22 +612,32 @@ export default function WorkspacePage() {
         isAuthenticatingRef.current = false;
       }
     },
-    [visitorId, setPassword, showToast, t],
+    [setAuthMode, setPassword, showToast, t, visitorId],
   );
 
   // Auto-validate password on page load (only once)
   useEffect(() => {
-    if (password && visitorId && !isAuthenticated && !hasAttemptedAutoValidationRef.current) {
+    if (authMode === "password" && password && visitorId && !isAuthenticated && !hasAttemptedAutoValidationRef.current) {
       hasAttemptedAutoValidationRef.current = true;
       handleAuthenticate(password);
     }
-  }, [password, visitorId, isAuthenticated, handleAuthenticate]);
+  }, [authMode, password, visitorId, isAuthenticated, handleAuthenticate]);
+
+  useEffect(() => {
+    if (authMode !== "api-key" || !visitorId || !hasApiKey || isAuthenticated) return;
+
+    setIsAuthenticated(true);
+    setRemainingUses(undefined);
+    setCurrentVersionId(null);
+    fetchVersions({ loadLatest: true });
+  }, [authMode, fetchVersions, hasApiKey, isAuthenticated, visitorId]);
 
   // Open password modal automatically if ?p= parameter is present in URL
   useEffect(() => {
     const urlPassword = searchParams.get("p");
     if (urlPassword) {
       // Open the password modal with prefilled password
+      setAuthDialogInitialMode("password");
       setIsPasswordModalOpen(true);
 
       // Remove the ?p= parameter from the URL
@@ -330,6 +661,7 @@ export default function WorkspacePage() {
 
         // Switch to the shared template
         setCurrentTemplateId(newTemplate.id);
+        setCurrentVersionId(null);
         setCode(pendingShare.code);
         originalCodeSnapshotRef.current = pendingShare.code;
 
@@ -342,7 +674,27 @@ export default function WorkspacePage() {
 
   const handleSendMessage = useCallback(
     async (prompt: string) => {
-      if (!visitorId || !password) return;
+      if (!visitorId || !isAuthenticated) return;
+
+      const authPayload =
+        authMode === "api-key"
+          ? {
+              authMode: "api-key" as const,
+              apiKeys: {
+                gemini: apiKeySettings.gemini.trim(),
+                openai: apiKeySettings.openai.trim(),
+              },
+              apiKeyAccessToken: getOrCreateApiKeyAccessToken(),
+            }
+          : {
+              authMode: "password" as const,
+              password,
+            };
+
+      if (authMode === "password" && !password) return;
+      if (authMode === "api-key" && !apiKeySettings.gemini.trim() && !apiKeySettings.openai.trim()) return;
+
+      const codeBeforeGeneration = code;
 
       // Add user message to chat
       const userMessage: ChatMessage = {
@@ -355,8 +707,9 @@ export default function WorkspacePage() {
       setIsGenerating(true);
       setIsStreaming(true);
       setStreamingMessage("");
-      setStreamingCode("");
       codeBufferRef.current = "";
+      pendingEditorChunkRef.current = "";
+      clearEditorFlushTimer();
 
       try {
         // Build message history from last 10 contextMessages
@@ -368,12 +721,14 @@ export default function WorkspacePage() {
         // Use streaming API with new event handlers
         const abort = await api.generateCodeStream(
           {
-            password,
+            ...authPayload,
             visitorId,
             prompt,
             existingCode: code,
+            parentVersionId: currentVersionId,
             messageHistory,
             mode: chatMode,
+            modelPreference,
           },
           {
             // Step 0: Code starts - disable preview and clear editor
@@ -393,15 +748,10 @@ export default function WorkspacePage() {
               // Disable preview auto-refresh
               previewControlRef.current?.disableAutoRefresh();
 
-              // Clear the editor buffer and reset write tracking
+              // Clear the editor buffer and reset pending stream writes
               codeBufferRef.current = "";
-              lastWrittenLengthRef.current = 0;
-
-              // Cancel any pending animation frames from previous streaming
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
+              pendingEditorChunkRef.current = "";
+              clearEditorFlushTimer();
 
               // Mobile: Switch to editor panel to watch code stream in (if auto-switch enabled)
               if (autoSwitchEnabled) {
@@ -468,31 +818,10 @@ export default function WorkspacePage() {
               // In ASK mode, we don't modify code
               if (chatMode === "ask") return;
 
-              // Accumulate code chunks in the buffer
+              // Keep the authoritative full code outside React state while streaming.
               codeBufferRef.current += chunk;
-
-              // Cancel any pending edit frame (we'll batch multiple chunks into one frame)
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-              }
-
-              // Use requestAnimationFrame for smooth 60fps updates
-              editorUpdateFrameRef.current = requestAnimationFrame(() => {
-                // Calculate the delta: what hasn't been published to React state yet
-                // This ensures we don't lose chunks when multiple arrive within one frame
-                const fullBuffer = codeBufferRef.current;
-                const newContent = fullBuffer.slice(lastWrittenLengthRef.current);
-
-                // Only publish if there's new content
-                if (newContent.length > 0) {
-                  // Update tracking: mark all buffer content as published
-                  lastWrittenLengthRef.current = fullBuffer.length;
-                  // Single-writer approach: React state drives editor content
-                  setCode(fullBuffer);
-                }
-                // Clear the frame ref since this frame has executed
-                editorUpdateFrameRef.current = null;
-              });
+              pendingEditorChunkRef.current += chunk;
+              scheduleEditorFlush();
             },
 
             // Step 3: Code complete
@@ -500,17 +829,8 @@ export default function WorkspacePage() {
               // In ASK mode, we don't modify code
               if (chatMode === "ask") return;
 
-              // Clear any pending animation frames
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
-
-              // Ensure any remaining buffered content is published
-              if (lastWrittenLengthRef.current < codeBufferRef.current.length) {
-                lastWrittenLengthRef.current = codeBufferRef.current.length;
-                setCode(codeBufferRef.current);
-              }
+              flushEditorChunks();
+              syncStreamingBufferToEditor();
 
               // Clean up scroll interval
               if (scrollIntervalRef.current) {
@@ -530,41 +850,10 @@ export default function WorkspacePage() {
               }
 
               // Apply final code buffer to React state (for template switching, etc.)
-              setCode(codeBufferRef.current);
+              const finalStreamedCode = codeBufferRef.current;
+              setCode(finalStreamedCode);
 
-              // Auto-format the document after streaming completes
-              if (monacoEditorRef.current) {
-                // Use setTimeout to ensure Monaco has processed the final content
-                setTimeout(() => {
-                  monacoEditorRef.current?.getAction("editor.action.formatDocument")?.run();
-
-                  // Restore cursor position after formatting completes
-                  setTimeout(() => {
-                    if (savedCursorPositionRef.current) {
-                      const model = monacoEditorRef.current?.getModel();
-                      if (model) {
-                        const { lineNumber, column } = savedCursorPositionRef.current;
-                        const newLineCount = model.getLineCount();
-
-                        // Only restore if the line still exists
-                        if (lineNumber <= newLineCount) {
-                          const lineLength = model.getLineContent(lineNumber).length;
-                          const safeColumn = Math.min(column, lineLength + 1);
-
-                          monacoEditorRef.current.setPosition({
-                            lineNumber,
-                            column: safeColumn,
-                          });
-                          monacoEditorRef.current.revealLineInCenter(lineNumber);
-                        }
-
-                        // Clear saved position
-                        savedCursorPositionRef.current = null;
-                      }
-                    }
-                  }, 50);
-                }, 50);
-              }
+              runDeferredAutoFormat(finalStreamedCode);
             },
 
             // Step 4: Message complete - show in chat
@@ -574,11 +863,7 @@ export default function WorkspacePage() {
 
             // Step 5: All done - enable preview and update
             onDone: (data) => {
-              // Clear any pending animation frames
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
+              flushEditorChunks();
 
               // Clean up scroll interval
               if (scrollIntervalRef.current) {
@@ -600,6 +885,12 @@ export default function WorkspacePage() {
               const finalMessage = data.message || t("chat.codeGenerated");
               const finalCode = data.code;
               const projectName = data.projectName;
+              const versionMeta = data.version
+                ? {
+                    currentVersionId: data.version.id,
+                    rootVersionId: data.version.rootVersionId || data.version.id,
+                  }
+                : undefined;
 
               // In EDIT mode, update templates and code
               if (chatMode === "edit") {
@@ -611,7 +902,7 @@ export default function WorkspacePage() {
                 // If user is in a custom template, update it instead of creating a new one
                 if (isCustomTemplateId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
-                  updateTemplate(currentTemplateId, finalCode, projectName);
+                  updateTemplate(currentTemplateId, finalCode, projectName, versionMeta);
                   // Keep the same template ID
                   setCurrentTemplateId(currentTemplateId);
                 } else {
@@ -625,7 +916,7 @@ export default function WorkspacePage() {
                     const messages = getMessages(language);
                     templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
                   }
-                  const newTemplate = addTemplate(templateName, finalCode, projectName);
+                  const newTemplate = addTemplate(templateName, finalCode, projectName, versionMeta);
                   // Switch to the new custom template and update savedTemplateId to match
                   setSavedTemplateId(newTemplate.id);
                   setCurrentTemplateId(newTemplate.id);
@@ -637,8 +928,27 @@ export default function WorkspacePage() {
                 setCode(finalCode);
                 // Set the snapshot to the new code so it's not dirty
                 originalCodeSnapshotRef.current = finalCode;
+                if (data.version) {
+                  setCurrentVersionId(data.version.id);
+                  setVersions((prev) => {
+                    const withoutDuplicate = prev.filter((version) => version.id !== data.version?.id);
+                    return [...withoutDuplicate, data.version as CodeVersion].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                  });
+                }
               }
-              setRemainingUses(data.remaining);
+              if (authMode === "password") {
+                setRemainingUses(data.remaining);
+              } else if (data.usage) {
+                setApiKeyUsage((prev) =>
+                  [
+                    {
+                      id: crypto.randomUUID(),
+                      ...data.usage!,
+                    },
+                    ...prev,
+                  ].slice(0, 500),
+                );
+              }
 
               // Add assistant message to chat history
               const assistantMessage: ChatMessage = {
@@ -654,7 +964,6 @@ export default function WorkspacePage() {
 
               // Clear streaming states
               setStreamingMessage("");
-              setStreamingCode("");
               setIsStreaming(false);
 
               // Enable preview and update it (only in EDIT mode)
@@ -669,11 +978,8 @@ export default function WorkspacePage() {
               showToast(t("chat.codeGenerated"), "success");
             },
             onError: (error, remainingUsesOnError, errorCode, details) => {
-              // Clear any pending animation frames
-              if (editorUpdateFrameRef.current) {
-                cancelAnimationFrame(editorUpdateFrameRef.current);
-                editorUpdateFrameRef.current = null;
-              }
+              pendingEditorChunkRef.current = "";
+              clearEditorFlushTimer();
 
               // Clean up scroll interval
               if (scrollIntervalRef.current) {
@@ -690,6 +996,20 @@ export default function WorkspacePage() {
                   monacoEditorRef.current.setValue = originalSetValueRef.current;
                   originalSetValueRef.current = null;
                 }
+              }
+
+              if (chatMode === "edit") {
+                codeBufferRef.current = codeBeforeGeneration;
+                setCode(codeBeforeGeneration);
+
+                try {
+                  monacoEditorRef.current?.getModel()?.setValue(codeBeforeGeneration);
+                } catch (restoreError) {
+                  console.warn("Failed to restore editor after generation error:", restoreError);
+                }
+
+                previewControlRef.current?.enableAutoRefresh();
+                previewControlRef.current?.forceRefresh(codeBeforeGeneration);
               }
 
               // Get translated error message based on error code
@@ -718,12 +1038,12 @@ export default function WorkspacePage() {
                 timestamp: new Date(),
                 errorDetails: formattedErrorDetails,
                 errorCode: errorCode,
+                failedPrompt: prompt,
               };
               setChatHistory((prev) => [...prev, errorChatMessage]);
 
               // Clear streaming states
               setStreamingMessage("");
-              setStreamingCode("");
               setIsStreaming(false);
             },
           },
@@ -735,7 +1055,34 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code, t, contextMessages, language, currentTemplateId, isCustomTemplateId, updateTemplate, addTemplate, chatMode],
+    [
+      visitorId,
+      password,
+      isAuthenticated,
+      authMode,
+      apiKeySettings,
+      getOrCreateApiKeyAccessToken,
+      showToast,
+      code,
+      t,
+      contextMessages,
+      clearEditorFlushTimer,
+      flushEditorChunks,
+      scheduleEditorFlush,
+      syncStreamingBufferToEditor,
+      runDeferredAutoFormat,
+      language,
+      currentTemplateId,
+      isCustomTemplateId,
+      updateTemplate,
+      addTemplate,
+      chatMode,
+      modelPreference,
+      currentVersionId,
+      autoSwitchEnabled,
+      setApiKeyUsage,
+      setSavedTemplateId,
+    ],
   );
 
   // Cleanup abort on unmount
@@ -744,10 +1091,8 @@ export default function WorkspacePage() {
       if (abortStreamRef.current) {
         abortStreamRef.current();
       }
-      // Clean up any pending animation frames
-      if (editorUpdateFrameRef.current) {
-        cancelAnimationFrame(editorUpdateFrameRef.current);
-      }
+      clearEditorFlushTimer();
+      pendingEditorChunkRef.current = "";
       // Clean up scroll interval
       if (scrollIntervalRef.current) {
         clearInterval(scrollIntervalRef.current);
@@ -762,7 +1107,7 @@ export default function WorkspacePage() {
         originalSetValueRef.current = null;
       }
     };
-  }, []);
+  }, [clearEditorFlushTimer]);
 
   // Fallback: if streaming starts before editor is ready/mounted, focus once it becomes available
   useEffect(() => {
@@ -802,6 +1147,7 @@ export default function WorkspacePage() {
           prompt,
           existingCode: code,
           messageHistory,
+          modelPreference,
         });
 
         setCode(response.code);
@@ -841,7 +1187,7 @@ export default function WorkspacePage() {
         setIsGenerating(false);
       }
     },
-    [visitorId, password, showToast, code, t, contextMessages],
+    [visitorId, password, showToast, code, t, contextMessages, modelPreference],
   );
   */
 
@@ -852,6 +1198,7 @@ export default function WorkspacePage() {
 
       // Save the new template ID to localStorage
       setSavedTemplateId(templateId);
+      setCurrentVersionId(null);
 
       const dirty = isCodeDirty();
 
@@ -884,6 +1231,7 @@ export default function WorkspacePage() {
           setCode(customTemplate.code);
           originalCodeSnapshotRef.current = customTemplate.code;
           setCurrentTemplateId(templateId);
+          setCurrentVersionId(customTemplate.currentVersionId || null);
           // Clear context messages when switching templates
           setContextMessages([]);
           // Force instant preview update with the new code
@@ -908,6 +1256,28 @@ export default function WorkspacePage() {
       }
     },
     [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates, getSharedTemplate],
+  );
+
+  const handleSelectVersion = useCallback(
+    (version: CodeVersion) => {
+      if (!version.code) return;
+
+      setCode(version.code);
+      setCurrentVersionId(version.id);
+      if (isCustomTemplateId(currentTemplateId)) {
+        updateTemplate(currentTemplateId, version.code, version.projectName || undefined, {
+          currentVersionId: version.id,
+          rootVersionId: version.rootVersionId || version.id,
+        });
+      }
+      originalCodeSnapshotRef.current = version.code;
+      setContextMessages([]);
+      setIsVersionHistoryOpen(false);
+      previewControlRef.current?.forceRefresh(version.code);
+
+      showToast(t("versionHistory.loaded"), "success");
+    },
+    [currentTemplateId, isCustomTemplateId, showToast, t, updateTemplate],
   );
 
   const handleRemoveCustomTemplate = useCallback(
@@ -936,6 +1306,84 @@ export default function WorkspacePage() {
     setContextMessages([]);
     showToast(t("chat.clearChat"), "success");
   }, [showToast, t]);
+
+  const handleSaveApiKeys = useCallback(
+    async (nextApiKeys: UserApiKeySettings) => {
+      const accessToken = nextApiKeys.accessToken || apiKeySettings.accessToken || crypto.randomUUID();
+      const savedApiKeys = {
+        gemini: nextApiKeys.gemini.trim(),
+        openai: nextApiKeys.openai.trim(),
+        accessToken,
+      };
+
+      setApiKeySettings(savedApiKeys);
+      setAuthMode("api-key");
+      setIsAuthenticated(true);
+      setIsPasswordModalOpen(false);
+      setAuthError(undefined);
+      setRemainingUses(undefined);
+      setVersions([]);
+      setCurrentVersionId(null);
+      setContextMessages([]);
+
+      const availableModels = MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(savedApiKeys[MODEL_PROVIDER[preference]]));
+      if (availableModels.length > 0 && !availableModels.includes(modelPreference)) {
+        setModelPreference(availableModels[0]);
+      }
+
+      if (visitorId) {
+        try {
+          const fetchedVersions = await api.getMyCodeVersions({
+            authMode: "api-key",
+            visitorId,
+            apiKeyAccessToken: accessToken,
+            includeCode: true,
+          });
+          setVersions(fetchedVersions);
+          if (fetchedVersions.length > 0) {
+            const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+            setCode(latest.code);
+            setCurrentVersionId(latest.id);
+            originalCodeSnapshotRef.current = latest.code;
+            previewControlRef.current?.forceRefresh(latest.code);
+          }
+        } catch (versionError) {
+          console.warn("Failed to load API key code versions:", versionError);
+        }
+      }
+
+      showToast(t("apiKeys.saved"), "success");
+    },
+    [apiKeySettings.accessToken, modelPreference, setApiKeySettings, setAuthMode, setModelPreference, showToast, t, visitorId],
+  );
+
+  const handleTestApiKey = useCallback(
+    async (provider: ApiKeyProvider, apiKey: string) => {
+      try {
+        const isValid = await api.testApiKey(provider, apiKey.trim());
+        showToast(isValid ? t("apiKeys.testSuccess") : t("apiKeys.testFailed"), isValid ? "success" : "error");
+        return isValid;
+      } catch (error) {
+        showToast(t("apiKeys.testFailed"), "error");
+        throw error;
+      }
+    },
+    [showToast, t],
+  );
+
+  const handleLogout = useCallback(() => {
+    setIsAuthenticated(false);
+    if (authMode === "password") {
+      setPassword("");
+    } else {
+      setAuthMode("password");
+    }
+    setChatHistory([]);
+    setContextMessages([]);
+    setRemainingUses(undefined);
+    setVersions([]);
+    setCurrentVersionId(null);
+  }, [authMode, setAuthMode, setPassword]);
 
   // Get the current template's projectName for sharing
   const getCurrentProjectName = useCallback((): string | undefined => {
@@ -977,6 +1425,13 @@ export default function WorkspacePage() {
   // Handle opening the password modal
   const handleOpenPasswordModal = useCallback(() => {
     setAuthError(undefined);
+    setAuthDialogInitialMode("password");
+    setIsPasswordModalOpen(true);
+  }, []);
+
+  const handleOpenApiKeySettings = useCallback(() => {
+    setAuthError(undefined);
+    setAuthDialogInitialMode("api-key");
     setIsPasswordModalOpen(true);
   }, []);
 
@@ -1010,13 +1465,7 @@ export default function WorkspacePage() {
               <>
                 {/* Mobile: Icon-only logout button */}
                 <button
-                  onClick={() => {
-                    setIsAuthenticated(false);
-                    setPassword("");
-                    setChatHistory([]);
-                    setContextMessages([]);
-                    setRemainingUses(undefined);
-                  }}
+                  onClick={handleLogout}
                   className="md:hidden p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors"
                   title={t("common.logout")}
                 >
@@ -1028,13 +1477,7 @@ export default function WorkspacePage() {
                 </button>
                 {/* Desktop: Text logout button */}
                 <button
-                  onClick={() => {
-                    setIsAuthenticated(false);
-                    setPassword("");
-                    setChatHistory([]);
-                    setContextMessages([]);
-                    setRemainingUses(undefined);
-                  }}
+                  onClick={handleLogout}
                   className="hidden md:inline text-xs font-mono text-gray-400 hover:text-white transition-colors"
                 >
                   {t("common.logout")}
@@ -1053,16 +1496,22 @@ export default function WorkspacePage() {
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
                 isLoading={isStreaming}
-                remainingUses={remainingUses}
+                remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
                 onClearMessages={handleClearMessages}
+                onOpenSettings={handleOpenApiKeySettings}
+                onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
                 autoSwitchEnabled={autoSwitchEnabled}
                 onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                modelPreference={modelPreference}
+                onModelPreferenceChange={setModelPreference}
+                enabledModelPreferences={availableModelPreferences}
+                onRetryMessage={handleSendMessage}
               />
             </Panel>
 
@@ -1080,8 +1529,15 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
+                onOpenVersionHistory={() => {
+                  setIsVersionHistoryOpen(true);
+                  fetchVersions();
+                }}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming) {
+                    syncStreamingBufferToEditor();
+                  }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
                     editor.focus();
                     shouldFocusEditorForStreamingRef.current = false;
@@ -1115,16 +1571,22 @@ export default function WorkspacePage() {
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
                 isLoading={isStreaming}
-                remainingUses={remainingUses}
+                remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
                 onClearMessages={handleClearMessages}
+                onOpenSettings={handleOpenApiKeySettings}
+                onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
                 autoSwitchEnabled={autoSwitchEnabled}
                 onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                modelPreference={modelPreference}
+                onModelPreferenceChange={setModelPreference}
+                enabledModelPreferences={availableModelPreferences}
+                onRetryMessage={handleSendMessage}
               />
             )}
             {mobileActivePanel === "editor" && (
@@ -1138,8 +1600,15 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
+                onOpenVersionHistory={() => {
+                  setIsVersionHistoryOpen(true);
+                  fetchVersions();
+                }}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
+                  if (isStreaming) {
+                    syncStreamingBufferToEditor();
+                  }
                   if (isStreaming && shouldFocusEditorForStreamingRef.current) {
                     editor.focus();
                     shouldFocusEditorForStreamingRef.current = false;
@@ -1217,7 +1686,23 @@ export default function WorkspacePage() {
           isValidating={isValidating}
           error={authError}
           initialPassword={urlPassword || undefined}
+          initialMode={authDialogInitialMode}
+          apiKeys={apiKeySettings}
+          onSaveApiKeys={handleSaveApiKeys}
+          onTestApiKey={handleTestApiKey}
           onClose={handleClosePasswordModal}
+        />
+      )}
+
+      {isApiKeyUsageOpen && <ApiKeyUsageDialog entries={apiKeyUsage} onClose={() => setIsApiKeyUsageOpen(false)} onClear={() => setApiKeyUsage([])} />}
+
+      {isVersionHistoryOpen && (
+        <VersionHistoryDialog
+          versions={currentProjectVersions}
+          currentVersionId={currentVersionId}
+          isLoading={isLoadingVersions}
+          onClose={() => setIsVersionHistoryOpen(false)}
+          onSelectVersion={handleSelectVersion}
         />
       )}
 

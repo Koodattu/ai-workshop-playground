@@ -7,10 +7,20 @@ const express = require("express");
 const { body } = require("express-validator");
 const { generateCode } = require("../controllers/aiController");
 const workshopGuard = require("../middleware/workshopGuard");
+const { apiKeyAuth } = require("../middleware/apiKeyAuth");
 const validateRequest = require("../middleware/validateRequest");
 const { ERROR_CODES } = require("../constants/errorCodes");
 
 const router = express.Router();
+const isApiKeyMode = (value, { req }) => req.body.authMode === "api-key";
+
+const generationAuth = (req, res, next) => {
+  if (req.body.authMode === "api-key") {
+    return apiKeyAuth(req, res, next);
+  }
+
+  return workshopGuard(req, res, next);
+};
 
 /**
  * Custom validator that attaches error code to validation error
@@ -33,6 +43,7 @@ const withCode = (validationChain, errorCode) => {
  * - visitorId: Unique identifier for the visitor/machine
  * - prompt: The code generation prompt
  * - messageHistory: (optional) Array of previous messages for context
+ * - modelPreference: (optional) "fast", "balanced", "accurate", "gpt54mini", "gpt54", or "gpt55"
  *
  * Response:
  * - code: Generated HTML/CSS/JS code
@@ -41,7 +52,33 @@ const withCode = (validationChain, errorCode) => {
 router.post(
   "/",
   [
-    body("password").trim().notEmpty().withMessage({ msg: "Workshop password is required", errorCode: ERROR_CODES.PASSWORD_REQUIRED }),
+    body("authMode").optional().isIn(["password", "api-key"]).withMessage({ msg: "Auth mode is invalid", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("password")
+      .if((value, { req }) => req.body.authMode !== "api-key")
+      .trim()
+      .notEmpty()
+      .withMessage({ msg: "Workshop password is required", errorCode: ERROR_CODES.PASSWORD_REQUIRED }),
+    body("apiKeyAccessToken")
+      .if(isApiKeyMode)
+      .trim()
+      .notEmpty()
+      .withMessage({ msg: "API key session token is required", errorCode: ERROR_CODES.VALIDATION_FAILED })
+      .bail()
+      .isLength({ min: 24, max: 200 })
+      .withMessage({ msg: "API key session token is invalid", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("apiKeys").if(isApiKeyMode).optional().isObject().withMessage({ msg: "API keys must be an object", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("apiKeys.gemini")
+      .if(isApiKeyMode)
+      .optional({ checkFalsy: true })
+      .trim()
+      .isLength({ max: 4096 })
+      .withMessage({ msg: "Gemini API key is too long", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("apiKeys.openai")
+      .if(isApiKeyMode)
+      .optional({ checkFalsy: true })
+      .trim()
+      .isLength({ max: 4096 })
+      .withMessage({ msg: "OpenAI API key is too long", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("visitorId")
       .trim()
       .notEmpty()
@@ -71,10 +108,16 @@ router.post(
       .bail()
       .isLength({ max: 5000 })
       .withMessage({ msg: "Message content must not exceed 5000 characters", errorCode: ERROR_CODES.MESSAGE_CONTENT_TOO_LONG }),
+    body("existingCode").optional().isString().withMessage({ msg: "Existing code must be a string", errorCode: ERROR_CODES.VALIDATION_FAILED }).isLength({ max: 500000 }),
+    body("parentVersionId").optional({ nullable: true, checkFalsy: true }).isMongoId().withMessage({ msg: "Parent version ID is invalid", errorCode: ERROR_CODES.INVALID_OBJECT_ID }),
     body("mode").optional().isIn(["edit", "ask"]).withMessage({ msg: "Mode must be either 'edit' or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("modelPreference")
+      .optional()
+      .isIn(["fast", "balanced", "accurate", "gpt54mini", "gpt54", "gpt55"])
+      .withMessage({ msg: "Model preference must be one of 'fast', 'balanced', 'accurate', 'gpt54mini', 'gpt54', or 'gpt55'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     validateRequest,
   ],
-  workshopGuard,
+  generationAuth,
   generateCode,
 );
 
