@@ -1,5 +1,6 @@
 import { config } from "./config";
 import type {
+  ArtifactType,
   GenerateRequest,
   GenerateResponse,
   PasswordEntry,
@@ -217,6 +218,7 @@ class ApiClient {
                         message: event.message,
                         code: event.code,
                         projectName: event.projectName,
+                        artifactType: event.artifactType,
                         editMode: event.editMode,
                         version: event.version,
                         remaining: event.remaining,
@@ -443,10 +445,10 @@ class ApiClient {
   }
 
   // Create a share link
-  async createShareLink(code: string, title?: string, projectName?: string): Promise<CreateShareResponse> {
+  async createShareLink(code: string, title?: string, projectName?: string, artifactType: ArtifactType = "website"): Promise<CreateShareResponse> {
     const { data } = await this.request<{ message: string; data: CreateShareResponse }>("/api/share", {
       method: "POST",
-      body: JSON.stringify({ code, title, projectName }),
+      body: JSON.stringify({ code, title, projectName, artifactType }),
     });
     return data.data;
   }

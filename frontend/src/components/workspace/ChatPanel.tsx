@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ChatMessage, ChatMode, ModelPreference } from "@/types";
+import type { ArtifactType, ChatMessage, ChatMode, ModelPreference } from "@/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -24,6 +24,8 @@ interface ChatPanelProps {
   onUnlockClick: () => void;
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
+  artifactType: ArtifactType;
+  onArtifactTypeChange: (artifactType: ArtifactType) => void;
   modelPreference: ModelPreference;
   onModelPreferenceChange: (modelPreference: ModelPreference) => void;
   enabledModelPreferences: ModelPreference[];
@@ -152,6 +154,8 @@ export function ChatPanel({
   onUnlockClick,
   mode,
   onModeChange,
+  artifactType,
+  onArtifactTypeChange,
   modelPreference,
   onModelPreferenceChange,
   enabledModelPreferences,
@@ -477,7 +481,7 @@ export function ChatPanel({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={t("chat.sendPlaceholder")}
+                placeholder={artifactType === "game" ? t("chat.gamePlaceholder") : t("chat.websitePlaceholder")}
                 rows={1}
                 disabled={isLoading}
                 className="
@@ -493,36 +497,74 @@ export function ChatPanel({
             </div>
 
             <div className="flex items-end justify-between gap-2 flex-wrap">
-              {/* Left side: Mode toggle + auto-switch (mobile only) */}
+              {/* Left side: Artifact/action modes + auto-switch (mobile only) */}
               <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
-                {/* ASK/EDIT Mode Toggle */}
-                <div className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5 md:p-1">
-                  <button
-                    type="button"
-                    onClick={() => onModeChange("ask")}
-                    disabled={isLoading}
-                    className={`
-                      px-2 py-0.5 md:px-4 md:py-1.5 rounded text-[10px] md:text-xs font-mono transition-all duration-200
-                      ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                    title={t("chat.askModeTooltip")}
-                  >
-                    {t("chat.askMode")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onModeChange("edit")}
-                    disabled={isLoading}
-                    className={`
-                      px-2 py-0.5 md:px-4 md:py-1.5 rounded text-[10px] md:text-xs font-mono transition-all duration-200
-                      ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                    title={t("chat.editModeTooltip")}
-                  >
-                    {t("chat.editMode")}
-                  </button>
+                <div className="flex flex-col gap-1">
+                  <div role="group" aria-label={t("chat.artifactModeLabel")} className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onArtifactTypeChange("website")}
+                      disabled={isLoading}
+                      aria-pressed={artifactType === "website"}
+                      className={`
+                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${artifactType === "website" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.websiteModeTooltip")}
+                    >
+                      {t("chat.websiteMode")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onArtifactTypeChange("game")}
+                      disabled={isLoading}
+                      aria-pressed={artifactType === "game"}
+                      className={`
+                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${artifactType === "game" ? "bg-purple-500/20 text-purple-300 border border-purple-400/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.gameModeTooltip")}
+                    >
+                      {t("chat.gameMode")}
+                    </button>
+                  </div>
+
+                  <div role="group" aria-label={t("chat.actionModeLabel")} className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onModeChange("ask")}
+                      disabled={isLoading}
+                      aria-pressed={mode === "ask"}
+                      className={`
+                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.askModeTooltip")}
+                    >
+                      {t("chat.askMode")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onModeChange("edit")}
+                      disabled={isLoading}
+                      aria-pressed={mode === "edit"}
+                      className={`
+                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.editModeTooltip")}
+                    >
+                      {t("chat.editMode")}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Mobile only: Auto-switch checkbox */}

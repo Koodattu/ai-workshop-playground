@@ -19,7 +19,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage } from "@/lib/errorTranslation";
-import type { ApiKeyProvider, ApiKeyUsageEntry, AuthMode, ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
+import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -169,6 +169,7 @@ export default function WorkspacePage() {
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
+  const [artifactType, setArtifactType] = useLocalStorage<ArtifactType>("artifact-type", "website");
   const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "balanced");
   const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>([...MODEL_PREFERENCE_PRIORITY]);
 
@@ -418,6 +419,7 @@ export default function WorkspacePage() {
         if (options?.loadLatest && !isSafeStart && fetchedVersions.length > 0) {
           const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
           setCode(latest.code);
+          setArtifactType(latest.artifactType || "website");
           setCurrentVersionId(latest.id);
           originalCodeSnapshotRef.current = latest.code;
           previewControlRef.current?.forceRefresh(latest.code);
@@ -498,7 +500,7 @@ export default function WorkspacePage() {
         templateCounterRef.current += 1;
         const messages = getMessages(language);
         const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
-        const newTemplate = addTemplate(templateName, newCode);
+        const newTemplate = addTemplate(templateName, newCode, undefined, undefined, artifactType);
 
         // Switch to the newly created custom template
         setSavedTemplateId(newTemplate.id);
@@ -510,7 +512,7 @@ export default function WorkspacePage() {
         setCode(newCode);
       }
     },
-    [currentTemplateId, isCustomTemplateId, language, addTemplate, isStreaming, setSavedTemplateId],
+    [currentTemplateId, isCustomTemplateId, language, addTemplate, artifactType, isStreaming, setSavedTemplateId],
   );
 
   // Auto-save code changes to custom templates (debounced)
@@ -555,11 +557,13 @@ export default function WorkspacePage() {
 
     // Try to load the saved template
     let templateCode: string | undefined;
+    let templateArtifactType: ArtifactType = "website";
 
     // Check shared templates
     const sharedTemplate = sharedTemplates.find((t) => t.id === savedTemplateId);
     if (sharedTemplate) {
       templateCode = sharedTemplate.code;
+      templateArtifactType = sharedTemplate.artifactType || "website";
     }
 
     // Check custom templates
@@ -567,6 +571,7 @@ export default function WorkspacePage() {
       const customTemplate = customTemplates.find((t) => t.id === savedTemplateId);
       if (customTemplate) {
         templateCode = customTemplate.code;
+        templateArtifactType = customTemplate.artifactType || "website";
       }
     }
 
@@ -576,6 +581,7 @@ export default function WorkspacePage() {
       if (builtInTemplate) {
         const messages = getMessages(language);
         templateCode = getLocalizedTemplate(savedTemplateId, language, messages) || builtInTemplate.code;
+        templateArtifactType = builtInTemplate.artifactType || "website";
       }
     }
 
@@ -583,6 +589,7 @@ export default function WorkspacePage() {
     if (templateCode) {
       setCurrentTemplateId(savedTemplateId);
       setCode(templateCode);
+      setArtifactType(templateArtifactType);
       originalCodeSnapshotRef.current = templateCode;
     }
   }, [customTemplates, sharedTemplates, savedTemplateId, language, isSafeStart]); // Only run when templates or savedTemplateId changes
@@ -638,6 +645,7 @@ export default function WorkspacePage() {
             if (!isSafeStart && fetchedVersions.length > 0) {
               const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
               setCode(latest.code);
+              setArtifactType(latest.artifactType || "website");
               setCurrentVersionId(latest.id);
               originalCodeSnapshotRef.current = latest.code;
               previewControlRef.current?.forceRefresh(latest.code);
@@ -724,12 +732,14 @@ export default function WorkspacePage() {
         sessionStorage.removeItem("pending-shared-template");
 
         // Add to shared templates and switch to it (include projectName if available)
-        const newTemplate = addSharedTemplate(pendingShare.shareId, pendingShare.code, pendingShare.title, pendingShare.projectName);
+        const pendingArtifactType: ArtifactType = pendingShare.artifactType === "game" ? "game" : "website";
+        const newTemplate = addSharedTemplate(pendingShare.shareId, pendingShare.code, pendingShare.title, pendingShare.projectName, pendingArtifactType);
 
         // Switch to the shared template
         setCurrentTemplateId(newTemplate.id);
         setCurrentVersionId(null);
         setCode(pendingShare.code);
+        setArtifactType(pendingArtifactType);
         originalCodeSnapshotRef.current = pendingShare.code;
 
         showToast(t("share.templateAdded"), "success");
@@ -797,6 +807,7 @@ export default function WorkspacePage() {
             parentVersionId: currentVersionId,
             messageHistory,
             mode: chatMode,
+            artifactType,
             modelPreference,
             showThoughts,
           },
@@ -977,7 +988,7 @@ export default function WorkspacePage() {
                 // If user is in a custom template, update it instead of creating a new one
                 if (isCustomTemplateId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
-                  updateTemplate(currentTemplateId, finalCode, projectName, versionMeta);
+                  updateTemplate(currentTemplateId, finalCode, projectName, versionMeta, artifactType);
                   // Keep the same template ID
                   setCurrentTemplateId(currentTemplateId);
                 } else {
@@ -991,7 +1002,7 @@ export default function WorkspacePage() {
                     const messages = getMessages(language);
                     templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
                   }
-                  const newTemplate = addTemplate(templateName, finalCode, projectName, versionMeta);
+                  const newTemplate = addTemplate(templateName, finalCode, projectName, versionMeta, artifactType);
                   // Switch to the new custom template and update savedTemplateId to match
                   setSavedTemplateId(newTemplate.id);
                   setCurrentTemplateId(newTemplate.id);
@@ -1154,6 +1165,7 @@ export default function WorkspacePage() {
       updateTemplate,
       addTemplate,
       chatMode,
+      artifactType,
       modelPreference,
       currentVersionId,
       autoSwitchEnabled,
@@ -1293,6 +1305,7 @@ export default function WorkspacePage() {
       const sharedTemplate = getSharedTemplate(templateId);
       if (sharedTemplate) {
         setCode(sharedTemplate.code);
+        setArtifactType(sharedTemplate.artifactType || "website");
         originalCodeSnapshotRef.current = sharedTemplate.code;
         setCurrentTemplateId(templateId);
         // Clear context messages when switching templates
@@ -1307,6 +1320,7 @@ export default function WorkspacePage() {
         const customTemplate = customTemplates.find((t) => t.id === templateId);
         if (customTemplate) {
           setCode(customTemplate.code);
+          setArtifactType(customTemplate.artifactType || "website");
           originalCodeSnapshotRef.current = customTemplate.code;
           setCurrentTemplateId(templateId);
           setCurrentVersionId(customTemplate.currentVersionId || null);
@@ -1324,6 +1338,7 @@ export default function WorkspacePage() {
           const localizedCode = getLocalizedTemplate(templateId, language, messages);
           const newCode = localizedCode || template.code;
           setCode(newCode);
+          setArtifactType(template.artifactType || "website");
           originalCodeSnapshotRef.current = newCode;
           setCurrentTemplateId(templateId);
           // Clear context messages when switching templates
@@ -1341,12 +1356,19 @@ export default function WorkspacePage() {
       if (!version.code) return;
 
       setCode(version.code);
+      setArtifactType(version.artifactType || "website");
       setCurrentVersionId(version.id);
       if (isCustomTemplateId(currentTemplateId)) {
-        updateTemplate(currentTemplateId, version.code, version.projectName || undefined, {
-          currentVersionId: version.id,
-          rootVersionId: version.rootVersionId || version.id,
-        });
+        updateTemplate(
+          currentTemplateId,
+          version.code,
+          version.projectName || undefined,
+          {
+            currentVersionId: version.id,
+            rootVersionId: version.rootVersionId || version.id,
+          },
+          version.artifactType || "website",
+        );
       }
       originalCodeSnapshotRef.current = version.code;
       setContextMessages([]);
@@ -1369,6 +1391,7 @@ export default function WorkspacePage() {
           const localizedCode = getLocalizedTemplate(DEFAULT_TEMPLATE_ID, language, messages);
           const newCode = localizedCode || defaultTemplate.code;
           setCode(newCode);
+          setArtifactType(defaultTemplate.artifactType || "website");
           originalCodeSnapshotRef.current = newCode;
           setCurrentTemplateId(DEFAULT_TEMPLATE_ID);
           setContextMessages([]);
@@ -1384,6 +1407,16 @@ export default function WorkspacePage() {
     setContextMessages([]);
     showToast(t("chat.clearChat"), "success");
   }, [showToast, t]);
+
+  const handleArtifactTypeChange = useCallback(
+    (nextArtifactType: ArtifactType) => {
+      setArtifactType(nextArtifactType);
+      if (isCustomTemplateId(currentTemplateId)) {
+        updateTemplate(currentTemplateId, code, undefined, undefined, nextArtifactType);
+      }
+    },
+    [code, currentTemplateId, isCustomTemplateId, updateTemplate],
+  );
 
   const handleSaveApiKeys = useCallback(
     async (nextApiKeys: UserApiKeySettings) => {
@@ -1422,6 +1455,7 @@ export default function WorkspacePage() {
           if (!isSafeStart && fetchedVersions.length > 0) {
             const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
             setCode(latest.code);
+            setArtifactType(latest.artifactType || "website");
             setCurrentVersionId(latest.id);
             originalCodeSnapshotRef.current = latest.code;
             previewControlRef.current?.forceRefresh(latest.code);
@@ -1485,7 +1519,7 @@ export default function WorkspacePage() {
     setIsSharing(true);
     try {
       const projectName = getCurrentProjectName();
-      const response = await api.createShareLink(code, undefined, projectName);
+      const response = await api.createShareLink(code, undefined, projectName, artifactType);
       const shareUrl = `${window.location.origin}/share/${response.shareId}`;
 
       // Copy to clipboard
@@ -1499,7 +1533,7 @@ export default function WorkspacePage() {
     } finally {
       setIsSharing(false);
     }
-  }, [code, showToast, t, getCurrentProjectName]);
+  }, [artifactType, code, showToast, t, getCurrentProjectName]);
 
   // Handle opening the password modal
   const handleOpenPasswordModal = useCallback(() => {
@@ -1589,6 +1623,8 @@ export default function WorkspacePage() {
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                artifactType={artifactType}
+                onArtifactTypeChange={handleArtifactTypeChange}
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
                 enabledModelPreferences={availableModelPreferences}
@@ -1678,6 +1714,8 @@ export default function WorkspacePage() {
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
                 onModeChange={setChatMode}
+                artifactType={artifactType}
+                onArtifactTypeChange={handleArtifactTypeChange}
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
                 enabledModelPreferences={availableModelPreferences}

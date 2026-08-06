@@ -1,12 +1,12 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import type { SharedTemplate } from "@/types";
+import type { ArtifactType, SharedTemplate } from "@/types";
 import { SHARED_TEMPLATE_CONFIG } from "@/types";
 
 interface UseSharedTemplatesReturn {
   /** All shared templates, sorted by loadedAt (newest first) */
   templates: SharedTemplate[];
   /** Add a new shared template from a share link, auto-removes oldest if exceeding max */
-  addSharedTemplate: (shareId: string, code: string, title: string | null, projectName?: string) => SharedTemplate;
+  addSharedTemplate: (shareId: string, code: string, title: string | null, projectName?: string, artifactType?: ArtifactType) => SharedTemplate;
   /** Remove a shared template by id */
   removeTemplate: (id: string) => void;
   /** Get a shared template by id */
@@ -77,7 +77,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
    * If exceeding MAX_TEMPLATES, the oldest template is removed.
    */
   const addSharedTemplate = useCallback(
-    (shareId: string, code: string, title: string | null, projectName?: string): SharedTemplate => {
+    (shareId: string, code: string, title: string | null, projectName?: string, artifactType: ArtifactType = "website"): SharedTemplate => {
       if (!shareId) {
         throw new Error("shareId is required to add a shared template");
       }
@@ -95,6 +95,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
           code,
           title,
           projectName,
+          artifactType,
           loadedAt: Date.now(),
         };
 
@@ -113,6 +114,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
         code,
         title,
         projectName,
+        artifactType,
         loadedAt: Date.now(),
       };
 

@@ -13,6 +13,7 @@ const mapVersion = (version, includeCode = false) => {
     prompt: version.prompt,
     message: version.message,
     projectName: version.projectName,
+    artifactType: version.artifactType || "website",
     modelProvider: version.modelProvider || null,
     modelPreference: version.modelPreference || null,
     modelId: version.modelId || null,

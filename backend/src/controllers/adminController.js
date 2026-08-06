@@ -632,7 +632,7 @@ const getTokenTimeSeries = asyncHandler(async (req, res) => {
  * Get all share links
  */
 const getShareLinks = asyncHandler(async (req, res) => {
-  const shareLinks = await SharedCode.find().select("shareId code title projectName createdAt").sort({ createdAt: -1 }).lean();
+  const shareLinks = await SharedCode.find().select("shareId code title projectName artifactType createdAt").sort({ createdAt: -1 }).lean();
 
   res.json({
     count: shareLinks.length,

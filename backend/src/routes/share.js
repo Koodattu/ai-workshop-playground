@@ -14,6 +14,8 @@ router.post(
   [
     body("code").notEmpty().withMessage("Code is required").isString().withMessage("Code must be a string").isLength({ max: 500000 }).withMessage("Code cannot exceed 500KB"),
     body("title").optional().isString().withMessage("Title must be a string").isLength({ max: 100 }).withMessage("Title cannot exceed 100 characters"),
+    body("projectName").optional().isString().withMessage("Project name must be a string").isLength({ max: 50 }).withMessage("Project name cannot exceed 50 characters"),
+    body("artifactType").optional().isIn(["website", "game"]).withMessage("Artifact type must be either 'website' or 'game'"),
   ],
   validateRequest,
   createShare,

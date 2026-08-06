@@ -118,6 +118,10 @@ router.post(
     body("existingCode").optional().isString().withMessage({ msg: "Existing code must be a string", errorCode: ERROR_CODES.VALIDATION_FAILED }).isLength({ max: 500000 }),
     body("parentVersionId").optional({ nullable: true, checkFalsy: true }).isMongoId().withMessage({ msg: "Parent version ID is invalid", errorCode: ERROR_CODES.INVALID_OBJECT_ID }),
     body("mode").optional().isIn(["edit", "ask"]).withMessage({ msg: "Mode must be either 'edit' or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("artifactType")
+      .optional()
+      .isIn(["website", "game"])
+      .withMessage({ msg: "Artifact type must be either 'website' or 'game'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("showThoughts").optional().isBoolean().withMessage({ msg: "Show thoughts must be a boolean", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("modelPreference")
       .optional()

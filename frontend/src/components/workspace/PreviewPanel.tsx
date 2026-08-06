@@ -827,7 +827,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
               ref={iframeRef}
               srcDoc={processedCode}
               onLoad={restoreCurrentProjectState}
-              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-pointer-lock"
               className="w-full h-full border-0"
               title="Preview"
             />

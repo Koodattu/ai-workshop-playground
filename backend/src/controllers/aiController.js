@@ -906,61 +906,63 @@ const genAI = new GoogleGenAI({ apiKey: config.geminiApiKey });
 const openAI = config.openaiApiKey ? new OpenAI({ apiKey: config.openaiApiKey }) : null;
 const deepSeek = config.deepseekApiKey ? new OpenAI({ apiKey: config.deepseekApiKey, baseURL: "https://api.deepseek.com" }) : null;
 
-// System instruction for clean code output
-const SYSTEM_INSTRUCTION = `You are an expert web developer assistant. Your task is to generate or modify clean, production-ready HTML, CSS, and JavaScript code.
+const COMMON_ARTIFACT_INSTRUCTION = `You are an expert browser-artifact developer helping users design, build, and improve websites and games. When editing code, produce a complete, runnable workshop prototype for the user's current milestone using a single HTML document with inline CSS and JavaScript.
 
-Reply in the same language as the user, and SUPER shortly tell what you did. SUPER short.
+WORKING RULES:
+- Implement the requested step, not an imagined finished product. Prefer the simplest approach that creates a useful result now.
+- When code exists, preserve its working behavior, visual language, dependencies, and state contract unless the user asks to change them.
+- Use modern browser APIs and semantic HTML. Keep the result responsive and format the code clearly.
+- Use plain HTML, CSS, and JavaScript by default. Add a library only when it materially simplifies the requested result, and never add a build step.
+- Before finishing, check that the document loads without obvious errors, the requested interaction works, and the layout remains usable at narrow and wide sizes.
 
-CRITICAL OUTPUT RULES - FOLLOW EXACTLY:
-1. Return either a full replacement or exact patch edits using "editMode"
-2. Return a SUPER short message in the "message" field in the SAME LANGUAGE as the user
-3. Return a TWO-WORD project name in the "projectName" field in the SAME LANGUAGE as the user
-4. For "replace_all", the "code" field should contain ONLY the complete code itself - start directly with <!DOCTYPE html> or the first line of code
-5. NO markdown code fences (no \`\`\`html, no \`\`\`, nothing) in the code field
-6. The message should be 1-2 sentences maximum
-7. The projectName MUST be exactly TWO WORDS that describe the project creatively (e.g., "Solar Dashboard", "Pixel Art", "Magic Quiz")
-8. For "patch", set "code" to an empty string and put all changes in "edits"
-9. Put "editMode" before "code" in the JSON object
+STATE CONTRACT:
+- For an interactive artifact with meaningful progress or current state, expose window.workshopState with exportState() and importState(state).
+- exportState() returns a JSON-serializable object with a numeric schemaVersion and the values needed to resume. Never return DOM nodes, functions, timers, or class instances.
+- importState(state) accepts a previous object or null, validates it, restores internal variables, and rerenders. Null resets the artifact.
+- Call window.workshopPreview?.saveState() after meaningful state changes.
+- Do not use cookies, localStorage, or sessionStorage for artifact progress; the workshop host owns persistence.`;
 
-CODE MODIFICATION RULES:
-- If existing code is provided, modify/extend it based on the user's request
-- Maintain the existing structure and style unless explicitly asked to change it
-- If user says "add", "modify", "change", or "update" - work with the existing code
-- If user wants something completely new, you can start fresh
-- Preserve working functionality unless asked to remove it
-- Prefer "patch" for targeted changes when existing code is provided
-- Use "replace_all" only for brand new projects or broad rewrites
-- Patch edits must use exact oldText copied from the provided existing code
-- Each oldText must match exactly one location in the existing code
-- For translation requests, oldText must stay in the original language exactly as it appears in the code; translate only newText
-- If multiple areas need changes, return multiple edits
-- Do not use line numbers. Exact text replacement avoids line-number drift when several edits are applied.
+const EDIT_OUTPUT_INSTRUCTION = `EDIT MODE OUTPUT:
+- Return a JSON object with fields in this exact order: "editMode", "code", "edits", "message", "projectName".
+- Reply in the user's language. "message" is 1-2 short sentences and "projectName" is exactly two descriptive words.
+- For a new artifact or broad rewrite, use editMode "replace_all", put the complete document in "code", and return an empty "edits" array.
+- For a targeted change to existing code, prefer editMode "patch", set "code" to an empty string, and return exact oldText/newText replacements. Each oldText must be copied verbatim and match exactly once.
+- Never use line numbers or Markdown fences in the code field. A replacement document starts directly with <!DOCTYPE html>.
+- For translations, keep oldText in its original language and translate only newText.`;
 
-IF YOU NEED IMAGES:
-- Use https://static.photos/ for placeholder images, https://static.photos/CATEGORY/RESOLUTION/SEED
-- Possible categories: nature, office, people, technology, minimal, abstract, cityscape, workspace, food, travel, finance, medical, wellness, education, industry, gaming, automotive
-- Seed can be any integer to get different images
-- Example https://static.photos/nature/640x360/1
+const WEBSITE_ARTIFACT_INSTRUCTION = `WEBSITE ARTIFACT:
+- Infer whether the request is a marketing page, portfolio, dashboard, form, tool, or small web app, then choose hierarchy, density, and visual character to suit its audience and purpose.
+- Establish a coherent typography, color, spacing, and radius system. Avoid generic centered-hero and equal-card-grid layouts when the brief suggests a more specific composition.
+- Use semantic structure, accessible labels, visible focus states, sufficient contrast, and responsive behavior. Include loading, empty, error, pressed, or success states when the interaction needs them.
+- Motion should clarify hierarchy or state, remain quick and interruptible, name the transitioned properties, and respect prefers-reduced-motion.
+- Prefer self-contained CSS. Use Tailwind only when the user requests it or the existing artifact already uses it.
+- Use user-supplied image URLs when available. Otherwise prefer CSS, gradients, inline SVG, or a deliberate labeled placeholder; never invent remote image URLs.`;
 
-CODE GENERATION RULES:
-1. Generate complete, self-contained HTML files
-2. Use inline <style> tags for CSS and inline <script> tags for JavaScript
-3. Ensure code is production-ready and runs in any modern browser
-4. Use modern, semantic HTML5
-5. Create visually appealing designs with good styling
-6. Include responsive design principles
-7. Make interactive elements functional with proper JavaScript
-8. Format code with proper indentation - each tag, style rule, and script line should be on its own line
+const GAME_ARTIFACT_INSTRUCTION = `GAME ARTIFACT:
+- A game is a rule-governed system where player input changes state and produces understandable feedback and consequences. Build a small playable vertical slice before adding content or menus.
+- Make the main action discoverable within seconds. Include responsive controls, clear feedback, and an appropriate reset/restart path. Scores, lives, win screens, and levels are optional, not universal requirements.
+- Choose the simplest suitable representation: DOM for interface-heavy games, Canvas 2D for small arcade or puzzle games, Phaser for structured 2D scenes/physics, PixiJS for graphics-heavy 2D rendering, and Three.js for 3D.
+- Approved pinned libraries, only when useful: Phaser 3.90.0 at https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js; PixiJS 8.19.0 at https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.js; Matter.js 0.20.0 at https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js; Three.js 0.185.1 via an import map using https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js and the matching examples/jsm addon path.
+- For animation loops, use elapsed time, clamp large deltas after tab suspension, resize canvases for their display size and device pixel ratio, and prevent browser scrolling only for captured controls. Add touch controls when reasonable.
+- Prefer procedural Web Audio for small effects. Create or resume audio only after user interaction and provide a mute control. Do not embed large Base64 media.
+- Keep remote assets optional so a failed request cannot make the game blank or unplayable. Do not add shops, inventories, lore, multiple levels, or elaborate settings unless requested.`;
 
-STATE PRESERVATION CONTRACT:
-- For every interactive app with meaningful user progress or current UI/game state, expose window.workshopState with exportState() and importState(state) functions
-- exportState() must return a JSON-serializable object containing a numeric schemaVersion and every value needed to resume the experience; never include DOM nodes, functions, timers, or class instances
-- importState(state) must accept either a previously exported object or null. Validate fields, restore internal variables, and redraw or rerender the UI. A null value must reset the app to its initial state
-- After meaningful state changes, call window.workshopPreview?.saveState() so the workshop can persist progress promptly
-- Keep this contract working when modifying an existing interactive app, and migrate older schema versions when practical
-- Do not use cookies, localStorage, or sessionStorage for app progress. The workshop host owns persistence through this contract
+const ASK_OUTPUT_INSTRUCTION = `ASK MODE OUTPUT:
+- Answer as a domain expert without generating or modifying code.
+- Return only a JSON object with a "message" field.
+- Reply in the user's language in 2-4 concise, useful sentences. Analyze the existing artifact when relevant and stay focused on the question.`;
 
-REMEMBER: Return JSON fields in this exact order: "editMode", "code", "edits", "message", "projectName".`;
+function normalizeArtifactType(value) {
+  return value === "game" ? "game" : "website";
+}
+
+function buildSystemInstruction({ isAskMode, artifactType }) {
+  const domainInstruction = normalizeArtifactType(artifactType) === "game" ? GAME_ARTIFACT_INSTRUCTION : WEBSITE_ARTIFACT_INSTRUCTION;
+  return [COMMON_ARTIFACT_INSTRUCTION, domainInstruction, isAskMode ? ASK_OUTPUT_INSTRUCTION : EDIT_OUTPUT_INSTRUCTION].join("\n\n");
+}
+
+const DEFAULT_EDIT_SYSTEM_INSTRUCTION = buildSystemInstruction({ isAskMode: false, artifactType: "website" });
+const DEFAULT_ASK_SYSTEM_INSTRUCTION = buildSystemInstruction({ isAskMode: true, artifactType: "website" });
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
@@ -1004,21 +1006,6 @@ const CODE_GENERATION_SCHEMA = {
   },
   required: ["editMode", "code", "edits", "message", "projectName"],
 };
-
-// System instruction for ASK mode - answering questions without generating code
-const ASK_SYSTEM_INSTRUCTION = `You are a helpful web development assistant. Your task is to answer questions about HTML, CSS, JavaScript, and web development in general.
-
-Reply in the same language as the user. Be SHORT, CONCISE, and TO THE POINT. No long explanations.
-
-CRITICAL OUTPUT RULES:
-1. Return ONLY a "message" field in JSON format
-2. The message should be a short, helpful response (2-4 sentences max)
-3. Do NOT generate any code - just explain, suggest, or answer
-4. If the user asks how to do something, explain the concept briefly
-5. If they ask about the existing code, analyze and give feedback
-6. Stay focused on the question - no unnecessary elaboration
-
-REMEMBER: You are in ASK mode - your job is to help and advise, NOT to write or modify code. Keep responses SHORT.`;
 
 // JSON schema for ASK mode structured output
 const ASK_SCHEMA = {
@@ -1180,7 +1167,7 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
 
   const request = {
     model: selectedModel.model,
-    instructions: systemInstruction || (isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION),
+    instructions: systemInstruction || (isAskMode ? DEFAULT_ASK_SYSTEM_INSTRUCTION : DEFAULT_EDIT_SYSTEM_INSTRUCTION),
     input: userPrompt,
     text: buildOpenAITextFormat(isAskMode),
     reasoning: getOpenAIReasoningConfig(selectedModel, showThoughts),
@@ -1263,7 +1250,7 @@ async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, syst
     messages: [
       {
         role: "system",
-        content: systemInstruction || (isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION),
+        content: systemInstruction || (isAskMode ? DEFAULT_ASK_SYSTEM_INSTRUCTION : DEFAULT_EDIT_SYSTEM_INSTRUCTION),
       },
       { role: "user", content: userPrompt },
     ],
@@ -1348,7 +1335,7 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
 async function generateFullRewriteAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext, apiKeys }) {
   const retryConfig = {
     ...generationConfig,
-    systemInstruction: `${SYSTEM_INSTRUCTION}
+    systemInstruction: `${generationConfig.systemInstruction || DEFAULT_EDIT_SYSTEM_INSTRUCTION}
 
 PATCH RETRY MODE:
 - A previous patch response could not be applied safely to the current code.
@@ -1486,8 +1473,18 @@ The previous patch could not be applied safely. Return the complete updated code
  * Generate code using the selected provider with streaming structured outputs
  */
 const generateCode = asyncHandler(async (req, res) => {
-  const { prompt, existingCode, messageHistory, mode = "edit", modelPreference = DEFAULT_MODEL_PREFERENCE, parentVersionId, showThoughts = false } = req.body;
+  const {
+    prompt,
+    existingCode,
+    messageHistory,
+    mode = "edit",
+    artifactType: requestedArtifactType = "website",
+    modelPreference = DEFAULT_MODEL_PREFERENCE,
+    parentVersionId,
+    showThoughts = false,
+  } = req.body;
   const isAskMode = mode === "ask";
+  const artifactType = normalizeArtifactType(requestedArtifactType);
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
   const allowCodeStreaming = !isAskMode;
   const isApiKeyMode = req.workshop?.authMode === "api-key";
@@ -1552,6 +1549,7 @@ const generateCode = asyncHandler(async (req, res) => {
     provider: selectedModel.provider,
     model: selectedModel.model,
     mode,
+    artifactType,
     hasExistingCode,
     textChunks: 0,
     textChars: 0,
@@ -1590,7 +1588,7 @@ const generateCode = asyncHandler(async (req, res) => {
   try {
     // Configure generation with system instruction based on mode
     const generationConfig = {
-      systemInstruction: isAskMode ? ASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION,
+      systemInstruction: buildSystemInstruction({ isAskMode, artifactType }),
       responseMimeType: "application/json",
       responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
     };
@@ -1913,6 +1911,7 @@ Modify or extend the existing code based on the user's request.`;
         prompt,
         message: structuredResponse.message,
         projectName: structuredResponse.projectName || null,
+        artifactType,
         modelProvider: selectedModel.provider,
         modelPreference: selectedModel.id,
         modelId: selectedModel.model,
@@ -1941,6 +1940,7 @@ Modify or extend the existing code based on the user's request.`;
         prompt: version.prompt,
         message: version.message,
         projectName: version.projectName,
+        artifactType: version.artifactType || "website",
         modelProvider: version.modelProvider,
         modelPreference: version.modelPreference,
         modelId: version.modelId,
@@ -1987,6 +1987,7 @@ Modify or extend the existing code based on the user's request.`;
         modelLabel: selectedModel.label,
         modelThinking: selectedModel.thinking,
         mode,
+        artifactType,
         promptTokens,
         candidatesTokens,
         thoughtsTokens,
@@ -2043,6 +2044,7 @@ Modify or extend the existing code based on the user's request.`;
       message: structuredResponse.message,
       code: isAskMode ? "" : finalCode,
       projectName: isAskMode ? undefined : structuredResponse.projectName,
+      artifactType,
       editMode: isAskMode ? undefined : finalEditMode,
       version: savedVersion,
       remaining: req.workshop?.remaining,
@@ -2060,6 +2062,7 @@ Modify or extend the existing code based on the user's request.`;
       parentVersionId: parentVersionId || null,
       model: selectedModel.model,
       mode,
+      artifactType,
       authMode: req.workshop?.authMode || "password",
       error: sanitizeErrorForLog(error),
     });

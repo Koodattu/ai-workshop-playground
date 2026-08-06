@@ -1,7 +1,10 @@
+import type { ArtifactType } from "@/types";
+
 export interface Template {
   id: string;
   nameKey: string;
   code: string;
+  artifactType?: ArtifactType;
 }
 
 // Type for translation messages
@@ -472,6 +475,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "snake",
     nameKey: "templates.snake",
+    artifactType: "game",
     code: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -894,6 +898,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "tictactoe",
     nameKey: "templates.tictactoe",
+    artifactType: "game",
     code: `<!DOCTYPE html>
 <html lang="en">
 <head>

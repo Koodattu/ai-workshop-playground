@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { ArtifactType } from "@/types";
 
 interface SharePageProps {
   params: Promise<{ id: string }>;
@@ -16,6 +17,7 @@ interface SharedCodeData {
   code: string;
   title: string | null;
   projectName?: string;
+  artifactType?: ArtifactType;
   createdAt: string;
 }
 
@@ -69,6 +71,7 @@ export default function SharePage({ params }: SharePageProps) {
       code: sharedData.code,
       title: sharedData.title,
       projectName: sharedData.projectName,
+      artifactType: sharedData.artifactType || "website",
       createdAt: sharedData.createdAt,
     };
     sessionStorage.setItem("pending-shared-template", JSON.stringify(pendingShare));
@@ -223,7 +226,7 @@ export default function SharePage({ params }: SharePageProps) {
         {sharedData?.code ? (
           <iframe
             srcDoc={processedCode}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-pointer-lock"
             className="w-full h-full border-0"
             title="Shared Preview"
           />

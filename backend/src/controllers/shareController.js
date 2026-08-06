@@ -19,7 +19,7 @@ const generateShareId = () => {
  * POST /api/share
  */
 const createShare = asyncHandler(async (req, res) => {
-  const { code, title, projectName } = req.body;
+  const { code, title, projectName, artifactType = "website" } = req.body;
 
   // Generate a unique share ID with collision handling
   let shareId;
@@ -45,6 +45,7 @@ const createShare = asyncHandler(async (req, res) => {
     code,
     title: title || null,
     projectName: projectName || null,
+    artifactType,
   });
 
   res.status(201).json({
@@ -79,6 +80,7 @@ const getShare = asyncHandler(async (req, res) => {
       code: sharedCode.code,
       title: sharedCode.title,
       projectName: sharedCode.projectName,
+      artifactType: sharedCode.artifactType || "website",
       createdAt: sharedCode.createdAt,
     },
   });

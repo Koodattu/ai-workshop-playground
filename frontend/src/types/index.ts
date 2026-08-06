@@ -10,6 +10,7 @@ export interface ChatMessage {
 
 // Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)
 export type ChatMode = "edit" | "ask";
+export type ArtifactType = "website" | "game";
 
 // AI model preference sent as a symbolic value; backend maps it to provider model IDs.
 export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55" | "gpt56luna" | "deepseekv4flash";
@@ -31,6 +32,7 @@ export interface GenerationUsageSummary {
   modelLabel: string;
   modelThinking?: ThinkingLevel | string | null;
   mode: ChatMode;
+  artifactType: ArtifactType;
   promptTokens: number;
   candidatesTokens: number;
   thoughtsTokens: number;
@@ -57,6 +59,7 @@ export interface GenerateRequest {
   parentVersionId?: string | null;
   messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   mode?: ChatMode;
+  artifactType?: ArtifactType;
   modelPreference?: ModelPreference;
   showThoughts?: boolean;
 }
@@ -65,6 +68,7 @@ export interface GenerateResponse {
   message: string;
   code: string;
   projectName?: string;
+  artifactType?: ArtifactType;
   editMode?: "replace_all" | "patch";
   version?: CodeVersion;
   usage?: GenerationUsageSummary | null;
@@ -148,6 +152,7 @@ export interface StreamDoneEvent {
   message: string;
   code: string;
   projectName?: string;
+  artifactType?: ArtifactType;
   editMode?: "replace_all" | "patch";
   version?: CodeVersion;
   remaining?: number;
@@ -198,7 +203,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; projectName?: string; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
+  onDone?: (data: { message: string; code: string; projectName?: string; artifactType?: ArtifactType; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
@@ -214,6 +219,7 @@ export interface CustomTemplate {
   id: string;
   name: string;
   code: string;
+  artifactType?: ArtifactType;
   projectName?: string; // LLM-provided project name
   currentVersionId?: string | null; // latest AI version for this creation
   rootVersionId?: string | null; // root version tree for this creation
@@ -338,6 +344,7 @@ export interface SharedTemplate {
   code: string;
   title: string | null;
   projectName?: string; // LLM-provided project name for shared projects
+  artifactType?: ArtifactType;
   loadedAt: number; // timestamp when loaded
 }
 
@@ -359,6 +366,7 @@ export interface GetShareResponse {
   code: string;
   title: string | null;
   projectName?: string;
+  artifactType?: ArtifactType;
   createdAt: string;
 }
 
@@ -369,6 +377,7 @@ export interface ShareLinkEntry {
   code: string;
   title: string | null;
   projectName: string | null;
+  artifactType?: ArtifactType;
   createdAt: string;
 }
 
@@ -386,6 +395,7 @@ export interface CodeVersion {
   prompt: string;
   message: string;
   projectName?: string | null;
+  artifactType?: ArtifactType;
   modelProvider?: ApiKeyProvider | null;
   modelPreference?: ModelPreference | string | null;
   modelId?: string | null;
