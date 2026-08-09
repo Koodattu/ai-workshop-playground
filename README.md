@@ -40,7 +40,7 @@ cp backend/.env.example backend/.env
 # Add OPENAI_API_KEY and/or DEEPSEEK_API_KEY if you enable those models in the admin panel
 
 # 3. Start everything with Docker Compose
-docker-compose up --build
+docker compose up --build
 
 # 4. Open your browser
 # Visit http://localhost:3000
@@ -58,7 +58,7 @@ If you prefer to run services individually:
 
 **Prerequisites:**
 
-- Node.js 20 or higher
+- Node.js 24 or higher
 - MongoDB running locally or in Docker
 - Google Gemini API key ([get one free](https://makersuite.google.com/app/apikey))
 - Optional OpenAI API key for GPT models
@@ -66,17 +66,17 @@ If you prefer to run services individually:
 
 ```bash
 # Start MongoDB
-docker run -d -p 27017:27017 mongo:latest
+docker run -d -p 27017:27017 mongo:8.0
 
 # Start the backend
 cd backend
-npm install
+npm ci
 cp .env.example .env  # Add your GEMINI_API_KEY, ADMIN_SECRET, and optional provider keys
 npm run dev
 
 # In another terminal, start the frontend
 cd frontend
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```

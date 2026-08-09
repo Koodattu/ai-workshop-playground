@@ -1,5 +1,10 @@
 .env
 .env.*
-!.env.example
+.git
+.gitignore
+.dockerignore
+Dockerfile*
 node_modules
+coverage
 npm-debug.log*
+*.log

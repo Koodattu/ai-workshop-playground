@@ -96,25 +96,23 @@ AI Workshop Playground follows a three-tier architecture with a React frontend, 
 
 ### Frontend
 
-| Technology                       | Version | Purpose                         |
-| -------------------------------- | ------- | ------------------------------- |
-| **Next.js**                      | 15.x    | React framework with App Router |
-| **React**                        | 19.x    | UI library                      |
-| **TypeScript**                   | 5.x     | Type safety                     |
-| **Tailwind CSS**                 | 3.x     | Utility-first styling           |
-| **Monaco Editor**                | 0.52.x  | Code editor (VS Code engine)    |
-| **next-intl**                    | 3.x     | Internationalization            |
-| **@fingerprintjs/fingerprintjs** | 4.x     | Browser fingerprinting          |
+| Technology        | Version | Purpose                         |
+| ----------------- | ------- | ------------------------------- |
+| **Next.js**       | 16.x    | React framework with App Router |
+| **React**         | 19.x    | UI library                      |
+| **TypeScript**    | 6.x     | Type safety                     |
+| **Tailwind CSS**  | 4.x     | Utility-first styling           |
+| **Monaco Editor** | 0.56.x  | Code editor (VS Code engine)    |
 
 ### Backend
 
 | Technology                | Version | Purpose                   |
 | ------------------------- | ------- | ------------------------- |
-| **Node.js**               | 20+     | JavaScript runtime        |
-| **Express.js**            | 4.x     | Web framework             |
-| **Mongoose**              | 8.x     | MongoDB ODM               |
+| **Node.js**               | 24+     | JavaScript runtime        |
+| **Express.js**            | 5.x     | Web framework             |
+| **Mongoose**              | 9.x     | MongoDB ODM               |
 | **@google/genai**         | 2.x     | Gemini API client         |
-| **dotenv**                | 16.x    | Environment configuration |
+| **dotenv**                | 17.x    | Environment configuration |
 
 ### Infrastructure
 
@@ -867,7 +865,7 @@ Security features:
 
 **Implementation:**
 
-- Uses `next-intl` for translations
+- Uses the app's `LanguageContext` for translations
 - Supports English (`en`) and Finnish (`fi`)
 - Language context wraps entire app
 - Messages stored in `messages/en.json` and `messages/fi.json`
@@ -875,11 +873,11 @@ Security features:
 **Usage:**
 
 ```tsx
-import { useTranslations } from "next-intl";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const Component = () => {
-  const t = useTranslations("ChatPanel");
-  return <p>{t("placeholder")}</p>;
+  const { t } = useLanguage();
+  return <p>{t("chat.sendPlaceholder")}</p>;
 };
 ```
 
@@ -1008,12 +1006,12 @@ const Editor = dynamic(() => import('@monaco-editor/react'), {
 3. Build and start:
 
    ```bash
-   docker-compose up --build -d
+   docker compose up --build -d
    ```
 
 4. Verify:
    ```bash
-   docker-compose ps
+   docker compose ps
    curl http://localhost:5000/api/health
    ```
 
@@ -1025,7 +1023,7 @@ const Editor = dynamic(() => import('@monaco-editor/react'), {
 
 **Volumes:**
 
-- `mongodb_data`: Persists database across restarts
+- `mongo-data`: Persists database across restarts
 
 ### Manual Deployment
 
@@ -1033,8 +1031,7 @@ const Editor = dynamic(() => import('@monaco-editor/react'), {
 
 ```bash
 cd backend
-npm install --production
-npm run build  # If TypeScript
+npm ci --omit=dev
 NODE_ENV=production node src/index.js
 ```
 
@@ -1042,15 +1039,16 @@ NODE_ENV=production node src/index.js
 
 ```bash
 cd frontend
-npm install --production
+npm ci
 npm run build
+npm prune --omit=dev
 npm start
 ```
 
 **Requirements:**
 
-- Node.js 20+
-- MongoDB 5+
+- Node.js 24+
+- MongoDB 8.0+
 - Reverse proxy (nginx) for HTTPS
 - Process manager (PM2) for production
 
