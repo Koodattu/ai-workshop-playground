@@ -48,20 +48,24 @@ const STATUS_CHARACTER_MIN_MS = 24;
 const STATUS_CHARACTER_VARIANCE_MS = 28;
 
 function PlayfulStatusText() {
-  const [phraseIndex, setPhraseIndex] = useState(() => Math.floor(Math.random() * FUN_STATUS_KEYS.length));
-  const [visibleCharacters, setVisibleCharacters] = useState(0);
-  const [isExiting, setIsExiting] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const { t } = useLanguage();
+  const [phraseIndex, setPhraseIndex] = useState(() => Math.floor(Math.random() * FUN_STATUS_KEYS.length));
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [visibleCharacters, setVisibleCharacters] = useState(() => (prefersReducedMotion ? t(FUN_STATUS_KEYS[phraseIndex]).length : 0));
+  const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+    const updatePreference = () => {
+      const nextPreference = mediaQuery.matches;
+      setPrefersReducedMotion(nextPreference);
+      setIsExiting(false);
+      setVisibleCharacters(nextPreference ? t(FUN_STATUS_KEYS[phraseIndex]).length : 0);
+    };
 
-    updatePreference();
     mediaQuery.addEventListener("change", updatePreference);
     return () => mediaQuery.removeEventListener("change", updatePreference);
-  }, []);
+  }, [phraseIndex, t]);
 
   useEffect(() => {
     const phrase = t(FUN_STATUS_KEYS[phraseIndex]);
@@ -72,14 +76,18 @@ function PlayfulStatusText() {
     const scheduleNextPhrase = () => {
       const holdDuration = STATUS_HOLD_MIN_MS + Math.random() * STATUS_HOLD_VARIANCE_MS;
       timeout = setTimeout(() => {
+        const nextPhraseIndex = (phraseIndex + 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1))) % FUN_STATUS_KEYS.length;
         if (prefersReducedMotion) {
-          setPhraseIndex((current) => (current + 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1))) % FUN_STATUS_KEYS.length);
+          setVisibleCharacters(t(FUN_STATUS_KEYS[nextPhraseIndex]).length);
+          setPhraseIndex(nextPhraseIndex);
           return;
         }
 
         setIsExiting(true);
         timeout = setTimeout(() => {
-          setPhraseIndex((current) => (current + 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1))) % FUN_STATUS_KEYS.length);
+          setIsExiting(false);
+          setVisibleCharacters(0);
+          setPhraseIndex(nextPhraseIndex);
         }, STATUS_EXIT_MS);
       }, holdDuration);
     };
@@ -98,12 +106,9 @@ function PlayfulStatusText() {
       }
     };
 
-    setIsExiting(false);
     if (prefersReducedMotion) {
-      setVisibleCharacters(phrase.length);
       scheduleNextPhrase();
     } else {
-      setVisibleCharacters(0);
       timeout = setTimeout(revealNextCharacter, 120);
     }
 
@@ -215,7 +220,7 @@ export function ChatPanel({
       setPrompt("");
       try {
         await onSendMessage(trimmedPrompt);
-      } catch (err) {
+      } catch {
         // Restore the prompt on error so user can retry
         setPrompt(trimmedPrompt);
         // Error handling is done in the parent component

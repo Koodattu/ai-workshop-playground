@@ -122,6 +122,11 @@ function clearSavedState(projectId: string) {
 }
 
 export function PreviewPanel({ code, projectId, onControlReady, onShare, isSharing = false }: PreviewPanelProps) {
+  const [initialPersistence] = useState(() => {
+    const enabled = readStateSetting(projectId);
+    const storedState = readSavedState(projectId);
+    return { enabled, storedState };
+  });
   const [isAutoRefresh, setIsAutoRefresh] = useState(true);
   const [manuallyDisabled, setManuallyDisabled] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<PreviewDocument>({ code, projectId });
@@ -129,9 +134,10 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
   const [key, setKey] = useState(0);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isStatePersistenceEnabled, setIsStatePersistenceEnabled] = useState(true);
-  const [savedState, setSavedState] = useState<SavedPreviewState | null>(null);
-  const [stateStatus, setStateStatus] = useState<StateStatus>("idle");
+  const [isStatePersistenceEnabled, setIsStatePersistenceEnabled] = useState(initialPersistence.enabled);
+  const [savedState, setSavedState] = useState<SavedPreviewState | null>(initialPersistence.storedState);
+  const [stateStatus, setStateStatus] = useState<StateStatus>(initialPersistence.storedState && initialPersistence.enabled ? "ready" : "idle");
+  const [stateProjectId, setStateProjectId] = useState(projectId);
   const { language, t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -146,10 +152,22 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
   const restoredDocumentRef = useRef<PreviewDocument | null>(null);
   const statePersistenceEnabledRef = useRef(isStatePersistenceEnabled);
 
-  latestCodeRef.current = code;
-  latestProjectIdRef.current = projectId;
-  previewDocumentRef.current = previewDocument;
-  statePersistenceEnabledRef.current = isStatePersistenceEnabled;
+  if (stateProjectId !== projectId) {
+    const enabled = readStateSetting(projectId);
+    const storedState = readSavedState(projectId);
+    setStateProjectId(projectId);
+    setIsStatePersistenceEnabled(enabled);
+    setSavedState(storedState);
+    setStateStatus(storedState && enabled ? "ready" : "idle");
+    setIsSettingsOpen(false);
+  }
+
+  useEffect(() => {
+    latestCodeRef.current = code;
+    latestProjectIdRef.current = projectId;
+    previewDocumentRef.current = previewDocument;
+    statePersistenceEnabledRef.current = isStatePersistenceEnabled;
+  }, [code, isStatePersistenceEnabled, previewDocument, projectId]);
 
   const isPreviewVisible = useCallback(() => {
     return Boolean(containerRef.current?.getClientRects().length);
@@ -315,16 +333,6 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
   }, [code, projectId, isAutoRefresh, manuallyDisabled, updatePreview]);
 
   useEffect(() => {
-    const enabled = readStateSetting(projectId);
-    const storedState = readSavedState(projectId);
-    setIsStatePersistenceEnabled(enabled);
-    statePersistenceEnabledRef.current = enabled;
-    setSavedState(storedState);
-    setStateStatus(storedState && enabled ? "ready" : "idle");
-    setIsSettingsOpen(false);
-  }, [projectId]);
-
-  useEffect(() => {
     const handleSettingChange = (event: Event) => {
       const detail = (event as CustomEvent<{ projectId?: string; enabled?: boolean }>).detail;
       if (detail?.projectId !== latestProjectIdRef.current || typeof detail.enabled !== "boolean") return;
@@ -409,12 +417,13 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
   }, [isPreviewVisible, restoreCurrentProjectState, storeCapturedState]);
 
   useEffect(() => {
+    const pendingCaptures = pendingCapturesRef.current;
     return () => {
-      pendingCapturesRef.current.forEach(({ resolve, timeoutId }) => {
+      pendingCaptures.forEach(({ resolve, timeoutId }) => {
         clearTimeout(timeoutId);
         resolve(null);
       });
-      pendingCapturesRef.current.clear();
+      pendingCaptures.clear();
     };
   }, []);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // Notification item
@@ -14,18 +14,15 @@ interface NotificationItem {
 // Notification banner that shows the latest notification
 interface NotificationBannerProps {
   notification: NotificationItem | null;
-  totalCount: number;
   onShowAll: () => void;
   onDismiss: () => void;
 }
 
-function NotificationBanner({ notification, totalCount, onShowAll, onDismiss }: NotificationBannerProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const { t } = useLanguage();
+function NotificationBanner({ notification, onShowAll, onDismiss }: NotificationBannerProps) {
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     if (notification) {
-      setIsVisible(true);
       // Auto-dismiss after 5 seconds
       const timer = setTimeout(() => {
         setIsVisible(false);
@@ -184,7 +181,7 @@ export function useToast() {
   const [showModal, setShowModal] = useState(false);
   const [currentNotification, setCurrentNotification] = useState<NotificationItem | null>(null);
 
-  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+  const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
     const notification: NotificationItem = {
       id: crypto.randomUUID(),
       message,
@@ -194,7 +191,7 @@ export function useToast() {
 
     setNotifications((prev) => [...prev, notification]);
     setCurrentNotification(notification);
-  };
+  }, []);
 
   const handleShowAll = () => {
     setShowModal(true);
@@ -216,7 +213,7 @@ export function useToast() {
 
   const ToastContainer = () => (
     <>
-      <NotificationBanner notification={currentNotification} totalCount={notifications.length} onShowAll={handleShowAll} onDismiss={handleDismissCurrent} />
+      <NotificationBanner key={currentNotification?.id} notification={currentNotification} onShowAll={handleShowAll} onDismiss={handleDismissCurrent} />
       {showModal && <NotificationModal notifications={notifications} onClose={handleCloseModal} onClear={handleClearAll} />}
     </>
   );

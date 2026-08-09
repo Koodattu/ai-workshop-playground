@@ -7,15 +7,6 @@ export interface Template {
   artifactType?: ArtifactType;
 }
 
-// Type for translation messages
-type Messages = {
-  templateContent: {
-    [key: string]: {
-      [key: string]: string;
-    };
-  };
-};
-
 export const TEMPLATES: Template[] = [
   {
     id: "simple-welcome",
@@ -1237,7 +1228,7 @@ export function getTemplateById(id: string): Template | undefined {
  * @param language - The language code ('en' or 'fi')
  * @returns The template code with placeholders replaced with translations
  */
-export function getLocalizedTemplate(templateId: string, language: "en" | "fi", messages: any): string {
+export function getLocalizedTemplate(templateId: string, language: "en" | "fi", messages: Record<string, unknown>): string {
   const template = getTemplateById(templateId);
 
   if (!template) {
@@ -1250,7 +1241,7 @@ export function getLocalizedTemplate(templateId: string, language: "en" | "fi", 
   }
 
   // Ensure we have messages
-  if (!messages || !messages.templateContent) {
+  if (!messages.templateContent) {
     console.error("No translations available");
     return template.code;
   }
@@ -1262,11 +1253,11 @@ export function getLocalizedTemplate(templateId: string, language: "en" | "fi", 
   localizedCode = localizedCode.replace(placeholderRegex, (match, path) => {
     // Parse the path (e.g., "templateContent.welcome.title")
     const parts = path.split(".");
-    let value: any = messages;
+    let value: unknown = messages;
 
     for (const part of parts) {
       if (value && typeof value === "object" && part in value) {
-        value = value[part];
+        value = (value as Record<string, unknown>)[part];
       } else {
         // If translation not found, return the placeholder as-is
         return match;

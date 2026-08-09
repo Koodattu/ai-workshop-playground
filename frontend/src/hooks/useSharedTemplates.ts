@@ -17,19 +17,40 @@ interface UseSharedTemplatesReturn {
   isSharedTemplateId: (id: string) => boolean;
 }
 
+export type InitialSharedTemplate = Pick<SharedTemplate, "shareId" | "code" | "title" | "projectName" | "artifactType">;
+
+const createSharedTemplateId = () => `${SHARED_TEMPLATE_CONFIG.ID_PREFIX}${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+const mergeInitialTemplate = (templates: SharedTemplate[], initialTemplate?: InitialSharedTemplate): SharedTemplate[] => {
+  if (!initialTemplate?.shareId) return templates;
+
+  const normalizedShareId = initialTemplate.shareId.toUpperCase();
+  const existing = templates.find((template) => template.shareId?.toUpperCase() === normalizedShareId);
+  const mergedTemplate: SharedTemplate = {
+    ...existing,
+    ...initialTemplate,
+    id: existing?.id || createSharedTemplateId(),
+    shareId: normalizedShareId,
+    loadedAt: Date.now(),
+  };
+
+  return [mergedTemplate, ...templates.filter((template) => template.id !== existing?.id)].slice(0, SHARED_TEMPLATE_CONFIG.MAX_TEMPLATES);
+};
+
 /**
  * Hook for managing shared templates loaded from share links.
  * Templates are stored in localStorage and persist across sessions.
  * Automatically enforces the maximum template limit by removing oldest templates.
  */
-export function useSharedTemplates(): UseSharedTemplatesReturn {
+export function useSharedTemplates(initialTemplate?: InitialSharedTemplate): UseSharedTemplatesReturn {
   const [templates, setTemplates] = useState<SharedTemplate[]>(() => {
     if (typeof window === "undefined") return [];
     try {
       const stored = localStorage.getItem(SHARED_TEMPLATE_CONFIG.STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const storedTemplates = stored ? (JSON.parse(stored) as SharedTemplate[]) : [];
+      return mergeInitialTemplate(storedTemplates, initialTemplate);
     } catch {
-      return [];
+      return mergeInitialTemplate([], initialTemplate);
     }
   });
 
@@ -45,7 +66,7 @@ export function useSharedTemplates(): UseSharedTemplatesReturn {
 
   /** Generate a unique ID for a new shared template */
   const generateId = useCallback(() => {
-    return `${SHARED_TEMPLATE_CONFIG.ID_PREFIX}${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    return createSharedTemplateId();
   }, []);
 
   /** Check if an id belongs to a shared template */

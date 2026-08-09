@@ -43,16 +43,11 @@ export function EditorPanel({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const actionsButtonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [actionsPosition, setActionsPosition] = useState({ top: 0, left: 0 });
   const { t } = useLanguage();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Update dropdown position when it opens
   useEffect(() => {
@@ -76,31 +71,34 @@ export function EditorPanel({
     }
   }, [isActionsMenuOpen]);
 
-  const handleEditorMount: OnMount = useCallback((editor) => {
-    editorRef.current = editor;
-    onEditorReady?.(editor);
+  const handleEditorMount: OnMount = useCallback(
+    (editor) => {
+      editorRef.current = editor;
+      onEditorReady?.(editor);
 
     // Configure editor settings
-    editor.updateOptions({
-      fontSize: 14,
-      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-      fontLigatures: true,
-      lineHeight: 1.6,
-      letterSpacing: 0.5,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      renderLineHighlight: "all",
-      cursorBlinking: "smooth",
-      cursorSmoothCaretAnimation: "on",
-      smoothScrolling: true,
-      padding: { top: 16, bottom: 16 },
-      bracketPairColorization: { enabled: true },
-      guides: {
-        bracketPairs: true,
-        indentation: true,
-      },
-    });
-  }, []);
+      editor.updateOptions({
+        fontSize: 14,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontLigatures: true,
+        lineHeight: 1.6,
+        letterSpacing: 0.5,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        renderLineHighlight: "all",
+        cursorBlinking: "smooth",
+        cursorSmoothCaretAnimation: "on",
+        smoothScrolling: true,
+        padding: { top: 16, bottom: 16 },
+        bracketPairColorization: { enabled: true },
+        guides: {
+          bracketPairs: true,
+          indentation: true,
+        },
+      });
+    },
+    [onEditorReady],
+  );
 
   const handleChange: OnChange = useCallback(
     (value) => {
@@ -242,8 +240,7 @@ export function EditorPanel({
               </svg>
             </button>
 
-            {mounted &&
-              isDropdownOpen &&
+            {isDropdownOpen &&
               createPortal(
                 <>
                   <div className="fixed inset-0 z-9998" onClick={() => setIsDropdownOpen(false)} />
@@ -565,8 +562,7 @@ export function EditorPanel({
               </svg>
             </button>
 
-            {mounted &&
-              isActionsMenuOpen &&
+            {isActionsMenuOpen &&
               createPortal(
                 <>
                   <div className="fixed inset-0 z-9998" onClick={() => setIsActionsMenuOpen(false)} />

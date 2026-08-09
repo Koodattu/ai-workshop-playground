@@ -62,21 +62,6 @@ export function PasswordModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const testResetTimersRef = useRef<Partial<Record<ApiKeyProvider, ReturnType<typeof setTimeout>>>>({});
 
-  useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
-
-  useEffect(() => {
-    setApiKeys(normalizeApiKeys(initialApiKeys));
-  }, [initialApiKeys]);
-
-  useEffect(() => {
-    if (initialPassword) {
-      setPassword(initialPassword);
-      setMode("password");
-    }
-  }, [initialPassword]);
-
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
       onClose();
@@ -94,8 +79,9 @@ export function PasswordModal({
   }, [onClose, isValidating]);
 
   useEffect(() => {
+    const resetTimers = testResetTimersRef.current;
     return () => {
-      Object.values(testResetTimersRef.current).forEach((timer) => {
+      Object.values(resetTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
     };

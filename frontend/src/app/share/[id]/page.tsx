@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, use, useCallback } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
@@ -183,7 +184,7 @@ export default function SharePage({ params }: SharePageProps) {
         {/* Left side: Logo and title */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <img src="/web-app-manifest-192x192.png" alt="App icon" className="w-8 h-8 object-contain" />
+            <Image src="/web-app-manifest-192x192.png" alt="App icon" width={32} height={32} className="w-8 h-8 object-contain" />
             <span className="font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
           </div>
         </div>

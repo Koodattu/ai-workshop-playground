@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, PasswordUserStats, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel } from "@/types";
 
 // ============================================================================
 // TYPES
@@ -285,18 +285,6 @@ const TokenBar = ({ promptTokens, candidatesTokens, thoughtsTokens, t }: TokenBa
     </div>
   );
 };
-
-// ============================================================================
-// LOADING SKELETON
-// ============================================================================
-
-const LoadingSkeleton = ({ rows = 3 }: { rows?: number }) => (
-  <div className="space-y-3 animate-pulse">
-    {Array.from({ length: rows }).map((_, i) => (
-      <div key={i} className="h-16 bg-graphite/50 rounded-xl" />
-    ))}
-  </div>
-);
 
 // ============================================================================
 // OVERVIEW TAB
@@ -1053,6 +1041,26 @@ const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTa
 // MAIN COMPONENT
 // ============================================================================
 
+const fetchPasswordManagerData = async (adminSecret: string, activityPeriod: ActivityPeriod) => {
+  const limitMap: Record<ActivityPeriod, number> = {
+    "24h": 50,
+    "7d": 100,
+    "30d": 200,
+  };
+
+  const [systemStats, passwords, usage, recentRequests, shareLinks, codeVersions, modelSettings] = await Promise.all([
+    api.getSystemStats(adminSecret),
+    api.getPasswords(adminSecret),
+    api.getUsageStats(adminSecret),
+    api.getRecentRequests(adminSecret, limitMap[activityPeriod]),
+    api.getShareLinks(adminSecret),
+    api.getCodeVersions(adminSecret),
+    api.getModelSettings(adminSecret),
+  ]);
+
+  return { systemStats, passwords, usage, recentRequests, shareLinks, codeVersions, modelSettings };
+};
+
 export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const { t } = useLanguage();
 
@@ -1096,41 +1104,29 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
   // Fetch all data in parallel on mount
   const fetchAllData = useCallback(async () => {
-    setIsInitialLoading(true);
-    setLoadError(null);
-
     try {
-      const limitMap: Record<ActivityPeriod, number> = {
-        "24h": 50,
-        "7d": 100,
-        "30d": 200,
-      };
-
-      // Load everything in parallel
-      const [statsData, passwordsData, usageData, logsData, shareLinksData, codeVersionsData, modelSettingsData] = await Promise.all([
-        api.getSystemStats(adminSecret),
-        api.getPasswords(adminSecret),
-        api.getUsageStats(adminSecret),
-        api.getRecentRequests(adminSecret, limitMap[activityPeriod]),
-        api.getShareLinks(adminSecret),
-        api.getCodeVersions(adminSecret),
-        api.getModelSettings(adminSecret),
-      ]);
+      const data = await fetchPasswordManagerData(adminSecret, activityPeriod);
 
       // Update all state at once
-      setSystemStats(statsData);
-      setPasswords(passwordsData);
-      setUsage(usageData);
-      setRecentRequests(logsData);
-      setShareLinks(shareLinksData);
-      setCodeVersions(codeVersionsData);
-      setModelSettings(modelSettingsData);
+      setSystemStats(data.systemStats);
+      setPasswords(data.passwords);
+      setUsage(data.usage);
+      setRecentRequests(data.recentRequests);
+      setShareLinks(data.shareLinks);
+      setCodeVersions(data.codeVersions);
+      setModelSettings(data.modelSettings);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t("api.dataFetchError"));
     } finally {
       setIsInitialLoading(false);
     }
   }, [adminSecret, activityPeriod, t]);
+
+  const refreshAllData = useCallback(async () => {
+    setIsInitialLoading(true);
+    setLoadError(null);
+    await fetchAllData();
+  }, [fetchAllData]);
 
   const fetchPasswordDetailedStats = useCallback(
     async (passwordId: string) => {
@@ -1146,15 +1142,40 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
   // Initial data fetch on mount
   useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    let ignore = false;
 
-  // Refetch when activity period changes
-  useEffect(() => {
-    if (!isInitialLoading) {
-      fetchAllData();
-    }
-  }, [activityPeriod]);
+    void fetchPasswordManagerData(adminSecret, activityPeriod)
+      .then((data) => {
+        if (ignore) return;
+        setSystemStats(data.systemStats);
+        setPasswords(data.passwords);
+        setUsage(data.usage);
+        setRecentRequests(data.recentRequests);
+        setShareLinks(data.shareLinks);
+        setCodeVersions(data.codeVersions);
+        setModelSettings(data.modelSettings);
+      })
+      .catch((error: unknown) => {
+        if (!ignore) {
+          setLoadError(error instanceof Error ? error.message : t("api.dataFetchError"));
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsInitialLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activityPeriod, adminSecret, t]);
+
+  const handleActivityPeriodChange = useCallback((period: ActivityPeriod) => {
+    setIsInitialLoading(true);
+    setLoadError(null);
+    setActivityPeriod(period);
+  }, []);
 
   // ============================================================================
   // HANDLERS
@@ -1176,26 +1197,26 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         setNewMaxUses(10);
         setNewExpiresAt("");
         setShowCreateForm(false);
-        await fetchAllData();
+        await refreshAllData();
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : t("api.passwordCreateError"));
       } finally {
         setIsCreating(false);
       }
     },
-    [adminSecret, newCode, newExpiresAt, newMaxUses, t, fetchAllData],
+    [adminSecret, newCode, newExpiresAt, newMaxUses, t, refreshAllData],
   );
 
   const handleTogglePassword = useCallback(
     async (id: string, isActive: boolean) => {
       try {
         await api.togglePassword(adminSecret, id, !isActive);
-        await fetchAllData();
+        await refreshAllData();
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : t("api.passwordToggleError"));
       }
     },
-    [adminSecret, t, fetchAllData],
+    [adminSecret, t, refreshAllData],
   );
 
   const handleDeletePassword = useCallback(
@@ -1204,7 +1225,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
       try {
         await api.deletePassword(adminSecret, id);
-        await fetchAllData();
+        await refreshAllData();
         // Clean up cached stats
         setPasswordStats((prev) => {
           const newMap = new Map(prev);
@@ -1215,7 +1236,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         setLoadError(err instanceof Error ? err.message : t("api.passwordDeleteError"));
       }
     },
-    [adminSecret, t, fetchAllData],
+    [adminSecret, t, refreshAllData],
   );
 
   const handleViewPasswordDetails = useCallback(
@@ -1238,8 +1259,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   );
 
   const handleRefresh = useCallback(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    void refreshAllData();
+  }, [refreshAllData]);
 
   const handleChangeModelSetting = useCallback(
     async (model: ModelPreference, nextSetting: ModelSettings[ModelPreference]) => {
@@ -1260,12 +1281,12 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         setModelSettings(savedSettings);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : "Failed to update model settings");
-        await fetchAllData();
+        await refreshAllData();
       } finally {
         setIsSavingModelSettings(false);
       }
     },
-    [adminSecret, fetchAllData, modelSettings],
+    [adminSecret, modelSettings, refreshAllData],
   );
 
   // ============================================================================
@@ -1360,7 +1381,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
           />
         )}
 
-        {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={setActivityPeriod} t={t} />}
+        {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={handleActivityPeriodChange} t={t} />}
 
         {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} isSaving={isSavingModelSettings} onChange={handleChangeModelSetting} />}
 

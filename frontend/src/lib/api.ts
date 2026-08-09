@@ -42,12 +42,19 @@ class ApiClient {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }));
+        const error = (await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }))) as {
+          error?: string;
+          errorCode?: string;
+          details?: string[];
+        };
         // Create an error object that includes both the message and the error code
-        const errorObj = new Error(error.error || this.getHttpErrorMessage(response.status));
+        const errorObj = new Error(error.error || this.getHttpErrorMessage(response.status)) as Error & {
+          errorCode?: string;
+          details?: string[];
+        };
         // Attach errorCode and details as properties so they can be accessed by error handlers
-        (errorObj as any).errorCode = error.errorCode;
-        (errorObj as any).details = error.details;
+        errorObj.errorCode = error.errorCode;
+        errorObj.details = error.details;
         throw errorObj;
       }
 

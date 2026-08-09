@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
+import type { editor } from "monaco-editor";
 import { Panel, Group, Separator, usePanelRef } from "react-resizable-panels";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { EditorPanel } from "@/components/workspace/EditorPanel";
@@ -13,13 +15,13 @@ import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useCustomTemplates } from "@/hooks/useCustomTemplates";
-import { useSharedTemplates } from "@/hooks/useSharedTemplates";
+import { useSharedTemplates, type InitialSharedTemplate } from "@/hooks/useSharedTemplates";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
-import { getErrorMessage } from "@/lib/errorTranslation";
-import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, CustomTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
+import { getErrorMessage, parseApiError } from "@/lib/errorTranslation";
+import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -78,28 +80,111 @@ const shouldAutoFormatStreamedCode = (text: string) => {
   return text.length <= STREAM_AUTO_FORMAT_MAX_CHARS && countLines(text) <= STREAM_AUTO_FORMAT_MAX_LINES;
 };
 
+interface InitialWorkspaceTemplate {
+  id: string;
+  code: string;
+  artifactType: ArtifactType;
+  useSavedArtifactType: boolean;
+}
+
+const readPendingSharedTemplate = (): InitialSharedTemplate | undefined => {
+  if (typeof window === "undefined") return undefined;
+
+  try {
+    const stored = sessionStorage.getItem("pending-shared-template");
+    if (!stored) return undefined;
+
+    const pending = JSON.parse(stored) as Record<string, unknown>;
+    if (typeof pending.shareId !== "string" || typeof pending.code !== "string") return undefined;
+
+    return {
+      shareId: pending.shareId,
+      code: pending.code,
+      title: typeof pending.title === "string" ? pending.title : null,
+      projectName: typeof pending.projectName === "string" ? pending.projectName : undefined,
+      artifactType: pending.artifactType === "game" ? "game" : "website",
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveInitialWorkspaceTemplate = (
+  savedTemplateId: string,
+  customTemplates: CustomTemplate[],
+  sharedTemplates: SharedTemplate[],
+  language: "fi" | "en",
+  isSafeStart: boolean,
+  pendingSharedTemplate?: InitialSharedTemplate,
+): InitialWorkspaceTemplate => {
+  const pendingTemplate = pendingSharedTemplate
+    ? sharedTemplates.find((template) => template.shareId.toUpperCase() === pendingSharedTemplate.shareId.toUpperCase())
+    : undefined;
+  const preferredTemplateId = isSafeStart ? DEFAULT_TEMPLATE_ID : pendingTemplate?.id || savedTemplateId || DEFAULT_TEMPLATE_ID;
+  const sharedTemplate = sharedTemplates.find((template) => template.id === preferredTemplateId);
+
+  if (sharedTemplate) {
+    return {
+      id: sharedTemplate.id,
+      code: sharedTemplate.code,
+      artifactType: sharedTemplate.artifactType || "website",
+      useSavedArtifactType: false,
+    };
+  }
+
+  const customTemplate = customTemplates.find((template) => template.id === preferredTemplateId);
+  if (customTemplate) {
+    return {
+      id: customTemplate.id,
+      code: customTemplate.code,
+      artifactType: customTemplate.artifactType || "website",
+      useSavedArtifactType: false,
+    };
+  }
+
+  const builtInTemplate = getTemplateById(preferredTemplateId) || getTemplateById(DEFAULT_TEMPLATE_ID);
+  const templateId = builtInTemplate?.id || DEFAULT_TEMPLATE_ID;
+  const localizedCode = builtInTemplate ? getLocalizedTemplate(templateId, language, getMessages(language)) || builtInTemplate.code : "";
+
+  return {
+    id: templateId,
+    code: localizedCode,
+    artifactType: builtInTemplate?.artifactType || "website",
+    useSavedArtifactType: templateId === DEFAULT_TEMPLATE_ID,
+  };
+};
+
 export default function WorkspacePage() {
+  const { language, t } = useLanguage();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isSafeStart = searchParams.has("safe") || searchParams.has("debug") || searchParams.has("recover");
+  const urlPassword = searchParams.get("p");
+  const [pendingSharedTemplate] = useState(() => (isSafeStart ? undefined : readPendingSharedTemplate()));
+
   // Custom templates management (needed early for validation)
   const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
 
   // Shared templates management (needed early for validation)
-  const { templates: sharedTemplates, addSharedTemplate, removeTemplate: removeSharedTemplate, isSharedTemplateId, getTemplate: getSharedTemplate } = useSharedTemplates();
-
-  const { language } = useLanguage();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const isSafeStart = searchParams.has("safe") || searchParams.has("debug") || searchParams.has("recover");
+  const { templates: sharedTemplates, removeTemplate: removeSharedTemplate, getTemplate: getSharedTemplate } = useSharedTemplates(pendingSharedTemplate);
 
   // Persist template selection to localStorage with validation
   const [savedTemplateId, setSavedTemplateId] = useLocalStorage<string>("current-template-id", DEFAULT_TEMPLATE_ID);
+  const [initialTemplate] = useState(() => resolveInitialWorkspaceTemplate(savedTemplateId, customTemplates, sharedTemplates, language, isSafeStart, pendingSharedTemplate));
+  const [savedArtifactType, persistArtifactType] = useLocalStorage<ArtifactType>("artifact-type", "website");
+  const [artifactType, setArtifactTypeState] = useState<ArtifactType>(() => (initialTemplate.useSavedArtifactType ? savedArtifactType : initialTemplate.artifactType));
+  const setArtifactType = useCallback(
+    (nextArtifactType: ArtifactType) => {
+      setArtifactTypeState(nextArtifactType);
+      persistArtifactType(nextArtifactType);
+    },
+    [persistArtifactType],
+  );
 
-  // Start with default, then load saved template via useEffect once templates are loaded
-  const [currentTemplateId, setCurrentTemplateId] = useState(DEFAULT_TEMPLATE_ID);
-
-  const [code, setCode] = useState(() => {
-    const defaultTemplate = getTemplateById(DEFAULT_TEMPLATE_ID);
-    return defaultTemplate?.code || "";
-  });
+  const [currentTemplateId, setCurrentTemplateId] = useState(initialTemplate.id);
+  const [code, setCode] = useState(initialTemplate.code);
+  const [originalCodeSnapshot, setOriginalCodeSnapshot] = useState(initialTemplate.code);
+  const [localizedLanguage, setLocalizedLanguage] = useState(language);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [mobileActivePanel, setMobileActivePanel] = useState<"chat" | "editor" | "preview">("chat");
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
@@ -114,12 +199,11 @@ export default function WorkspacePage() {
   const [authMode, setAuthMode] = useLocalStorage<AuthMode>("workshop-auth-mode", "password");
   const [apiKeySettings, setApiKeySettings] = useLocalStorage<UserApiKeySettings>("workshop-api-keys", EMPTY_API_KEYS);
   const [apiKeyUsage, setApiKeyUsage] = useLocalStorage<ApiKeyUsageEntry[]>("api-key-usage", []);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticatedState, setIsAuthenticated] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [authError, setAuthError] = useState<string | undefined>();
-  const [isGenerating, setIsGenerating] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number | undefined>();
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(() => Boolean(urlPassword));
   const [authDialogInitialMode, setAuthDialogInitialMode] = useState<AuthMode>("password");
   const [isApiKeyUsageOpen, setIsApiKeyUsageOpen] = useState(false);
 
@@ -169,12 +253,8 @@ export default function WorkspacePage() {
 
   // Chat mode state - determines if AI generates code (edit) or just answers (ask)
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
-  const [artifactType, setArtifactType] = useLocalStorage<ArtifactType>("artifact-type", "website");
   const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "balanced");
   const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>([...MODEL_PREFERENCE_PRIORITY]);
-
-  // Original code snapshot for dirty checking
-  const originalCodeSnapshotRef = useRef<string>(code);
 
   // Sequential counter for naming custom templates
   const templateCounterRef = useRef<number>(0);
@@ -202,7 +282,7 @@ export default function WorkspacePage() {
   const previewControlRef = useRef<PreviewControl | null>(null);
 
   // Monaco editor ref for direct manipulation
-  const monacoEditorRef = useRef<any>(null);
+  const monacoEditorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   // Focus intent flag for streaming start (handles delayed editor mount/ready)
   const shouldFocusEditorForStreamingRef = useRef<boolean>(false);
@@ -219,10 +299,8 @@ export default function WorkspacePage() {
   // Timer for coalescing tiny provider deltas before touching Monaco.
   const editorFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Guard to prevent template loading effect from reverting code after streaming completes
-  // When streaming ends, onDone sets the final code - we don't want the template effect to override it
-  const skipTemplateLoadRef = useRef<boolean>(false);
   const hasAppliedSafeStartRef = useRef(false);
+  const hasLoadedApiKeyVersionsRef = useRef(false);
 
   // Interval ref for forceful continuous polling scroll to bottom during streaming
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -235,8 +313,8 @@ export default function WorkspacePage() {
 
   const visitorId = useVisitorId();
   const { showToast, ToastContainer } = useToast();
-  const { t } = useLanguage();
   const hasApiKey = Boolean(apiKeySettings.gemini?.trim() || apiKeySettings.openai?.trim() || apiKeySettings.deepseek?.trim());
+  const isAuthenticated = isAuthenticatedState || (authMode === "api-key" && Boolean(visitorId) && hasApiKey);
 
   const clearEditorFlushTimer = useCallback(() => {
     if (editorFlushTimerRef.current) {
@@ -253,7 +331,7 @@ export default function WorkspacePage() {
 
     const editor = monacoEditorRef.current;
     const model = editor?.getModel?.();
-    if (!model) return;
+    if (!editor || !model) return;
 
     pendingEditorChunkRef.current = "";
 
@@ -301,7 +379,7 @@ export default function WorkspacePage() {
   const syncStreamingBufferToEditor = useCallback(() => {
     const editor = monacoEditorRef.current;
     const model = editor?.getModel?.();
-    if (!model) return;
+    if (!editor || !model) return;
 
     const bufferedCode = codeBufferRef.current;
     if (model.getValue() === bufferedCode) {
@@ -421,7 +499,7 @@ export default function WorkspacePage() {
           setCode(latest.code);
           setArtifactType(latest.artifactType || "website");
           setCurrentVersionId(latest.id);
-          originalCodeSnapshotRef.current = latest.code;
+          setOriginalCodeSnapshot(latest.code);
           previewControlRef.current?.forceRefresh(latest.code);
         }
       } catch (error) {
@@ -430,7 +508,7 @@ export default function WorkspacePage() {
         setIsLoadingVersions(false);
       }
     },
-    [getVersionListRequest, isSafeStart],
+    [getVersionListRequest, isSafeStart, setArtifactType],
   );
 
   const currentProjectVersions = useMemo(() => {
@@ -472,7 +550,7 @@ export default function WorkspacePage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [setModelPreference]);
 
   useEffect(() => {
     if (availableModelPreferences.length > 0 && !availableModelPreferences.includes(modelPreference)) {
@@ -481,8 +559,8 @@ export default function WorkspacePage() {
   }, [availableModelPreferences, modelPreference, setModelPreference]);
   // Check if code is dirty (different from original snapshot)
   const isCodeDirty = useCallback(() => {
-    return code !== originalCodeSnapshotRef.current;
-  }, [code]);
+    return code !== originalCodeSnapshot;
+  }, [code, originalCodeSnapshot]);
 
   // Handle code changes and auto-convert built-in templates to custom on first edit
   const handleCodeChange = useCallback(
@@ -493,7 +571,7 @@ export default function WorkspacePage() {
 
       // Check if we need to auto-convert from built-in to custom template
       const wasBuiltInTemplate = !isCustomTemplateId(currentTemplateId);
-      const isFirstEdit = wasBuiltInTemplate && newCode !== originalCodeSnapshotRef.current;
+      const isFirstEdit = wasBuiltInTemplate && newCode !== originalCodeSnapshot;
 
       if (isFirstEdit) {
         // First edit of a built-in template - convert to custom template
@@ -505,14 +583,14 @@ export default function WorkspacePage() {
         // Switch to the newly created custom template
         setSavedTemplateId(newTemplate.id);
         setCurrentTemplateId(newTemplate.id);
-        originalCodeSnapshotRef.current = newCode;
+        setOriginalCodeSnapshot(newCode);
         setCode(newCode);
       } else {
         // Normal code update
         setCode(newCode);
       }
     },
-    [currentTemplateId, isCustomTemplateId, language, addTemplate, artifactType, isStreaming, setSavedTemplateId],
+    [currentTemplateId, isCustomTemplateId, language, addTemplate, artifactType, isStreaming, originalCodeSnapshot, setSavedTemplateId],
   );
 
   // Auto-save code changes to custom templates (debounced)
@@ -525,7 +603,7 @@ export default function WorkspacePage() {
     // Debounce: wait 1 second after user stops typing before saving
     const saveTimer = setTimeout(() => {
       updateTemplate(currentTemplateId, code);
-      originalCodeSnapshotRef.current = code;
+      setOriginalCodeSnapshot(code);
     }, 1000);
 
     return () => clearTimeout(saveTimer);
@@ -538,73 +616,17 @@ export default function WorkspacePage() {
     setSavedTemplateId(DEFAULT_TEMPLATE_ID);
   }, [isSafeStart, setSavedTemplateId]);
 
-  // Load saved template from localStorage once templates are loaded
-  useEffect(() => {
-    // Emergency safe start: keep the saved project intact, but do not execute it automatically.
-    if (isSafeStart) return;
-
-    // Skip if streaming just completed - onDone handles the code state
-    // This prevents the effect from reverting to old template code after AI generation
-    if (skipTemplateLoadRef.current) {
-      skipTemplateLoadRef.current = false;
-      return;
-    }
-
-    if (!savedTemplateId || savedTemplateId === DEFAULT_TEMPLATE_ID) return;
-
-    // Check if current template is already the saved one
-    if (currentTemplateId === savedTemplateId) return;
-
-    // Try to load the saved template
-    let templateCode: string | undefined;
-    let templateArtifactType: ArtifactType = "website";
-
-    // Check shared templates
-    const sharedTemplate = sharedTemplates.find((t) => t.id === savedTemplateId);
-    if (sharedTemplate) {
-      templateCode = sharedTemplate.code;
-      templateArtifactType = sharedTemplate.artifactType || "website";
-    }
-
-    // Check custom templates
-    if (!templateCode) {
-      const customTemplate = customTemplates.find((t) => t.id === savedTemplateId);
-      if (customTemplate) {
-        templateCode = customTemplate.code;
-        templateArtifactType = customTemplate.artifactType || "website";
-      }
-    }
-
-    // Check built-in templates
-    if (!templateCode) {
-      const builtInTemplate = getTemplateById(savedTemplateId);
-      if (builtInTemplate) {
-        const messages = getMessages(language);
-        templateCode = getLocalizedTemplate(savedTemplateId, language, messages) || builtInTemplate.code;
-        templateArtifactType = builtInTemplate.artifactType || "website";
-      }
-    }
-
-    // If template exists, switch to it
-    if (templateCode) {
-      setCurrentTemplateId(savedTemplateId);
-      setCode(templateCode);
-      setArtifactType(templateArtifactType);
-      originalCodeSnapshotRef.current = templateCode;
-    }
-  }, [customTemplates, sharedTemplates, savedTemplateId, language, isSafeStart]); // Only run when templates or savedTemplateId changes
-
-  // Update template code when language changes (for built-in templates only)
-  useEffect(() => {
-    if (!isCustomTemplateId(currentTemplateId)) {
-      const messages = getMessages(language);
-      const localizedCode = getLocalizedTemplate(currentTemplateId, language, messages);
-      if (localizedCode && !isCodeDirty()) {
+  // Keep untouched built-in templates localized when the language changes.
+  if (localizedLanguage !== language) {
+    setLocalizedLanguage(language);
+    if (!isCustomTemplateId(currentTemplateId) && !isCodeDirty()) {
+      const localizedCode = getLocalizedTemplate(currentTemplateId, language, getMessages(language));
+      if (localizedCode) {
         setCode(localizedCode);
-        originalCodeSnapshotRef.current = localizedCode;
+        setOriginalCodeSnapshot(localizedCode);
       }
     }
-  }, [language, currentTemplateId, isCustomTemplateId, isCodeDirty]);
+  }
 
   // Check if already authenticated on mount
   const handleAuthenticate = useCallback(
@@ -647,7 +669,7 @@ export default function WorkspacePage() {
               setCode(latest.code);
               setArtifactType(latest.artifactType || "website");
               setCurrentVersionId(latest.id);
-              originalCodeSnapshotRef.current = latest.code;
+              setOriginalCodeSnapshot(latest.code);
               previewControlRef.current?.forceRefresh(latest.code);
             }
           } catch (versionError) {
@@ -664,7 +686,7 @@ export default function WorkspacePage() {
         setPassword("");
 
         // Handle specific error codes if available
-        const errorCode = (err as any).errorCode;
+        const { errorCode } = parseApiError(err);
         if (errorCode) {
           // Use the error translation utility to get localized message
           const translatedError = getErrorMessage(errorCode, t);
@@ -685,7 +707,7 @@ export default function WorkspacePage() {
         isAuthenticatingRef.current = false;
       }
     },
-    [isSafeStart, setAuthMode, setPassword, showToast, t, visitorId],
+    [isSafeStart, setArtifactType, setAuthMode, setPassword, showToast, t, visitorId],
   );
 
   // Auto-validate password on page load (only once)
@@ -697,57 +719,33 @@ export default function WorkspacePage() {
   }, [authMode, password, visitorId, isAuthenticated, handleAuthenticate]);
 
   useEffect(() => {
-    if (authMode !== "api-key" || !visitorId || !hasApiKey || isAuthenticated) return;
+    if (authMode !== "api-key" || !visitorId || !hasApiKey) {
+      hasLoadedApiKeyVersionsRef.current = false;
+      return;
+    }
+    if (hasLoadedApiKeyVersionsRef.current) return;
 
-    setIsAuthenticated(true);
-    setRemainingUses(undefined);
-    setCurrentVersionId(null);
-    fetchVersions({ loadLatest: true });
-  }, [authMode, fetchVersions, hasApiKey, isAuthenticated, visitorId]);
+    hasLoadedApiKeyVersionsRef.current = true;
+    void fetchVersions({ loadLatest: true });
+  }, [authMode, fetchVersions, hasApiKey, visitorId]);
 
   // Open password modal automatically if ?p= parameter is present in URL
   useEffect(() => {
-    const urlPassword = searchParams.get("p");
-    if (urlPassword) {
-      // Open the password modal with prefilled password
-      setAuthDialogInitialMode("password");
-      setIsPasswordModalOpen(true);
+    if (!urlPassword) return;
 
-      // Remove the ?p= parameter from the URL
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("p");
-      const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
-      router.replace(newUrl);
-    }
-  }, [searchParams, router]);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("p");
+    const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
+    router.replace(newUrl);
+  }, [router, searchParams, urlPassword]);
 
   // Check for pending shared template from share link
   useEffect(() => {
-    if (isSafeStart) return;
+    if (!pendingSharedTemplate) return;
 
-    const pendingShareStr = sessionStorage.getItem("pending-shared-template");
-    if (pendingShareStr) {
-      try {
-        const pendingShare = JSON.parse(pendingShareStr);
-        sessionStorage.removeItem("pending-shared-template");
-
-        // Add to shared templates and switch to it (include projectName if available)
-        const pendingArtifactType: ArtifactType = pendingShare.artifactType === "game" ? "game" : "website";
-        const newTemplate = addSharedTemplate(pendingShare.shareId, pendingShare.code, pendingShare.title, pendingShare.projectName, pendingArtifactType);
-
-        // Switch to the shared template
-        setCurrentTemplateId(newTemplate.id);
-        setCurrentVersionId(null);
-        setCode(pendingShare.code);
-        setArtifactType(pendingArtifactType);
-        originalCodeSnapshotRef.current = pendingShare.code;
-
-        showToast(t("share.templateAdded"), "success");
-      } catch (e) {
-        console.error("Failed to load pending shared template:", e);
-      }
-    }
-  }, [addSharedTemplate, isSafeStart, showToast, t]);
+    sessionStorage.removeItem("pending-shared-template");
+    showToast(t("share.templateAdded"), "success");
+  }, [pendingSharedTemplate, showToast, t]);
 
   const handleSendMessage = useCallback(
     async (prompt: string) => {
@@ -782,7 +780,6 @@ export default function WorkspacePage() {
         timestamp: new Date(),
       };
       setChatHistory((prev) => [...prev, userMessage]);
-      setIsGenerating(true);
       setIsStreaming(true);
       setStreamingMessage("");
       setProgressMessage("");
@@ -790,12 +787,11 @@ export default function WorkspacePage() {
       pendingEditorChunkRef.current = "";
       clearEditorFlushTimer();
 
-      try {
-        // Build message history from last 10 contextMessages
-        const messageHistory = contextMessages.slice(-10).map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
+      // Build message history from last 10 contextMessages
+      const messageHistory = contextMessages.slice(-10).map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
 
         // Use streaming API with new event handlers
         const abort = await api.generateCodeStream(
@@ -980,11 +976,6 @@ export default function WorkspacePage() {
 
               // In EDIT mode, update templates and code
               if (chatMode === "edit") {
-                // IMPORTANT: Set the guard BEFORE any template updates
-                // This prevents the "load saved template" effect from reverting the code
-                // when it sees customTemplates change from addTemplate() below
-                skipTemplateLoadRef.current = true;
-
                 // If user is in a custom template, update it instead of creating a new one
                 if (isCustomTemplateId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
@@ -1013,7 +1004,7 @@ export default function WorkspacePage() {
               if (chatMode === "edit") {
                 setCode(finalCode);
                 // Set the snapshot to the new code so it's not dirty
-                originalCodeSnapshotRef.current = finalCode;
+                setOriginalCodeSnapshot(finalCode);
                 if (data.version) {
                   setCurrentVersionId(data.version.id);
                   setVersions((prev) => {
@@ -1137,11 +1128,8 @@ export default function WorkspacePage() {
           },
         );
 
-        // Store the abort function
-        abortStreamRef.current = abort;
-      } finally {
-        setIsGenerating(false);
-      }
+      // Store the abort function
+      abortStreamRef.current = abort;
     },
     [
       visitorId,
@@ -1209,78 +1197,6 @@ export default function WorkspacePage() {
     shouldFocusEditorForStreamingRef.current = false;
   }, [isStreaming, mobileActivePanel]);
 
-  /* FALLBACK: Old non-streaming implementation (kept as backup)
-  const handleSendMessageNonStreaming = useCallback(
-    async (prompt: string) => {
-      if (!visitorId || !password) return;
-
-      // Add user message to chat
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: prompt,
-        timestamp: new Date(),
-      };
-      setChatHistory((prev) => [...prev, userMessage]);
-      setIsGenerating(true);
-
-      try {
-        // Build message history from last 10 contextMessages
-        const messageHistory = contextMessages.slice(-10).map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
-
-        const { response, remainingUses: remaining } = await api.generateCode({
-          password,
-          visitorId,
-          prompt,
-          existingCode: code,
-          messageHistory,
-          modelPreference,
-        });
-
-        setCode(response.code);
-        setRemainingUses(remaining);
-        setHasGeneratedWithLLM(true);
-        setCurrentTemplateId("custom");
-        setCustomCode(response.code);
-
-        // Add assistant message with AI's response
-        const assistantMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: response.message || t("chat.codeGenerated"),
-          timestamp: new Date(),
-        };
-        setChatHistory((prev) => [...prev, assistantMessage]);
-
-        // Update context messages with both user and assistant messages
-        setContextMessages((prev) => [...prev, userMessage, assistantMessage]);
-
-        showToast(t("chat.codeGenerated"), "success");
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : t("api.generateError");
-
-        // Add error message to chat with details
-        const errorChatMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: t("api.generateError"),
-          timestamp: new Date(),
-          errorDetails: errorMessage,
-        };
-        setChatHistory((prev) => [...prev, errorChatMessage]);
-        // Re-throw to let ChatPanel know not to clear the prompt
-        throw err;
-      } finally {
-        setIsGenerating(false);
-      }
-    },
-    [visitorId, password, showToast, code, t, contextMessages, modelPreference],
-  );
-  */
-
   const handleTemplateChange = useCallback(
     (templateId: string) => {
       // Don't do anything if switching to the same template
@@ -1306,7 +1222,7 @@ export default function WorkspacePage() {
       if (sharedTemplate) {
         setCode(sharedTemplate.code);
         setArtifactType(sharedTemplate.artifactType || "website");
-        originalCodeSnapshotRef.current = sharedTemplate.code;
+        setOriginalCodeSnapshot(sharedTemplate.code);
         setCurrentTemplateId(templateId);
         // Clear context messages when switching templates
         setContextMessages([]);
@@ -1321,7 +1237,7 @@ export default function WorkspacePage() {
         if (customTemplate) {
           setCode(customTemplate.code);
           setArtifactType(customTemplate.artifactType || "website");
-          originalCodeSnapshotRef.current = customTemplate.code;
+          setOriginalCodeSnapshot(customTemplate.code);
           setCurrentTemplateId(templateId);
           setCurrentVersionId(customTemplate.currentVersionId || null);
           // Clear context messages when switching templates
@@ -1339,7 +1255,7 @@ export default function WorkspacePage() {
           const newCode = localizedCode || template.code;
           setCode(newCode);
           setArtifactType(template.artifactType || "website");
-          originalCodeSnapshotRef.current = newCode;
+          setOriginalCodeSnapshot(newCode);
           setCurrentTemplateId(templateId);
           // Clear context messages when switching templates
           setContextMessages([]);
@@ -1348,7 +1264,7 @@ export default function WorkspacePage() {
         }
       }
     },
-    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates, getSharedTemplate],
+    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates, getSharedTemplate, setArtifactType, setSavedTemplateId],
   );
 
   const handleSelectVersion = useCallback(
@@ -1370,14 +1286,14 @@ export default function WorkspacePage() {
           version.artifactType || "website",
         );
       }
-      originalCodeSnapshotRef.current = version.code;
+      setOriginalCodeSnapshot(version.code);
       setContextMessages([]);
       setIsVersionHistoryOpen(false);
       previewControlRef.current?.forceRefresh(version.code);
 
       showToast(t("versionHistory.loaded"), "success");
     },
-    [currentTemplateId, isCustomTemplateId, showToast, t, updateTemplate],
+    [currentTemplateId, isCustomTemplateId, setArtifactType, showToast, t, updateTemplate],
   );
 
   const handleRemoveCustomTemplate = useCallback(
@@ -1392,13 +1308,13 @@ export default function WorkspacePage() {
           const newCode = localizedCode || defaultTemplate.code;
           setCode(newCode);
           setArtifactType(defaultTemplate.artifactType || "website");
-          originalCodeSnapshotRef.current = newCode;
+          setOriginalCodeSnapshot(newCode);
           setCurrentTemplateId(DEFAULT_TEMPLATE_ID);
           setContextMessages([]);
         }
       }
     },
-    [removeTemplate, currentTemplateId, language],
+    [removeTemplate, currentTemplateId, language, setArtifactType],
   );
 
   const handleClearMessages = useCallback(() => {
@@ -1415,7 +1331,7 @@ export default function WorkspacePage() {
         updateTemplate(currentTemplateId, code, undefined, undefined, nextArtifactType);
       }
     },
-    [code, currentTemplateId, isCustomTemplateId, updateTemplate],
+    [code, currentTemplateId, isCustomTemplateId, setArtifactType, updateTemplate],
   );
 
   const handleSaveApiKeys = useCallback(
@@ -1430,6 +1346,7 @@ export default function WorkspacePage() {
 
       setApiKeySettings(savedApiKeys);
       setAuthMode("api-key");
+      hasLoadedApiKeyVersionsRef.current = true;
       setIsAuthenticated(true);
       setIsPasswordModalOpen(false);
       setAuthError(undefined);
@@ -1457,7 +1374,7 @@ export default function WorkspacePage() {
             setCode(latest.code);
             setArtifactType(latest.artifactType || "website");
             setCurrentVersionId(latest.id);
-            originalCodeSnapshotRef.current = latest.code;
+            setOriginalCodeSnapshot(latest.code);
             previewControlRef.current?.forceRefresh(latest.code);
           }
         } catch (versionError) {
@@ -1467,7 +1384,7 @@ export default function WorkspacePage() {
 
       showToast(t("apiKeys.saved"), "success");
     },
-    [apiKeySettings.accessToken, isSafeStart, modelPreference, setApiKeySettings, setAuthMode, setModelPreference, showToast, t, visitorId],
+    [apiKeySettings.accessToken, isSafeStart, modelPreference, setApiKeySettings, setArtifactType, setAuthMode, setModelPreference, showToast, t, visitorId],
   );
 
   const handleTestApiKey = useCallback(
@@ -1556,9 +1473,6 @@ export default function WorkspacePage() {
     }
   }, [isValidating]);
 
-  // Get URL password for prefilling
-  const urlPassword = searchParams.get("p");
-
   return (
     <>
       <div className="h-screen flex flex-col bg-void overflow-hidden">
@@ -1566,7 +1480,7 @@ export default function WorkspacePage() {
         <header className="flex items-center justify-between px-4 py-2 border-b border-steel/30 bg-obsidian">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <img src="/web-app-manifest-192x192.png" alt="App icon" className="w-8 h-8 object-contain" />
+              <Image src="/web-app-manifest-192x192.png" alt="App icon" width={32} height={32} className="w-8 h-8 object-contain" />
               <span className="font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
             </div>
           </div>
