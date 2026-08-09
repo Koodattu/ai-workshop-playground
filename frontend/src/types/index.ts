@@ -11,6 +11,7 @@ export interface ChatMessage {
 // Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)
 export type ChatMode = "edit" | "ask";
 export type ArtifactType = "website" | "game";
+export type ChangeScope = "localized" | "cross_cutting" | "rewrite";
 
 // AI model preference sent as a symbolic value; backend maps it to provider model IDs.
 export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55" | "gpt56luna" | "deepseekv4flash";
@@ -70,6 +71,7 @@ export interface GenerateResponse {
   projectName?: string;
   artifactType?: ArtifactType;
   editMode?: "replace_all" | "patch";
+  changeScope?: ChangeScope;
   version?: CodeVersion;
   usage?: GenerationUsageSummary | null;
 }
@@ -154,6 +156,7 @@ export interface StreamDoneEvent {
   projectName?: string;
   artifactType?: ArtifactType;
   editMode?: "replace_all" | "patch";
+  changeScope?: ChangeScope;
   version?: CodeVersion;
   remaining?: number;
   usage?: GenerationUsageSummary | null;
@@ -203,7 +206,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; projectName?: string; artifactType?: ArtifactType; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
+  onDone?: (data: { message: string; code: string; projectName?: string; artifactType?: ArtifactType; editMode?: "replace_all" | "patch"; changeScope?: ChangeScope; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
@@ -212,6 +215,14 @@ export interface PreviewControl {
   disableAutoRefresh: () => void;
   enableAutoRefresh: () => void;
   forceRefresh: (newCode?: string, projectId?: string) => void;
+}
+
+export interface PreviewRuntimeIssue {
+  kind: "javascript" | "promise" | "resource";
+  message: string;
+  source?: string;
+  line?: number;
+  column?: number;
 }
 
 // Custom template interface for user-created templates
@@ -403,8 +414,11 @@ export interface CodeVersion {
   modelShortLabel?: string | null;
   modelThinking?: ThinkingLevel | string | null;
   editMode: "replace_all" | "patch";
+  changeScope?: ChangeScope;
   editCount: number;
   edits?: Array<{ oldText: string; newText: string }>;
+  patchRetryAttempted?: boolean;
+  patchApplyMethod?: "exact" | "line-ending-normalized" | "mixed" | null;
   manualEditsSinceParent?: boolean;
   createdAt: string;
   updatedAt?: string;

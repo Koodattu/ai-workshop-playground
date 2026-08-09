@@ -128,6 +128,7 @@
       "API_KEY_INVALID": "API-määritys on virheellinen",
       "AI_RESPONSE_PARSE_FAILED": "Tekoälyn vastauksen ymmärtäminen epäonnistui",
       "AI_RESPONSE_INVALID": "Tekoälyn vastausmuoto on virheellinen",
+      "AI_EDIT_UNSAFE": "Muutosta ei voitu tehdä turvallisesti. Alkuperäinen koodi säilytettiin; yritä uudelleen.",
       "AI_GENERATION_FAILED": "Koodin luonti epäonnistui",
       "INTERNAL_SERVER_ERROR": "Odottamaton virhe tapahtui",
       "API_QUOTA_EXCEEDED": "Palvelu väliaikaisesti poissa käytöstä. Yritä myöhemmin uudelleen.",
@@ -341,7 +342,11 @@
     "share": "Jaa",
     "shareTitle": "Jaa tämä koodi",
     "shareCopied": "Kopioitu!",
-    "shareCreating": "Luodaan jakamislinkkiä..."
+    "shareCreating": "Luodaan jakamislinkkiä...",
+    "runtimeIssueTitle": "Esikatselussa havaittiin ongelma",
+    "fixRuntimeIssue": "Korjaa tekoälyllä",
+    "dismissRuntimeIssue": "Sulje esikatselun ongelma",
+    "fixRuntimePrompt": "Korjaa tämä esikatselun ongelma ja säilytä muu toiminta ennallaan: {error}"
   },
   "shareDialog": {
     "title": "Jaa Luomuksesi",

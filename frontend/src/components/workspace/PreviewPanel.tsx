@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { PreviewControl } from "@/types";
+import type { PreviewControl, PreviewRuntimeIssue } from "@/types";
 
 interface PreviewPanelProps {
   code: string;
@@ -10,6 +10,8 @@ interface PreviewPanelProps {
   onControlReady?: (control: PreviewControl) => void;
   onShare?: () => Promise<string | null>;
   isSharing?: boolean;
+  isGenerating?: boolean;
+  onFixRuntimeIssue?: (issue: PreviewRuntimeIssue) => void;
 }
 
 interface PreviewDocument {
@@ -121,7 +123,15 @@ function clearSavedState(projectId: string) {
   }
 }
 
-export function PreviewPanel({ code, projectId, onControlReady, onShare, isSharing = false }: PreviewPanelProps) {
+export function PreviewPanel({
+  code,
+  projectId,
+  onControlReady,
+  onShare,
+  isSharing = false,
+  isGenerating = false,
+  onFixRuntimeIssue,
+}: PreviewPanelProps) {
   const [initialPersistence] = useState(() => {
     const enabled = readStateSetting(projectId);
     const storedState = readSavedState(projectId);
@@ -138,6 +148,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
   const [savedState, setSavedState] = useState<SavedPreviewState | null>(initialPersistence.storedState);
   const [stateStatus, setStateStatus] = useState<StateStatus>(initialPersistence.storedState && initialPersistence.enabled ? "ready" : "idle");
   const [stateProjectId, setStateProjectId] = useState(projectId);
+  const [runtimeIssue, setRuntimeIssue] = useState<PreviewRuntimeIssue | null>(null);
   const { language, t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -293,7 +304,10 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
 
       if (updateSequence !== previewUpdateSequenceRef.current) return;
 
-      setPreviewDocument({ code: nextCode, projectId: nextProjectId });
+      const nextDocument = { code: nextCode, projectId: nextProjectId };
+      previewDocumentRef.current = nextDocument;
+      setPreviewDocument(nextDocument);
+      setRuntimeIssue(null);
       if (force) {
         setKey((previous) => previous + 1);
       }
@@ -358,6 +372,11 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
         state?: unknown;
         error?: boolean;
         projectId?: string;
+        kind?: PreviewRuntimeIssue["kind"];
+        message?: string;
+        sourceUrl?: string;
+        line?: number;
+        column?: number;
       };
 
       if (data?.source !== PREVIEW_MESSAGE_SOURCE || data.protocolVersion !== PREVIEW_PROTOCOL_VERSION) return;
@@ -372,6 +391,17 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
           supported: data.supported === true,
           state: data.state,
           error: data.error === true,
+        });
+        return;
+      }
+
+      if (data.type === "runtime-error" && data.projectId === previewDocumentRef.current.projectId && data.kind && data.message) {
+        setRuntimeIssue({
+          kind: data.kind,
+          message: data.message.slice(0, 500),
+          source: data.sourceUrl?.slice(0, 500),
+          line: data.line,
+          column: data.column,
         });
         return;
       }
@@ -562,6 +592,41 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
             }, message), '*');
           }
 
+          var lastRuntimeIssue = '';
+          function reportRuntimeIssue(issue) {
+            var fingerprint = issue.kind + ':' + issue.message + ':' + (issue.sourceUrl || '') + ':' + (issue.line || 0);
+            if (fingerprint === lastRuntimeIssue) return;
+            lastRuntimeIssue = fingerprint;
+            postToHost(Object.assign({ type: 'runtime-error' }, issue));
+          }
+
+          window.addEventListener('error', function(event) {
+            if (event.target && event.target !== window) {
+              var target = event.target;
+              var resourceUrl = target.src || target.href || '';
+              reportRuntimeIssue({
+                kind: 'resource',
+                message: 'Failed to load ' + String(target.tagName || 'resource').toLowerCase(),
+                sourceUrl: String(resourceUrl).slice(0, 500)
+              });
+              return;
+            }
+
+            reportRuntimeIssue({
+              kind: 'javascript',
+              message: String(event.message || 'Unknown JavaScript error').slice(0, 500),
+              sourceUrl: String(event.filename || '').slice(0, 500),
+              line: Number(event.lineno) || undefined,
+              column: Number(event.colno) || undefined
+            });
+          }, true);
+
+          window.addEventListener('unhandledrejection', function(event) {
+            var reason = event.reason;
+            var message = reason && reason.message ? reason.message : String(reason || 'Unhandled promise rejection');
+            reportRuntimeIssue({ kind: 'promise', message: message.slice(0, 500) });
+          });
+
           function getStateApi() {
             var api = window.workshopState;
             if (!api || typeof api.exportState !== 'function' || typeof api.importState !== 'function') return null;
@@ -641,7 +706,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
           function initLinkHandler() {
             // Intercept all clicks on links
             document.addEventListener('click', function(e) {
-              const target = e.target.closest('a');
+              const target = e.target instanceof Element ? e.target.closest('a') : null;
               if (!target || !target.href) return;
 
               const href = target.getAttribute('href');
@@ -671,14 +736,14 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
       </script>
     `;
 
-    // Inject before closing body tag, or at the end if no body tag
-    if (html.includes("</body>")) {
-      return html.replace("</body>", script + "</body>");
-    } else if (html.includes("</html>")) {
-      return html.replace("</html>", script + "</html>");
-    } else {
-      return html + script;
+    // Install diagnostics before artifact scripts while keeping a fallback for fragments.
+    if (/<head\b[^>]*>/i.test(html)) {
+      return html.replace(/<head\b[^>]*>/i, (openingHead) => openingHead + script);
     }
+    if (/<body\b[^>]*>/i.test(html)) {
+      return html.replace(/<body\b[^>]*>/i, (openingBody) => openingBody + script);
+    }
+    return script + html;
   };
 
   const processedCode = hasCode ? injectPreviewRuntime(previewDocument.code) : "";
@@ -828,6 +893,35 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
           </div>
         </div>
 
+        {runtimeIssue && (
+          <div className="flex items-start gap-2 border-b border-amber-500/30 bg-amber-950 px-3 py-2 text-xs text-amber-100" role="alert">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">{t("preview.runtimeIssueTitle")}</div>
+              <div className="truncate font-mono text-amber-200/80" title={runtimeIssue.message}>
+                {runtimeIssue.message}
+              </div>
+            </div>
+            {onFixRuntimeIssue && (
+              <button
+                type="button"
+                disabled={isGenerating}
+                onClick={() => onFixRuntimeIssue(runtimeIssue)}
+                className="shrink-0 rounded border border-amber-400/40 px-2 py-1 font-semibold text-amber-100 transition-colors hover:bg-amber-400/10 disabled:cursor-wait disabled:opacity-50"
+              >
+                {t("preview.fixRuntimeIssue")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setRuntimeIssue(null)}
+              className="shrink-0 px-1 py-1 text-amber-200/70 hover:text-amber-100"
+              aria-label={t("preview.dismissRuntimeIssue")}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Preview Area */}
         <div className="flex-1 overflow-hidden bg-white">
           {hasCode ? (
@@ -836,7 +930,7 @@ export function PreviewPanel({ code, projectId, onControlReady, onShare, isShari
               ref={iframeRef}
               srcDoc={processedCode}
               onLoad={restoreCurrentProjectState}
-              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-pointer-lock"
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-pointer-lock"
               className="w-full h-full border-0"
               title="Preview"
             />

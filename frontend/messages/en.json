@@ -128,6 +128,7 @@
       "API_KEY_INVALID": "API configuration is invalid",
       "AI_RESPONSE_PARSE_FAILED": "Failed to understand AI response",
       "AI_RESPONSE_INVALID": "AI response format is invalid",
+      "AI_EDIT_UNSAFE": "The change could not be applied safely. Your original code was kept; please retry.",
       "AI_GENERATION_FAILED": "Code generation failed",
       "INTERNAL_SERVER_ERROR": "An unexpected error occurred",
       "API_QUOTA_EXCEEDED": "Service temporarily unavailable. Please try again later.",
@@ -341,7 +342,11 @@
     "share": "Share",
     "shareTitle": "Share this code",
     "shareCopied": "Copied!",
-    "shareCreating": "Creating share link..."
+    "shareCreating": "Creating share link...",
+    "runtimeIssueTitle": "Preview problem detected",
+    "fixRuntimeIssue": "Fix with AI",
+    "dismissRuntimeIssue": "Dismiss preview problem",
+    "fixRuntimePrompt": "Fix this preview problem while preserving unrelated behavior: {error}"
   },
   "shareDialog": {
     "title": "Share Your Creation",

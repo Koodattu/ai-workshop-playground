@@ -299,6 +299,17 @@ This allows for iterative modifications like:
 - "Make the header sticky"
 - "Change the color scheme to blue"
 
+### Safe Edit Planning
+
+Edit responses classify the requested change as `localized`, `cross_cutting`, or `rewrite` and choose one of two modes:
+
+- `patch`: up to eight exact, unique, non-overlapping `oldText`/`newText` replacements for localized work.
+- `replace_all`: a complete HTML document for new artifacts or genuine broad rewrites.
+
+The backend treats the model response as a proposal. It resolves every patch against the same original snapshot, rejects ambiguous, overlapping, no-op, fuzzy, and document-scale edits, and only applies the patch after every replacement passes. A rejected patch gets one diagnostic repair attempt; a second failure leaves the original code unchanged.
+
+Before saving, the backend verifies the complete HTML shell, output size, omission markers, and classic inline JavaScript syntax. Version metadata records the final edit mode, change scope, patch application method, and whether a repair was required.
+
 ### Streaming Implementation
 
 **Backend (SSE - Server-Sent Events):**
@@ -829,8 +840,9 @@ const appendCode = useCallback((text: string) => {
 - Render user code in sandboxed iframe
 - Handle auto-refresh toggle
 - Capture and restore project-scoped app state through `postMessage` (enabled by default)
+- Report JavaScript, unhandled promise, and resource-loading failures with an explicit AI repair action
 - Provide fullscreen mode
-- Display compilation errors (if any)
+- Display detected preview errors
 
 **Sandboxing:**
 

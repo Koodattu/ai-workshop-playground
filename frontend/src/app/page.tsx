@@ -21,7 +21,7 @@ import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage, parseApiError } from "@/lib/errorTranslation";
-import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
+import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, PreviewRuntimeIssue, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -748,8 +748,9 @@ export default function WorkspacePage() {
   }, [pendingSharedTemplate, showToast, t]);
 
   const handleSendMessage = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, modeOverride?: ChatMode) => {
       if (!visitorId || !isAuthenticated) return;
+      const requestMode = modeOverride ?? chatMode;
 
       const authPayload =
         authMode === "api-key"
@@ -802,7 +803,7 @@ export default function WorkspacePage() {
             existingCode: code,
             parentVersionId: currentVersionId,
             messageHistory,
-            mode: chatMode,
+            mode: requestMode,
             artifactType,
             modelPreference,
             showThoughts,
@@ -815,7 +816,7 @@ export default function WorkspacePage() {
             // Step 0: Code starts - disable preview and clear editor
             onCodeStart: () => {
               // In ASK mode, we don't modify code, so skip all editor operations
-              if (chatMode === "ask") return;
+              if (requestMode === "ask") return;
 
               // Mark that editor should be focused for streaming follow behavior
               shouldFocusEditorForStreamingRef.current = true;
@@ -897,7 +898,7 @@ export default function WorkspacePage() {
             // Step 1-2: Stream code chunks line by line to editor
             onCodeChunk: (chunk: string) => {
               // In ASK mode, we don't modify code
-              if (chatMode === "ask") return;
+              if (requestMode === "ask") return;
 
               // Keep the authoritative full code outside React state while streaming.
               codeBufferRef.current += chunk;
@@ -908,7 +909,7 @@ export default function WorkspacePage() {
             // Step 3: Code complete
             onCodeComplete: () => {
               // In ASK mode, we don't modify code
-              if (chatMode === "ask") return;
+              if (requestMode === "ask") return;
 
               flushEditorChunks();
               syncStreamingBufferToEditor();
@@ -975,7 +976,7 @@ export default function WorkspacePage() {
                 : undefined;
 
               // In EDIT mode, update templates and code
-              if (chatMode === "edit") {
+              if (requestMode === "edit") {
                 // If user is in a custom template, update it instead of creating a new one
                 if (isCustomTemplateId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
@@ -1001,7 +1002,7 @@ export default function WorkspacePage() {
               }
 
               // Update states based on mode
-              if (chatMode === "edit") {
+              if (requestMode === "edit") {
                 setCode(finalCode);
                 // Set the snapshot to the new code so it's not dirty
                 setOriginalCodeSnapshot(finalCode);
@@ -1045,7 +1046,7 @@ export default function WorkspacePage() {
               setIsStreaming(false);
 
               // Enable preview and update it (only in EDIT mode)
-              if (chatMode === "edit") {
+              if (requestMode === "edit") {
                 previewControlRef.current?.enableAutoRefresh();
                 // Mobile: Switch to preview panel to see the final result (if auto-switch enabled)
                 if (autoSwitchEnabled) {
@@ -1076,7 +1077,7 @@ export default function WorkspacePage() {
                 }
               }
 
-              if (chatMode === "edit") {
+              if (requestMode === "edit") {
                 codeBufferRef.current = codeBeforeGeneration;
                 setCode(codeBeforeGeneration);
 
@@ -1332,6 +1333,17 @@ export default function WorkspacePage() {
       }
     },
     [code, currentTemplateId, isCustomTemplateId, setArtifactType, updateTemplate],
+  );
+
+  const handleFixRuntimeIssue = useCallback(
+    (issue: PreviewRuntimeIssue) => {
+      if (isStreaming) return;
+
+      setChatMode("edit");
+      const location = issue.source ? ` (${issue.source}${issue.line ? `:${issue.line}${issue.column ? `:${issue.column}` : ""}` : ""})` : "";
+      void handleSendMessage(t("preview.fixRuntimePrompt", { error: `${issue.message}${location}` }), "edit");
+    },
+    [handleSendMessage, isStreaming, setChatMode, t],
   );
 
   const handleSaveApiKeys = useCallback(
@@ -1600,6 +1612,8 @@ export default function WorkspacePage() {
                 }}
                 onShare={handleShare}
                 isSharing={isSharing}
+                isGenerating={isStreaming}
+                onFixRuntimeIssue={handleFixRuntimeIssue}
               />
             </Panel>
           </Group>
@@ -1672,6 +1686,8 @@ export default function WorkspacePage() {
                 }}
                 onShare={handleShare}
                 isSharing={isSharing}
+                isGenerating={isStreaming}
+                onFixRuntimeIssue={handleFixRuntimeIssue}
               />
             )}
           </div>

@@ -138,6 +138,9 @@ class ApiClient {
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let terminalEventReceived = false;
+      let cancelledByCaller = false;
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
       const streamDiagnostics = {
         eventTypes: {} as Record<string, number>,
         codeChunks: 0,
@@ -150,6 +153,29 @@ class ApiClient {
         console.info(`[SSE Stream Diagnostic] ${event}`, payload);
       };
 
+      const clearInactivityTimer = () => {
+        if (inactivityTimer) {
+          clearTimeout(inactivityTimer);
+          inactivityTimer = null;
+        }
+      };
+
+      const finishWithError = (message: string, errorCode?: string, details?: string[]) => {
+        if (terminalEventReceived || cancelledByCaller) return;
+        terminalEventReceived = true;
+        callbacks.onError?.(message, undefined, errorCode, details);
+      };
+
+      const armInactivityTimer = () => {
+        clearInactivityTimer();
+        inactivityTimer = setTimeout(() => {
+          finishWithError("The generation stream stopped responding.", "AI_GENERATION_FAILED", ["No stream data was received for 120 seconds."]);
+          abortController.abort();
+        }, 120000);
+      };
+
+      armInactivityTimer();
+
       // Start reading the stream
       (async () => {
         try {
@@ -157,8 +183,13 @@ class ApiClient {
             const { done, value } = await reader.read();
 
             if (done) {
+              if (!terminalEventReceived && !cancelledByCaller) {
+                finishWithError("The generation stream ended before completion.", "AI_GENERATION_FAILED", ["The server closed the stream without a final event."]);
+              }
               break;
             }
+
+            armInactivityTimer();
 
             // Decode the chunk and add to buffer
             buffer += decoder.decode(value, { stream: true });
@@ -217,6 +248,8 @@ class ApiClient {
                       callbacks.onCodeUpdate?.(event.code);
                       break;
                     case "done":
+                      if (terminalEventReceived) break;
+                      terminalEventReceived = true;
                       logStreamDiagnostic("summary", {
                         ...streamDiagnostics,
                         elapsedMs: Date.now() - streamDiagnostics.startedAt,
@@ -227,32 +260,43 @@ class ApiClient {
                         projectName: event.projectName,
                         artifactType: event.artifactType,
                         editMode: event.editMode,
+                        changeScope: event.changeScope,
                         version: event.version,
                         remaining: event.remaining,
                         usage: event.usage,
                       });
                       break;
                     case "error":
+                      if (terminalEventReceived) break;
+                      terminalEventReceived = true;
                       callbacks.onError?.(event.error, event.remainingUses, event.errorCode, event.details);
                       break;
                   }
                 } catch (parseError) {
                   console.error("Failed to parse SSE data:", parseError);
+                  finishWithError("Failed to parse the generation stream.", "AI_RESPONSE_PARSE_FAILED");
+                  abortController.abort();
+                  break;
                 }
               }
             }
           }
         } catch (error) {
           if (error instanceof Error && error.name !== "AbortError") {
-            callbacks.onError?.(error.message || "NETWORK_ERROR");
+            finishWithError(error.message || "NETWORK_ERROR");
           }
         } finally {
+          clearInactivityTimer();
           reader.releaseLock();
         }
       })();
 
       // Return cleanup function
-      return () => abortController.abort();
+      return () => {
+        cancelledByCaller = true;
+        clearInactivityTimer();
+        abortController.abort();
+      };
     } catch (error) {
       if (error instanceof Error && error.name !== "AbortError") {
         callbacks.onError?.(error.message || "NETWORK_ERROR");

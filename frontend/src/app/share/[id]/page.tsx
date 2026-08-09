@@ -227,7 +227,7 @@ export default function SharePage({ params }: SharePageProps) {
         {sharedData?.code ? (
           <iframe
             srcDoc={processedCode}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-pointer-lock"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-pointer-lock"
             className="w-full h-full border-0"
             title="Shared Preview"
           />
