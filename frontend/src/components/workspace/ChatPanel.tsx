@@ -541,11 +541,26 @@ export function ChatPanel({
                   <div role="group" aria-label={t("chat.actionModeLabel")} className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
                     <button
                       type="button"
+                      onClick={() => onModeChange("auto")}
+                      disabled={isLoading}
+                      aria-pressed={mode === "auto"}
+                      className={`
+                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${mode === "auto" ? "bg-white/10 text-white border border-white/15" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.autoModeTooltip")}
+                    >
+                      {t("chat.autoMode")}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => onModeChange("ask")}
                       disabled={isLoading}
                       aria-pressed={mode === "ask"}
                       className={`
-                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
                         transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
                         ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
                         disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
@@ -560,7 +575,7 @@ export function ChatPanel({
                       disabled={isLoading}
                       aria-pressed={mode === "edit"}
                       className={`
-                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
                         transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
                         ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
                         disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
@@ -644,7 +659,7 @@ export function ChatPanel({
                     </svg>
                     {t("chat.generateButton")}
                   </>
-                ) : (
+                ) : mode === "ask" ? (
                   <>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
@@ -655,6 +670,13 @@ export function ChatPanel({
                       />
                     </svg>
                     {t("chat.askButton")}
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                    {t("chat.sendButton")}
                   </>
                 )}
               </Button>

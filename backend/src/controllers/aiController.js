@@ -501,15 +501,17 @@ STATE CONTRACT:
 - Call window.workshopPreview?.saveState() after meaningful state changes.
 - Do not use cookies, localStorage, or sessionStorage for artifact progress; the workshop host owns persistence.`;
 
-const EDIT_OUTPUT_INSTRUCTION = `EDIT MODE OUTPUT:
-- Return a JSON object with fields in this exact order: "editMode", "changeScope", "code", "edits", "message", "projectName".
-- Reply in the user's language. "message" is 1-2 short sentences and "projectName" is exactly two descriptive words.
+const EDIT_RESPONSE_RULES = `- Reply in the user's language. "message" is 1-2 short sentences and "projectName" is exactly two descriptive words.
 - Set changeScope to "localized" for isolated changes, "cross_cutting" for coordinated changes across several regions, or "rewrite" only when the document structure or implementation must be replaced broadly.
 - For a new artifact or a genuine broad rewrite, use editMode "replace_all", put the complete document in "code", and return an empty "edits" array.
 - For a targeted change to existing code, use editMode "patch", set "code" to an empty string, and return at most 8 non-overlapping exact oldText/newText replacements. Each oldText must be copied verbatim and match exactly once.
 - Prefer patch for large existing documents unless the request truly requires cross-cutting structural replacement. Never return the whole document as one patch block.
 - Never use line numbers or Markdown fences in the code field. A replacement document starts directly with <!DOCTYPE html>.
 - For translations, keep oldText in its original language and translate only newText.`;
+
+const EDIT_OUTPUT_INSTRUCTION = `EDIT MODE OUTPUT:
+- Return a JSON object with fields in this exact order: "editMode", "changeScope", "code", "edits", "message", "projectName".
+${EDIT_RESPONSE_RULES}`;
 
 const WEBSITE_ARTIFACT_INSTRUCTION = `WEBSITE ARTIFACT:
 - Infer whether the request is a marketing page, portfolio, dashboard, form, tool, or small web app, then choose hierarchy, density, and visual character to suit its audience and purpose.
@@ -533,17 +535,28 @@ const ASK_OUTPUT_INSTRUCTION = `ASK MODE OUTPUT:
 - Return only a JSON object with a "message" field.
 - Reply in the user's language in 2-4 concise, useful sentences. Analyze the existing artifact when relevant and stay focused on the question.`;
 
+const AUTO_OUTPUT_INSTRUCTION = `AUTO MODE OUTPUT:
+- First decide whether the user wants an answer or a change to the artifact.
+- Choose action "ask" for questions, explanations, brainstorming, reviews, or advice that do not request a code change.
+- Choose action "edit" when the user asks to create, implement, fix, add, remove, redesign, translate, or otherwise change the artifact. Requests phrased as questions still count as edits when they ask you to make a change.
+- Return a JSON object with fields in this exact order: "action", "editMode", "changeScope", "code", "edits", "message", "projectName".
+- For action "ask", answer in the user's language in 2-4 concise, useful sentences, set editMode to "replace_all", changeScope to "localized", code and projectName to empty strings, and edits to an empty array.
+- For action "edit", follow these rules:
+${EDIT_RESPONSE_RULES}`;
+
 function normalizeArtifactType(value) {
   return value === "game" ? "game" : "website";
 }
 
-function buildSystemInstruction({ isAskMode, artifactType }) {
+function buildSystemInstruction({ mode, artifactType }) {
   const domainInstruction = normalizeArtifactType(artifactType) === "game" ? GAME_ARTIFACT_INSTRUCTION : WEBSITE_ARTIFACT_INSTRUCTION;
-  return [COMMON_ARTIFACT_INSTRUCTION, domainInstruction, isAskMode ? ASK_OUTPUT_INSTRUCTION : EDIT_OUTPUT_INSTRUCTION].join("\n\n");
+  const outputInstruction = mode === "ask" ? ASK_OUTPUT_INSTRUCTION : mode === "auto" ? AUTO_OUTPUT_INSTRUCTION : EDIT_OUTPUT_INSTRUCTION;
+  return [COMMON_ARTIFACT_INSTRUCTION, domainInstruction, outputInstruction].join("\n\n");
 }
 
-const DEFAULT_EDIT_SYSTEM_INSTRUCTION = buildSystemInstruction({ isAskMode: false, artifactType: "website" });
-const DEFAULT_ASK_SYSTEM_INSTRUCTION = buildSystemInstruction({ isAskMode: true, artifactType: "website" });
+const DEFAULT_EDIT_SYSTEM_INSTRUCTION = buildSystemInstruction({ mode: "edit", artifactType: "website" });
+const DEFAULT_ASK_SYSTEM_INSTRUCTION = buildSystemInstruction({ mode: "ask", artifactType: "website" });
+const DEFAULT_AUTO_SYSTEM_INSTRUCTION = buildSystemInstruction({ mode: "auto", artifactType: "website" });
 
 // JSON schema for structured output
 const CODE_GENERATION_SCHEMA = {
@@ -605,6 +618,39 @@ const ASK_SCHEMA = {
   required: ["message"],
 };
 
+const AUTO_SCHEMA = {
+  type: "object",
+  properties: {
+    action: {
+      type: "string",
+      enum: ["ask", "edit"],
+      description: "Whether to answer conversationally or change the artifact.",
+    },
+    ...CODE_GENERATION_SCHEMA.properties,
+    message: {
+      type: "string",
+      description: "A concise response in the same language as the user.",
+    },
+    projectName: {
+      type: "string",
+      description: "A two-word project name for edits, or an empty string for answers.",
+    },
+  },
+  required: ["action", ...CODE_GENERATION_SCHEMA.required],
+};
+
+function getResponseSchema(mode) {
+  if (mode === "ask") return ASK_SCHEMA;
+  if (mode === "auto") return AUTO_SCHEMA;
+  return CODE_GENERATION_SCHEMA;
+}
+
+function getDefaultSystemInstruction(mode) {
+  if (mode === "ask") return DEFAULT_ASK_SYSTEM_INSTRUCTION;
+  if (mode === "auto") return DEFAULT_AUTO_SYSTEM_INSTRUCTION;
+  return DEFAULT_EDIT_SYSTEM_INSTRUCTION;
+}
+
 function addStrictJsonSchemaRules(schema) {
   if (!schema || typeof schema !== "object") return schema;
 
@@ -628,13 +674,13 @@ function addStrictJsonSchemaRules(schema) {
   return schema;
 }
 
-function buildOpenAITextFormat(isAskMode) {
+function buildOpenAITextFormat(mode) {
   return {
     format: {
       type: "json_schema",
-      name: isAskMode ? "ask_response" : "code_generation_response",
+      name: mode === "ask" ? "ask_response" : mode === "auto" ? "auto_response" : "code_generation_response",
       strict: true,
-      schema: addStrictJsonSchemaRules(isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA),
+      schema: addStrictJsonSchemaRules(getResponseSchema(mode)),
     },
   };
 }
@@ -744,7 +790,7 @@ async function createGeminiStream({ selectedModel, userPrompt, generationConfig,
   })();
 }
 
-async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey, showThoughts = false }) {
+async function createOpenAIStream({ selectedModel, userPrompt, responseMode, systemInstruction, requestId, phase, apiKey, showThoughts = false }) {
   const client = apiKey ? new OpenAI({ apiKey }) : openAI;
 
   if (!client) {
@@ -753,9 +799,9 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
 
   const request = {
     model: selectedModel.model,
-    instructions: systemInstruction || (isAskMode ? DEFAULT_ASK_SYSTEM_INSTRUCTION : DEFAULT_EDIT_SYSTEM_INSTRUCTION),
+    instructions: systemInstruction || getDefaultSystemInstruction(responseMode),
     input: userPrompt,
-    text: buildOpenAITextFormat(isAskMode),
+    text: buildOpenAITextFormat(responseMode),
     reasoning: getOpenAIReasoningConfig(selectedModel, showThoughts),
     stream: true,
     store: false,
@@ -824,7 +870,7 @@ async function createOpenAIStream({ selectedModel, userPrompt, isAskMode, system
   })();
 }
 
-async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, systemInstruction, requestId, phase, apiKey, showThoughts = false }) {
+async function createDeepSeekStream({ selectedModel, userPrompt, responseMode, systemInstruction, requestId, phase, apiKey, showThoughts = false }) {
   const client = apiKey ? new OpenAI({ apiKey, baseURL: "https://api.deepseek.com" }) : deepSeek;
 
   if (!client) {
@@ -836,7 +882,7 @@ async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, syst
     messages: [
       {
         role: "system",
-        content: systemInstruction || (isAskMode ? DEFAULT_ASK_SYSTEM_INSTRUCTION : DEFAULT_EDIT_SYSTEM_INSTRUCTION),
+        content: systemInstruction || getDefaultSystemInstruction(responseMode),
       },
       { role: "user", content: userPrompt },
     ],
@@ -888,12 +934,12 @@ async function createDeepSeekStream({ selectedModel, userPrompt, isAskMode, syst
   })();
 }
 
-async function createModelTextStream({ selectedModel, generationConfig, userPrompt, isAskMode, requestId, phase = "primary", apiKeys, showThoughts = false }) {
+async function createModelTextStream({ selectedModel, generationConfig, userPrompt, responseMode, requestId, phase = "primary", apiKeys, showThoughts = false }) {
   if (selectedModel.provider === "openai") {
     return createOpenAIStream({
       selectedModel,
       userPrompt,
-      isAskMode,
+      responseMode,
       systemInstruction: generationConfig?.systemInstruction,
       requestId,
       phase,
@@ -906,7 +952,7 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
     return createDeepSeekStream({
       selectedModel,
       userPrompt,
-      isAskMode,
+      responseMode,
       systemInstruction: generationConfig?.systemInstruction,
       requestId,
       phase,
@@ -918,10 +964,10 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
   return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey: apiKeys?.gemini, showThoughts });
 }
 
-async function generateRepairAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext, patchError, apiKeys }) {
+async function generateRepairAfterPatchFailure({ selectedModel, generationConfig, userPrompt, sendSse, requestId, diagnosticContext, patchError, artifactType, apiKeys }) {
   const retryConfig = {
     ...generationConfig,
-    systemInstruction: `${generationConfig.systemInstruction || DEFAULT_EDIT_SYSTEM_INSTRUCTION}
+    systemInstruction: `${buildSystemInstruction({ mode: "edit", artifactType })}
 
 PATCH REPAIR MODE:
 - The previous patch was rejected without changing the user's code.
@@ -929,6 +975,7 @@ PATCH REPAIR MODE:
 - Use at most 8 non-overlapping edits and keep unrelated code unchanged.
 - Use replace_all only if the requested change genuinely requires a broad rewrite; never disguise a whole-document replacement as one patch block.
 - This is the only automatic repair attempt, so follow the output contract exactly.`,
+    responseSchema: CODE_GENERATION_SCHEMA,
   };
 
   const retryPrompt = `${userPrompt}
@@ -959,7 +1006,7 @@ Return one corrected response using the current code above as the exact source o
     selectedModel,
     generationConfig: retryConfig,
     userPrompt: retryPrompt,
-    isAskMode: false,
+    responseMode: "edit",
     requestId,
     phase: "patch-retry",
     apiKeys,
@@ -1075,16 +1122,17 @@ const generateCode = asyncHandler(async (req, res) => {
     prompt,
     existingCode,
     messageHistory,
-    mode = "edit",
+    mode = "auto",
     artifactType: requestedArtifactType = "website",
     modelPreference = DEFAULT_MODEL_PREFERENCE,
     parentVersionId,
     showThoughts = false,
   } = req.body;
-  const isAskMode = mode === "ask";
+  const responseMode = mode === "ask" ? "ask" : mode === "edit" ? "edit" : "auto";
+  const isForcedAskMode = responseMode === "ask";
   const artifactType = normalizeArtifactType(requestedArtifactType);
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
-  const allowCodeStreaming = !isAskMode;
+  const allowCodeStreaming = !isForcedAskMode;
   const isApiKeyMode = req.workshop?.authMode === "api-key";
   const apiKeys = isApiKeyMode ? req.apiKeyAuth?.apiKeys || {} : null;
   const selectedModel = await getModelPreference(modelPreference, { restrictToEnabled: !isApiKeyMode });
@@ -1151,6 +1199,7 @@ const generateCode = asyncHandler(async (req, res) => {
   let codeFieldStartPos = -1; // Position after opening quote of code field
   const codeDecoder = createJsonStringDecoder();
   let latestUsageMetadata = null;
+  let detectedAction = responseMode === "auto" ? null : responseMode;
   let detectedEditMode = null;
   const codeStreamDiagnostics = {
     requestId,
@@ -1166,6 +1215,7 @@ const generateCode = asyncHandler(async (req, res) => {
     codeChunksSent: 0,
     codeCharsSent: 0,
     firstCodeChunkChars: null,
+    detectedAction,
     detectedEditMode: null,
     codeKeySeenAtTextChunk: null,
     codeStartAtTextChunk: null,
@@ -1197,9 +1247,9 @@ const generateCode = asyncHandler(async (req, res) => {
   try {
     // Configure generation with system instruction based on mode
     const generationConfig = {
-      systemInstruction: buildSystemInstruction({ isAskMode, artifactType }),
+      systemInstruction: buildSystemInstruction({ mode: responseMode, artifactType }),
       responseMimeType: "application/json",
-      responseSchema: isAskMode ? ASK_SCHEMA : CODE_GENERATION_SCHEMA,
+      responseSchema: getResponseSchema(responseMode),
     };
 
     const geminiThinkingConfig = getGeminiThinkingConfig(selectedModel, showThoughts);
@@ -1238,7 +1288,7 @@ END_${codeBoundary}
     if (existingCode && existingCode.trim()) {
       userPrompt += `USER REQUEST: ${prompt}
 
-Modify or extend the current artifact based on the user's request. Preserve unrelated code and use the narrowest safe edit mode.`;
+${responseMode === "ask" ? "Answer the request without changing the artifact." : responseMode === "edit" ? "Modify or extend the current artifact based on the user's request. Preserve unrelated code and use the narrowest safe edit mode." : "Decide whether the user wants an answer or an artifact change. Only modify the artifact when the request asks for a change; otherwise answer without changing it."}`;
     } else {
       userPrompt += prompt;
     }
@@ -1248,7 +1298,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
       selectedModel,
       generationConfig,
       userPrompt,
-      isAskMode,
+      responseMode,
       requestId,
       phase: "primary",
       apiKeys,
@@ -1278,12 +1328,28 @@ Modify or extend the current artifact based on the user's request. Preserve unre
           accumulatedText += chunkText;
 
           // In ASK mode, skip code streaming entirely - we just accumulate the response
-          if (isAskMode) {
+          if (isForcedAskMode) {
             // Just continue accumulating, we'll parse and send at the end
             continue;
           }
 
-          if (!detectedEditMode) {
+          if (!detectedAction) {
+            const actionMatch = accumulatedText.match(/"action"\s*:\s*"(ask|edit)"/);
+            if (actionMatch) {
+              detectedAction = actionMatch[1];
+              codeStreamDiagnostics.detectedAction = detectedAction;
+              logStreamDiagnostic("action-detected", {
+                requestId,
+                provider: selectedModel.provider,
+                model: selectedModel.model,
+                detectedAction,
+                textChunkNumber: codeStreamDiagnostics.textChunks,
+                accumulatedTextLength: accumulatedText.length,
+              });
+            }
+          }
+
+          if (detectedAction === "edit" && !detectedEditMode) {
             const editModeMatch = accumulatedText.match(/"editMode"\s*:\s*"(replace_all|patch)"/);
             if (editModeMatch) {
               detectedEditMode = editModeMatch[1];
@@ -1299,7 +1365,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
             }
           }
 
-          const canStreamCode = allowCodeStreaming && (!hasExistingCode || detectedEditMode === "replace_all") && detectedEditMode !== "patch";
+          const canStreamCode = allowCodeStreaming && detectedAction === "edit" && (!hasExistingCode || detectedEditMode === "replace_all") && detectedEditMode !== "patch";
 
           // If code field hasn't started yet, look for it
           if (canStreamCode && !codeStarted) {
@@ -1413,6 +1479,12 @@ Modify or extend the current artifact based on the user's request. Preserve unre
       throw new AppError("Failed to parse AI response", 500, ERROR_CODES.AI_RESPONSE_PARSE_FAILED);
     }
 
+    const resolvedMode = responseMode === "auto" ? structuredResponse.action : responseMode;
+    if (resolvedMode !== "ask" && resolvedMode !== "edit") {
+      throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
+    }
+    const isAskResponse = resolvedMode === "ask";
+
     let finalCode = "";
     let savedVersion = null;
     let finalEditMode = "replace_all";
@@ -1422,7 +1494,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
     let patchApplyMethod = null;
 
     // Validate response has required fields based on mode
-    if (isAskMode) {
+    if (isAskResponse) {
       if (!structuredResponse.message) {
         throw new AppError("Invalid AI response structure", 500, ERROR_CODES.AI_RESPONSE_INVALID);
       }
@@ -1480,6 +1552,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
             requestId,
             diagnosticContext: patchDiagnosticContext,
             patchError,
+            artifactType,
             apiKeys,
           });
 
@@ -1537,7 +1610,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
     }
 
     // Ensure code-complete was sent for EDIT mode (handles edge case where stream ends abruptly)
-    if (!isAskMode && codeStarted && !codeComplete) {
+    if (!isAskResponse && codeStarted && !codeComplete) {
       codeChunkSseBuffer.flush();
       codeComplete = true;
       codeStreamDiagnostics.codeCompleteAtTextChunk = codeStreamDiagnostics.codeCompleteAtTextChunk || codeStreamDiagnostics.textChunks;
@@ -1557,7 +1630,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
     const finalMessage = structuredResponse.message;
     sendSse({ type: "message-complete", message: finalMessage });
 
-    if (!isAskMode && req.workshop?.visitorId) {
+    if (!isAskResponse && req.workshop?.visitorId) {
       const parentVersion = await resolveParentVersion(parentVersionId, req.workshop);
       const manualEditsSinceParent = Boolean(parentVersion && existingCode && parentVersion.code !== existingCode);
       const version = await CodeVersion.create({
@@ -1639,7 +1712,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
       // Calculate estimated cost in cents
       const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens, selectedModel.pricing, cachedTokens);
       const codeChange = getCodeChangeSummary({
-        mode,
+        mode: resolvedMode,
         hasExistingCode,
         existingCode,
         finalCode,
@@ -1652,7 +1725,7 @@ Modify or extend the current artifact based on the user's request. Preserve unre
         modelId: selectedModel.model,
         modelLabel: selectedModel.label,
         modelThinking: selectedModel.thinking,
-        mode,
+        mode: resolvedMode,
         artifactType,
         promptTokens,
         candidatesTokens,
@@ -1690,8 +1763,8 @@ Modify or extend the current artifact based on the user's request. Preserve unre
           totalTokens,
           estimatedCost,
           model: selectedModel.model,
-          generationType: isAskMode ? "ask" : "code-generation",
-          mode: mode,
+          generationType: isAskResponse ? "ask" : "code-generation",
+          mode: resolvedMode,
         });
 
         // Update aggregate usage tracking
@@ -1708,11 +1781,12 @@ Modify or extend the current artifact based on the user's request. Preserve unre
     const finalData = {
       type: "done",
       message: structuredResponse.message,
-      code: isAskMode ? "" : finalCode,
-      projectName: isAskMode ? undefined : structuredResponse.projectName,
+      code: isAskResponse ? "" : finalCode,
+      mode: resolvedMode,
+      projectName: isAskResponse ? undefined : structuredResponse.projectName,
       artifactType,
-      editMode: isAskMode ? undefined : finalEditMode,
-      changeScope: isAskMode ? undefined : finalChangeScope,
+      editMode: isAskResponse ? undefined : finalEditMode,
+      changeScope: isAskResponse ? undefined : finalChangeScope,
       version: savedVersion,
       remaining: req.workshop?.remaining,
       usage: usageSummary,

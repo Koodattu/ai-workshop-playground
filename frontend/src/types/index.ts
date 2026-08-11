@@ -8,8 +8,9 @@ export interface ChatMessage {
   failedPrompt?: string;
 }
 
-// Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)
-export type ChatMode = "edit" | "ask";
+// Auto delegates the choice; explicit modes force a code change or chat response.
+export type ChatMode = "auto" | "edit" | "ask";
+export type ResolvedChatMode = Exclude<ChatMode, "auto">;
 export type ArtifactType = "website" | "game";
 export type ChangeScope = "localized" | "cross_cutting" | "rewrite";
 
@@ -32,7 +33,7 @@ export interface GenerationUsageSummary {
   modelId: string;
   modelLabel: string;
   modelThinking?: ThinkingLevel | string | null;
-  mode: ChatMode;
+  mode: ResolvedChatMode;
   artifactType: ArtifactType;
   promptTokens: number;
   candidatesTokens: number;
@@ -68,6 +69,7 @@ export interface GenerateRequest {
 export interface GenerateResponse {
   message: string;
   code: string;
+  mode?: ResolvedChatMode;
   projectName?: string;
   artifactType?: ArtifactType;
   editMode?: "replace_all" | "patch";
@@ -206,7 +208,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; projectName?: string; artifactType?: ArtifactType; editMode?: "replace_all" | "patch"; changeScope?: ChangeScope; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
+  onDone?: (data: { message: string; code: string; mode?: ResolvedChatMode; projectName?: string; artifactType?: ArtifactType; editMode?: "replace_all" | "patch"; changeScope?: ChangeScope; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 

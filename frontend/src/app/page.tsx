@@ -251,8 +251,8 @@ export default function WorkspacePage() {
     };
   }, []);
 
-  // Chat mode state - determines if AI generates code (edit) or just answers (ask)
-  const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "edit");
+  // Auto delegates intent routing to the model; explicit modes remain hard overrides.
+  const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "auto");
   const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "balanced");
   const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>([...MODEL_PREFERENCE_PRIORITY]);
 
@@ -965,7 +965,9 @@ export default function WorkspacePage() {
                 }
               }
 
-              const finalMessage = data.message || t("chat.codeGenerated");
+              const resolvedMode = data.mode ?? (requestMode === "ask" ? "ask" : "edit");
+              const isEditResponse = resolvedMode === "edit";
+              const finalMessage = data.message || t(isEditResponse ? "chat.codeGenerated" : "chat.responseReceived");
               const finalCode = data.code;
               const projectName = data.projectName;
               const versionMeta = data.version
@@ -976,7 +978,7 @@ export default function WorkspacePage() {
                 : undefined;
 
               // In EDIT mode, update templates and code
-              if (requestMode === "edit") {
+              if (isEditResponse) {
                 // If user is in a custom template, update it instead of creating a new one
                 if (isCustomTemplateId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
@@ -1002,7 +1004,7 @@ export default function WorkspacePage() {
               }
 
               // Update states based on mode
-              if (requestMode === "edit") {
+              if (isEditResponse) {
                 setCode(finalCode);
                 // Set the snapshot to the new code so it's not dirty
                 setOriginalCodeSnapshot(finalCode);
@@ -1046,7 +1048,7 @@ export default function WorkspacePage() {
               setIsStreaming(false);
 
               // Enable preview and update it (only in EDIT mode)
-              if (requestMode === "edit") {
+              if (isEditResponse) {
                 previewControlRef.current?.enableAutoRefresh();
                 // Mobile: Switch to preview panel to see the final result (if auto-switch enabled)
                 if (autoSwitchEnabled) {
@@ -1054,7 +1056,7 @@ export default function WorkspacePage() {
                 }
               }
 
-              showToast(t("chat.codeGenerated"), "success");
+              showToast(t(isEditResponse ? "chat.codeGenerated" : "chat.responseReceived"), "success");
             },
             onError: (error, remainingUsesOnError, errorCode, details) => {
               pendingEditorChunkRef.current = "";
@@ -1077,7 +1079,7 @@ export default function WorkspacePage() {
                 }
               }
 
-              if (requestMode === "edit") {
+              if (requestMode !== "ask") {
                 codeBufferRef.current = codeBeforeGeneration;
                 setCode(codeBeforeGeneration);
 

@@ -257,6 +257,7 @@ class ApiClient {
                       callbacks.onDone?.({
                         message: event.message,
                         code: event.code,
+                        mode: event.mode,
                         projectName: event.projectName,
                         artifactType: event.artifactType,
                         editMode: event.editMode,
