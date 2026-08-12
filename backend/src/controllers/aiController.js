@@ -6,139 +6,16 @@
 const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
 const OpenAI = require("openai");
 const crypto = require("crypto");
-const mongoose = require("mongoose");
 const config = require("../config");
 const { asyncHandler, AppError } = require("../middleware/errorHandler");
 const { ERROR_CODES } = require("../constants/errorCodes");
-const RequestLog = require("../models/RequestLog");
-const Usage = require("../models/Usage");
-const CodeVersion = require("../models/CodeVersion");
 const { getAllowedModelPreference, getModelSetting, normalizeThinkingLevel } = require("../services/modelSettings");
-const { ArtifactEditError, applyArtifactEdits, validateGeneratedArtifact } = require("../services/artifactEditing");
+const { MODEL_OPTIONS } = require("../services/modelCatalog");
+const { artifactGenerationRunService } = require("../services/artifactGenerationRun");
+const { ArtifactEditError, applyArtifactEdits } = require("../services/artifactEditing");
+const { createSseArtifactGenerationAdapter } = require("../adapters/sseArtifactGeneration");
 
-const MODEL_PREFERENCES = {
-  fast: {
-    provider: "gemini",
-    model: "gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
-    shortLabel: "2.5",
-    pricing: {
-      inputPerToken: 0.0000003,
-      outputPerToken: 0.0000025,
-    },
-    thinkingOptions: ["none"],
-    defaultThinking: "none",
-    thinkingMode: "gemini-budget",
-  },
-  balanced: {
-    provider: "gemini",
-    model: "gemini-3-flash-preview",
-    label: "Gemini 3 Flash",
-    shortLabel: "3",
-    pricing: {
-      inputPerToken: 0.0000005,
-      outputPerToken: 0.000003,
-    },
-    thinkingOptions: ["low", "medium", "high"],
-    defaultThinking: "low",
-    thinkingMode: "gemini-level",
-  },
-  accurate: {
-    provider: "gemini",
-    model: "gemini-3.5-flash",
-    label: "Gemini 3.5 Flash",
-    shortLabel: "3.5",
-    pricing: {
-      inputPerToken: 0.0000015,
-      outputPerToken: 0.000009,
-    },
-    thinkingOptions: ["low", "medium", "high"],
-    defaultThinking: "low",
-    thinkingMode: "gemini-level",
-  },
-  gpt54mini: {
-    provider: "openai",
-    model: "gpt-5.4-mini",
-    label: "GPT-5.4 mini",
-    shortLabel: "5.4-mini",
-    pricing: {
-      inputPerToken: 0.75 / 1000000,
-      cachedInputPerToken: 0.075 / 1000000,
-      outputPerToken: 4.5 / 1000000,
-      longContextInputTokenThreshold: 272000,
-      longContextInputMultiplier: 2,
-      longContextOutputMultiplier: 1.5,
-    },
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
-    defaultThinking: "none",
-    thinkingMode: "openai-reasoning",
-  },
-  gpt54: {
-    provider: "openai",
-    model: "gpt-5.4",
-    label: "GPT-5.4",
-    shortLabel: "5.4",
-    pricing: {
-      inputPerToken: 2.5 / 1000000,
-      cachedInputPerToken: 0.25 / 1000000,
-      outputPerToken: 15 / 1000000,
-      longContextInputTokenThreshold: 272000,
-      longContextInputMultiplier: 2,
-      longContextOutputMultiplier: 1.5,
-    },
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
-    defaultThinking: "none",
-    thinkingMode: "openai-reasoning",
-  },
-  gpt55: {
-    provider: "openai",
-    model: "gpt-5.5",
-    label: "GPT-5.5",
-    shortLabel: "5.5",
-    pricing: {
-      inputPerToken: 5 / 1000000,
-      cachedInputPerToken: 0.5 / 1000000,
-      outputPerToken: 30 / 1000000,
-      longContextInputTokenThreshold: 272000,
-      longContextInputMultiplier: 2,
-      longContextOutputMultiplier: 1.5,
-    },
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
-    defaultThinking: "medium",
-    thinkingMode: "openai-reasoning",
-  },
-  gpt56luna: {
-    provider: "openai",
-    model: "gpt-5.6-luna",
-    label: "GPT-5.6 Luna",
-    shortLabel: "5.6 Luna",
-    pricing: {
-      inputPerToken: 1 / 1000000,
-      cachedInputPerToken: 0.1 / 1000000,
-      outputPerToken: 6 / 1000000,
-      longContextInputTokenThreshold: 272000,
-      longContextInputMultiplier: 2,
-      longContextOutputMultiplier: 1.5,
-    },
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh", "max"],
-    defaultThinking: "medium",
-    thinkingMode: "openai-reasoning",
-  },
-  deepseekv4flash: {
-    provider: "deepseek",
-    model: "deepseek-v4-flash",
-    label: "DeepSeek V4 Flash",
-    shortLabel: "V4 Flash",
-    pricing: {
-      inputPerToken: 0.14 / 1000000,
-      cachedInputPerToken: 0.0028 / 1000000,
-      outputPerToken: 0.28 / 1000000,
-    },
-    thinkingOptions: ["none", "high", "max"],
-    defaultThinking: "high",
-    thinkingMode: "deepseek-thinking",
-  },
-};
+const MODEL_PREFERENCES = MODEL_OPTIONS;
 
 const DEFAULT_MODEL_PREFERENCE = "balanced";
 const SSE_CODE_CHUNK_FLUSH_CHARS = 1024;
@@ -197,48 +74,9 @@ function createCodeChunkSseBuffer(sendSse, { onFlush } = {}) {
   };
 }
 
-/**
- * Calculate estimated cost in cents based on token usage
- */
-function calculateCostInCents(promptTokens, billableOutputTokens, pricing, cachedTokens = 0) {
-  const normalizedCachedTokens = Math.min(Math.max(cachedTokens || 0, 0), promptTokens || 0);
-  const uncachedInputTokens = Math.max(0, (promptTokens || 0) - normalizedCachedTokens);
-  const cachedInputPerToken = pricing.cachedInputPerToken ?? pricing.inputPerToken;
-  const usesLongContextRate =
-    pricing.longContextInputTokenThreshold && promptTokens > pricing.longContextInputTokenThreshold;
-  const inputMultiplier = usesLongContextRate ? pricing.longContextInputMultiplier || 1 : 1;
-  const outputMultiplier = usesLongContextRate ? pricing.longContextOutputMultiplier || 1 : 1;
-
-  const inputCost = (uncachedInputTokens * pricing.inputPerToken + normalizedCachedTokens * cachedInputPerToken) * inputMultiplier;
-  const outputCost = (billableOutputTokens || 0) * pricing.outputPerToken * outputMultiplier;
-  const totalCostDollars = inputCost + outputCost;
-  return totalCostDollars * 100; // Convert to cents
-}
-
 function countLines(text) {
   if (!text) return 0;
   return normalizeLineEndings(text).split("\n").length;
-}
-
-function getCodeChangeSummary({ mode, hasExistingCode, existingCode, finalCode, finalEdits }) {
-  if (mode === "ask") {
-    return { addedLines: 0, removedLines: 0 };
-  }
-
-  if (Array.isArray(finalEdits) && finalEdits.length > 0) {
-    return finalEdits.reduce(
-      (summary, edit) => ({
-        addedLines: summary.addedLines + countLines(edit.newText),
-        removedLines: summary.removedLines + countLines(edit.oldText),
-      }),
-      { addedLines: 0, removedLines: 0 },
-    );
-  }
-
-  return {
-    addedLines: countLines(finalCode),
-    removedLines: hasExistingCode ? countLines(existingCode) : 0,
-  };
 }
 
 function redactSecretLikeText(value) {
@@ -322,40 +160,6 @@ function previewText(text, maxLength = 600) {
 
 function normalizeLineEndings(text) {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-}
-
-function getVersionOwnerFilter(workshop) {
-  if (workshop?.authMode === "api-key") {
-    return {
-      visitorId: workshop.visitorId,
-      accessMode: "api-key",
-      ownerTokenHash: workshop.ownerTokenHash,
-    };
-  }
-
-  return {
-    visitorId: workshop.visitorId,
-    accessMode: { $ne: "api-key" },
-  };
-}
-
-async function resolveParentVersion(parentVersionId, workshop) {
-  if (!parentVersionId) return null;
-
-  if (!mongoose.Types.ObjectId.isValid(parentVersionId)) {
-    throw new AppError("Invalid parent version ID", 400, ERROR_CODES.INVALID_OBJECT_ID);
-  }
-
-  const parentVersion = await CodeVersion.findOne({
-    _id: parentVersionId,
-    ...getVersionOwnerFilter(workshop),
-  });
-
-  if (!parentVersion) {
-    throw new AppError("Parent version not found", 404, ERROR_CODES.INVALID_OBJECT_ID);
-  }
-
-  return parentVersion;
 }
 
 /**
@@ -1134,7 +938,14 @@ const generateCode = asyncHandler(async (req, res) => {
   const hasExistingCode = Boolean(existingCode && existingCode.trim());
   const allowCodeStreaming = !isForcedAskMode;
   const isApiKeyMode = req.workshop?.authMode === "api-key";
-  const apiKeys = isApiKeyMode ? req.apiKeyAuth?.apiKeys || {} : null;
+  const providerAuthorization = req.workshopAccessGrant?.providerAuthorization;
+  const apiKeys = isApiKeyMode
+    ? {
+        gemini: providerAuthorization?.get("gemini") || "",
+        openai: providerAuthorization?.get("openai") || "",
+        deepseek: providerAuthorization?.get("deepseek") || "",
+      }
+    : null;
   const selectedModel = await getModelPreference(modelPreference, { restrictToEnabled: !isApiKeyMode });
   const requestId = crypto.randomUUID();
 
@@ -1163,35 +974,9 @@ const generateCode = asyncHandler(async (req, res) => {
     throw new AppError("DeepSeek API key not configured", 500, ERROR_CODES.API_KEY_NOT_CONFIGURED);
   }
 
-  // Set up SSE headers
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "X-Accel-Buffering": "no",
-  });
-  res.flushHeaders?.();
-
-  const heartbeat = setInterval(() => {
-    if (!res.destroyed && !res.writableEnded) {
-      res.write(": keep-alive\n\n");
-    }
-  }, 15000);
-
-  const sendSse = (data) => {
-    if (!res.destroyed && !res.writableEnded) {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    }
-  };
-
-  const endSse = () => {
-    clearInterval(heartbeat);
-    if (!res.destroyed && !res.writableEnded) {
-      res.end();
-    }
-  };
-
-  req.once("close", () => clearInterval(heartbeat));
+  const transport = createSseArtifactGenerationAdapter(req, res);
+  const sendSse = transport.send;
+  const endSse = transport.close;
 
   let accumulatedText = "";
   let codeStarted = false;
@@ -1598,15 +1383,7 @@ ${responseMode === "ask" ? "Answer the request without changing the artifact." :
         finalCode = structuredResponse.code;
       }
 
-      try {
-        validateGeneratedArtifact(finalCode);
-      } catch (validationError) {
-        if (!(validationError instanceof ArtifactEditError)) throw validationError;
-
-        const safeError = new AppError("AI returned code that could not be validated safely.", 500, ERROR_CODES.AI_EDIT_UNSAFE);
-        safeError.details = [validationError.retryFeedback];
-        throw safeError;
-      }
+      artifactGenerationRunService.validate(finalCode);
     }
 
     // Ensure code-complete was sent for EDIT mode (handles edge case where stream ends abruptly)
@@ -1630,152 +1407,28 @@ ${responseMode === "ask" ? "Answer the request without changing the artifact." :
     const finalMessage = structuredResponse.message;
     sendSse({ type: "message-complete", message: finalMessage });
 
-    if (!isAskResponse && req.workshop?.visitorId) {
-      const parentVersion = await resolveParentVersion(parentVersionId, req.workshop);
-      const manualEditsSinceParent = Boolean(parentVersion && existingCode && parentVersion.code !== existingCode);
-      const version = await CodeVersion.create({
-        visitorId: req.workshop.visitorId,
-        passwordId: req.workshop.passwordId || null,
-        accessMode: isApiKeyMode ? "api-key" : "password",
-        ownerTokenHash: isApiKeyMode ? req.workshop.ownerTokenHash : null,
-        parentVersionId: parentVersion?._id || null,
-        rootVersionId: parentVersion?.rootVersionId || parentVersion?._id || null,
-        code: finalCode,
+    const completion = await artifactGenerationRunService.finish({
+      grant: req.workshopAccessGrant,
+      parentVersionId,
+      existingCode,
+      generation: {
+        mode: resolvedMode,
+        code: isAskResponse ? "" : finalCode,
         prompt,
         message: structuredResponse.message,
-        projectName: structuredResponse.projectName || null,
+        projectName: isAskResponse ? undefined : structuredResponse.projectName,
         artifactType,
-        modelProvider: selectedModel.provider,
-        modelPreference: selectedModel.id,
-        modelId: selectedModel.model,
-        modelLabel: selectedModel.label,
-        modelShortLabel: selectedModel.shortLabel,
-        modelThinking: selectedModel.thinking,
-        editMode: finalEditMode,
-        changeScope: finalChangeScope,
-        editCount: finalEdits.length,
-        edits: finalEdits,
+        editMode: isAskResponse ? undefined : finalEditMode,
+        changeScope: isAskResponse ? undefined : finalChangeScope,
+        edits: isAskResponse ? [] : finalEdits,
         patchRetryAttempted,
         patchApplyMethod,
-        manualEditsSinceParent,
-      });
-
-      if (!version.rootVersionId) {
-        version.rootVersionId = version._id;
-        await version.save();
-      }
-
-      savedVersion = {
-        id: version._id.toString(),
-        visitorId: version.visitorId,
-        passwordId: version.passwordId?.toString() || null,
-        accessMode: version.accessMode,
-        parentVersionId: version.parentVersionId?.toString() || null,
-        rootVersionId: version.rootVersionId?.toString() || null,
-        code: version.code,
-        prompt: version.prompt,
-        message: version.message,
-        projectName: version.projectName,
-        artifactType: version.artifactType || "website",
-        modelProvider: version.modelProvider,
-        modelPreference: version.modelPreference,
-        modelId: version.modelId,
-        modelLabel: version.modelLabel,
-        modelShortLabel: version.modelShortLabel,
-        modelThinking: version.modelThinking,
-        editMode: version.editMode,
-        changeScope: version.changeScope,
-        editCount: version.editCount,
-        edits: version.edits,
-        patchRetryAttempted: version.patchRetryAttempted,
-        patchApplyMethod: version.patchApplyMethod,
-        manualEditsSinceParent: version.manualEditsSinceParent,
-        createdAt: version.createdAt,
-        updatedAt: version.updatedAt,
-      };
-    }
-
-    let usageSummary = null;
-
-    // Get token usage metadata from the stream
-    try {
-      const usageMetadata = latestUsageMetadata || {};
-
-      // Extract token counts with fallbacks
-      const promptTokens = usageMetadata.promptTokenCount || 0;
-      const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
-      const thoughtsTokens = usageMetadata.thoughtsTokenCount || 0;
-      const cachedTokens = usageMetadata.cachedContentTokenCount || 0;
-      const totalTokens = usageMetadata.totalTokenCount || promptTokens + candidatesTokens + thoughtsTokens;
-      const billableOutputTokens = candidatesTokens + thoughtsTokens;
-
-      // Calculate estimated cost in cents
-      const estimatedCost = calculateCostInCents(promptTokens, billableOutputTokens, selectedModel.pricing, cachedTokens);
-      const codeChange = getCodeChangeSummary({
-        mode: resolvedMode,
-        hasExistingCode,
-        existingCode,
-        finalCode,
-        finalEdits,
-      });
-
-      usageSummary = {
-        provider: selectedModel.provider,
-        modelPreference: selectedModel.id,
-        modelId: selectedModel.model,
-        modelLabel: selectedModel.label,
-        modelThinking: selectedModel.thinking,
-        mode: resolvedMode,
-        artifactType,
-        promptTokens,
-        candidatesTokens,
-        thoughtsTokens,
-        cachedTokens,
-        totalTokens,
-        estimatedCost,
-        addedLines: codeChange.addedLines,
-        removedLines: codeChange.removedLines,
-        createdAt: new Date().toISOString(),
-      };
-
-      console.log(
-        `[Token Usage] Model: ${selectedModel.model}, Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Thoughts: ${thoughtsTokens}, Total: ${totalTokens}, Cost: ${estimatedCost.toFixed(6)} cents`,
-      );
-
-      // Log request to RequestLog and update Usage if we have usage data from workshopGuard
-      if (req.workshop && req.workshop.passwordId && req.workshop.visitorId) {
-        const tokenData = {
-          promptTokens,
-          candidatesTokens,
-          thoughtsTokens,
-          totalTokens,
-          estimatedCost,
-        };
-
-        // Log the request details
-        await RequestLog.logRequest({
-          passwordId: req.workshop.passwordId,
-          visitorId: req.workshop.visitorId,
-          promptTokens,
-          candidatesTokens,
-          thoughtsTokens,
-          cachedTokens,
-          totalTokens,
-          estimatedCost,
-          model: selectedModel.model,
-          generationType: isAskResponse ? "ask" : "code-generation",
-          mode: resolvedMode,
-        });
-
-        // Update aggregate usage tracking
-        await Usage.trackTokenUsage(req.workshop.passwordId, req.workshop.visitorId, tokenData);
-
-        console.log(`[Token Tracking] Logged request for visitor ${req.workshop.visitorId}`);
-      }
-    } catch (tokenError) {
-      // Log the error but don't fail the request - token tracking is non-critical
-      console.error("[Token Tracking Error] Failed to log token usage:", tokenError.message);
-    }
+      },
+      model: selectedModel,
+      usageMetadata: latestUsageMetadata || {},
+    });
+    savedVersion = completion.version;
+    const usageSummary = completion.usage;
 
     // Send the final complete response
     const finalData = {

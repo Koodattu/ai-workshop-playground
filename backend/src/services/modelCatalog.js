@@ -1,0 +1,192 @@
+const MODEL_OPTIONS = {
+  fast: {
+    provider: "gemini",
+    model: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    adminLabel: "Gemini Fast",
+    shortLabel: "2.5",
+    description: "Gemini 2.5 Flash - cheapest and fastest Gemini option",
+    translationKey: "chat.modelGemini25",
+    pricing: {
+      inputPerToken: 0.0000003,
+      outputPerToken: 0.0000025,
+    },
+    thinkingOptions: ["none"],
+    defaultThinking: "none",
+    thinkingMode: "gemini-budget",
+    defaultEnabled: true,
+  },
+  balanced: {
+    provider: "gemini",
+    model: "gemini-3-flash-preview",
+    label: "Gemini 3 Flash",
+    adminLabel: "Gemini Balanced",
+    shortLabel: "3",
+    description: "Gemini 3 Flash - balanced cost and quality",
+    translationKey: "chat.modelGemini3",
+    pricing: {
+      inputPerToken: 0.0000005,
+      outputPerToken: 0.000003,
+    },
+    thinkingOptions: ["low", "medium", "high"],
+    defaultThinking: process.env.GEMINI_THINKING_LEVEL || "low",
+    thinkingMode: "gemini-level",
+    defaultEnabled: true,
+  },
+  accurate: {
+    provider: "gemini",
+    model: "gemini-3.5-flash",
+    label: "Gemini 3.5 Flash",
+    adminLabel: "Gemini Premium",
+    shortLabel: "3.5",
+    description: "Gemini 3.5 Flash - highest-cost Gemini option",
+    translationKey: "chat.modelGemini35",
+    pricing: {
+      inputPerToken: 0.0000015,
+      outputPerToken: 0.000009,
+    },
+    thinkingOptions: ["low", "medium", "high"],
+    defaultThinking: process.env.GEMINI_THINKING_LEVEL || "low",
+    thinkingMode: "gemini-level",
+    defaultEnabled: true,
+  },
+  gpt54mini: {
+    provider: "openai",
+    model: "gpt-5.4-mini",
+    label: "GPT-5.4 mini",
+    adminLabel: "OpenAI Fast",
+    shortLabel: "5.4-mini",
+    description: "GPT-5.4 mini - cheapest and fastest OpenAI option",
+    translationKey: "chat.modelGpt54Mini",
+    pricing: {
+      inputPerToken: 0.75 / 1000000,
+      cachedInputPerToken: 0.075 / 1000000,
+      outputPerToken: 4.5 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
+    defaultThinking: "none",
+    thinkingMode: "openai-reasoning",
+    defaultEnabled: false,
+  },
+  gpt54: {
+    provider: "openai",
+    model: "gpt-5.4",
+    label: "GPT-5.4",
+    adminLabel: "OpenAI Balanced",
+    shortLabel: "5.4",
+    description: "GPT-5.4 - OpenAI tier comparable to Gemini 3",
+    translationKey: "chat.modelGpt54",
+    pricing: {
+      inputPerToken: 2.5 / 1000000,
+      cachedInputPerToken: 0.25 / 1000000,
+      outputPerToken: 15 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
+    defaultThinking: "none",
+    thinkingMode: "openai-reasoning",
+    defaultEnabled: false,
+  },
+  gpt55: {
+    provider: "openai",
+    model: "gpt-5.5",
+    label: "GPT-5.5",
+    adminLabel: "OpenAI Premium",
+    shortLabel: "5.5",
+    description: "GPT-5.5 - highest-cost OpenAI option",
+    translationKey: "chat.modelGpt55",
+    pricing: {
+      inputPerToken: 5 / 1000000,
+      cachedInputPerToken: 0.5 / 1000000,
+      outputPerToken: 30 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
+    defaultThinking: "medium",
+    thinkingMode: "openai-reasoning",
+    defaultEnabled: false,
+  },
+  gpt56luna: {
+    provider: "openai",
+    model: "gpt-5.6-luna",
+    label: "GPT-5.6 Luna",
+    adminLabel: "OpenAI Efficient",
+    shortLabel: "5.6 Luna",
+    description: "GPT-5.6 Luna - cost-efficient, high-volume OpenAI model",
+    translationKey: "chat.modelGpt56Luna",
+    pricing: {
+      inputPerToken: 1 / 1000000,
+      cachedInputPerToken: 0.1 / 1000000,
+      outputPerToken: 6 / 1000000,
+      longContextInputTokenThreshold: 272000,
+      longContextInputMultiplier: 2,
+      longContextOutputMultiplier: 1.5,
+    },
+    thinkingOptions: ["none", "low", "medium", "high", "xhigh", "max"],
+    defaultThinking: "medium",
+    thinkingMode: "openai-reasoning",
+    defaultEnabled: false,
+  },
+  deepseekv4flash: {
+    provider: "deepseek",
+    model: "deepseek-v4-flash",
+    label: "DeepSeek V4 Flash",
+    adminLabel: "DeepSeek Fast",
+    shortLabel: "V4 Flash",
+    description: "DeepSeek V4 Flash - official DeepSeek API",
+    translationKey: "chat.modelDeepSeekV4Flash",
+    pricing: {
+      inputPerToken: 0.14 / 1000000,
+      cachedInputPerToken: 0.0028 / 1000000,
+      outputPerToken: 0.28 / 1000000,
+    },
+    thinkingOptions: ["none", "high", "max"],
+    defaultThinking: "high",
+    thinkingMode: "deepseek-thinking",
+    defaultEnabled: false,
+  },
+};
+
+const MODEL_OPTION_IDS = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55", "gpt56luna", "deepseekv4flash"];
+
+function getModelOption(id) {
+  return MODEL_OPTIONS[id] || null;
+}
+
+function getPublicModelCatalog(settings = {}) {
+  return MODEL_OPTION_IDS.map((id, order) => {
+    const option = MODEL_OPTIONS[id];
+    const setting = settings[id] || {};
+
+    return {
+      id,
+      order,
+      provider: option.provider,
+      model: option.model,
+      label: option.label,
+      adminLabel: option.adminLabel,
+      shortLabel: option.shortLabel,
+      description: option.description,
+      translationKey: option.translationKey,
+      pricing: { ...option.pricing },
+      thinkingOptions: [...option.thinkingOptions],
+      defaultThinking: option.defaultThinking,
+      thinking: setting.thinking || option.defaultThinking,
+      enabled: setting.enabled ?? option.defaultEnabled,
+    };
+  });
+}
+
+module.exports = {
+  MODEL_OPTIONS,
+  MODEL_OPTION_IDS,
+  getModelOption,
+  getPublicModelCatalog,
+};

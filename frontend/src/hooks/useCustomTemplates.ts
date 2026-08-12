@@ -13,15 +13,12 @@ interface UseCustomTemplatesReturn {
   removeTemplate: (id: string) => void;
   /** Get a custom template by id */
   getTemplate: (id: string) => CustomTemplate | undefined;
-  /** Check if an id belongs to a custom template */
-  isCustomTemplateId: (id: string) => boolean;
   /** Generate a unique custom template id */
   generateId: () => string;
 }
 
 interface VersionMeta {
   currentVersionId?: string | null;
-  rootVersionId?: string | null;
 }
 
 /**
@@ -55,11 +52,6 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
     return `${CUSTOM_TEMPLATE_CONFIG.ID_PREFIX}${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }, []);
 
-  /** Check if an id belongs to a custom template */
-  const isCustomTemplateId = useCallback((id: string): boolean => {
-    return id.startsWith(CUSTOM_TEMPLATE_CONFIG.ID_PREFIX);
-  }, []);
-
   /** Get a custom template by id */
   const getTemplate = useCallback(
     (id: string): CustomTemplate | undefined => {
@@ -82,7 +74,6 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
         artifactType,
         projectName,
         currentVersionId: versionMeta?.currentVersionId || null,
-        rootVersionId: versionMeta?.rootVersionId || null,
         createdAt: now,
         updatedAt: now,
       };
@@ -121,7 +112,6 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
               ...(versionMeta
                 ? {
                     currentVersionId: versionMeta.currentVersionId ?? t.currentVersionId ?? null,
-                    rootVersionId: versionMeta.rootVersionId ?? t.rootVersionId ?? null,
                   }
                 : {}),
               updatedAt: Date.now(),
@@ -147,7 +137,6 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
     updateTemplate,
     removeTemplate,
     getTemplate,
-    isCustomTemplateId,
     generateId,
   };
 }

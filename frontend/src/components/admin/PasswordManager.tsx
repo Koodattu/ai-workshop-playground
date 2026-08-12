@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
-import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel } from "@/types";
+import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel, ModelOption } from "@/types";
 
 // ============================================================================
 // TYPES
@@ -942,20 +942,10 @@ const CodeVersionsTab = ({ versions, t }: CodeVersionsTabProps) => {
 
 interface ModelSettingsTabProps {
   modelSettings: ModelSettings;
+  modelOptions: ModelOption[];
   isSaving: boolean;
   onChange: (model: ModelPreference, nextSetting: ModelSettings[ModelPreference]) => Promise<void>;
 }
-
-const DEFAULT_MODEL_SETTINGS: ModelSettings = {
-  fast: { enabled: true, thinking: "none" },
-  balanced: { enabled: true, thinking: "low" },
-  accurate: { enabled: true, thinking: "low" },
-  gpt54mini: { enabled: false, thinking: "none" },
-  gpt54: { enabled: false, thinking: "none" },
-  gpt55: { enabled: false, thinking: "medium" },
-  gpt56luna: { enabled: false, thinking: "medium" },
-  deepseekv4flash: { enabled: false, thinking: "high" },
-};
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
   none: "None",
@@ -966,18 +956,7 @@ const THINKING_LABELS: Record<ThinkingLevel, string> = {
   max: "Maximum",
 };
 
-const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTabProps) => {
-  const models: Array<{ id: ModelPreference; label: string; description: string; thinkingOptions: ThinkingLevel[] }> = [
-    { id: "balanced", label: "Gemini Balanced", description: "Gemini 3 Flash - balanced cost and quality", thinkingOptions: ["low", "medium", "high"] },
-    { id: "fast", label: "Gemini Fast", description: "Gemini 2.5 Flash - cheapest and fastest Gemini option", thinkingOptions: ["none"] },
-    { id: "accurate", label: "Gemini Premium", description: "Gemini 3.5 Flash - highest-cost Gemini option", thinkingOptions: ["low", "medium", "high"] },
-    { id: "gpt54mini", label: "OpenAI Fast", description: "GPT-5.4 mini - cheapest and fastest OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
-    { id: "gpt54", label: "OpenAI Balanced", description: "GPT-5.4 - OpenAI tier comparable to Gemini 3", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
-    { id: "gpt55", label: "OpenAI Premium", description: "GPT-5.5 - highest-cost OpenAI option", thinkingOptions: ["none", "low", "medium", "high", "xhigh"] },
-    { id: "gpt56luna", label: "OpenAI Efficient", description: "GPT-5.6 Luna - cost-efficient, high-volume OpenAI model", thinkingOptions: ["none", "low", "medium", "high", "xhigh", "max"] },
-    { id: "deepseekv4flash", label: "DeepSeek Fast", description: "DeepSeek V4 Flash - official DeepSeek API", thinkingOptions: ["none", "high", "max"] },
-  ];
-
+const ModelSettingsTab = ({ modelSettings, modelOptions, isSaving, onChange }: ModelSettingsTabProps) => {
   return (
     <div className="space-y-4 animate-fade-in">
       <div>
@@ -986,8 +965,8 @@ const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTa
       </div>
 
       <div className="grid gap-3">
-        {models.map((model) => {
-          const setting = modelSettings[model.id] || DEFAULT_MODEL_SETTINGS[model.id];
+        {modelOptions.map((model) => {
+          const setting = modelSettings[model.id] || { enabled: model.enabled, thinking: model.thinking };
           const isEnabled = setting.enabled;
 
           return (
@@ -1000,12 +979,12 @@ const ModelSettingsTab = ({ modelSettings, isSaving, onChange }: ModelSettingsTa
               `}
             >
               <div>
-                <p className={`font-display text-sm font-semibold ${isEnabled ? "text-electric" : "text-white"}`}>{model.label}</p>
+                <p className={`font-display text-sm font-semibold ${isEnabled ? "text-electric" : "text-white"}`}>{model.adminLabel}</p>
                 <p className="mt-1 text-xs font-mono text-gray-500">{model.description}</p>
               </div>
               <div className="flex items-center gap-2">
                 <label className="sr-only" htmlFor={`thinking-${model.id}`}>
-                  Thinking level for {model.label}
+                  Thinking level for {model.adminLabel}
                 </label>
                 <select
                   id={`thinking-${model.id}`}
@@ -1048,7 +1027,7 @@ const fetchPasswordManagerData = async (adminSecret: string, activityPeriod: Act
     "30d": 200,
   };
 
-  const [systemStats, passwords, usage, recentRequests, shareLinks, codeVersions, modelSettings] = await Promise.all([
+  const [systemStats, passwords, usage, recentRequests, shareLinks, codeVersions, modelSettings, modelOptions] = await Promise.all([
     api.getSystemStats(adminSecret),
     api.getPasswords(adminSecret),
     api.getUsageStats(adminSecret),
@@ -1056,9 +1035,10 @@ const fetchPasswordManagerData = async (adminSecret: string, activityPeriod: Act
     api.getShareLinks(adminSecret),
     api.getCodeVersions(adminSecret),
     api.getModelSettings(adminSecret),
+    api.getModelCatalog(),
   ]);
 
-  return { systemStats, passwords, usage, recentRequests, shareLinks, codeVersions, modelSettings };
+  return { systemStats, passwords, usage, recentRequests, shareLinks, codeVersions, modelSettings, modelOptions };
 };
 
 export function PasswordManager({ adminSecret }: PasswordManagerProps) {
@@ -1074,7 +1054,8 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   const [recentRequests, setRecentRequests] = useState<RequestLogEntry[]>([]);
   const [shareLinks, setShareLinks] = useState<ShareLinkEntry[]>([]);
   const [codeVersions, setCodeVersions] = useState<CodeVersion[]>([]);
-  const [modelSettings, setModelSettings] = useState<ModelSettings>(DEFAULT_MODEL_SETTINGS);
+  const [modelSettings, setModelSettings] = useState<ModelSettings>({});
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
   const [passwordStats, setPasswordStats] = useState<Map<string, PasswordDetailedStats>>(new Map());
 
   // Single unified loading state for initial data load
@@ -1115,6 +1096,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       setShareLinks(data.shareLinks);
       setCodeVersions(data.codeVersions);
       setModelSettings(data.modelSettings);
+      setModelOptions(data.modelOptions);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : t("api.dataFetchError"));
     } finally {
@@ -1154,6 +1136,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
         setShareLinks(data.shareLinks);
         setCodeVersions(data.codeVersions);
         setModelSettings(data.modelSettings);
+        setModelOptions(data.modelOptions);
       })
       .catch((error: unknown) => {
         if (!ignore) {
@@ -1383,7 +1366,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
         {activeTab === "activity" && <ActivityTab recentRequests={recentRequests} period={activityPeriod} setPeriod={handleActivityPeriodChange} t={t} />}
 
-        {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} isSaving={isSavingModelSettings} onChange={handleChangeModelSetting} />}
+        {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} modelOptions={modelOptions} isSaving={isSavingModelSettings} onChange={handleChangeModelSetting} />}
 
         {activeTab === "shares" && <ShareLinksTab shareLinks={shareLinks} t={t} />}
 

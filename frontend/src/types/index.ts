@@ -14,11 +14,35 @@ export type ResolvedChatMode = Exclude<ChatMode, "auto">;
 export type ArtifactType = "website" | "game";
 export type ChangeScope = "localized" | "cross_cutting" | "rewrite";
 
-// AI model preference sent as a symbolic value; backend maps it to provider model IDs.
-export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55" | "gpt56luna" | "deepseekv4flash";
+// Stable Model Option identity supplied by the backend Model Catalog.
+export type ModelPreference = string;
 export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AuthMode = "password" | "api-key";
 export type ApiKeyProvider = "gemini" | "openai" | "deepseek";
+
+export interface ModelOption {
+  id: ModelPreference;
+  order: number;
+  provider: ApiKeyProvider;
+  model: string;
+  label: string;
+  adminLabel: string;
+  shortLabel: string;
+  description: string;
+  translationKey: string;
+  pricing: {
+    inputPerToken: number;
+    cachedInputPerToken?: number;
+    outputPerToken: number;
+    longContextInputTokenThreshold?: number;
+    longContextInputMultiplier?: number;
+    longContextOutputMultiplier?: number;
+  };
+  thinkingOptions: ThinkingLevel[];
+  defaultThinking: ThinkingLevel;
+  thinking: ThinkingLevel;
+  enabled: boolean;
+}
 
 export interface UserApiKeySettings {
   gemini: string;
@@ -227,18 +251,22 @@ export interface PreviewRuntimeIssue {
   column?: number;
 }
 
-// Custom template interface for user-created templates
-export interface CustomTemplate {
+// A user-owned artifact persisted in the browser Artifact Library.
+export interface SavedArtifact {
   id: string;
   name: string;
   code: string;
   artifactType?: ArtifactType;
   projectName?: string; // LLM-provided project name
   currentVersionId?: string | null; // latest AI version for this creation
-  rootVersionId?: string | null; // root version tree for this creation
+  /** @deprecated Lineage roots are resolved by the Artifact Version Lineage service. */
+  rootVersionId?: string | null;
   createdAt: number; // timestamp for sorting/deletion
   updatedAt: number; // timestamp for tracking last modification
 }
+
+/** @deprecated Use SavedArtifact. Kept for local-storage and component compatibility. */
+export type CustomTemplate = SavedArtifact;
 
 // Configuration for custom template management
 export const CUSTOM_TEMPLATE_CONFIG = {
@@ -350,8 +378,8 @@ export interface TimeSeriesResponse {
   dataPoints: TimeSeriesDataPoint[];
 }
 
-// Shared template interface for templates loaded from share links
-export interface SharedTemplate {
+// An immutable artifact loaded from a share link.
+export interface SharedArtifact {
   id: string; // local id (shared-{timestamp})
   shareId: string; // the 4-letter share code from the server
   code: string;
@@ -360,6 +388,9 @@ export interface SharedTemplate {
   artifactType?: ArtifactType;
   loadedAt: number; // timestamp when loaded
 }
+
+/** @deprecated Use SharedArtifact. Kept for local-storage and component compatibility. */
+export type SharedTemplate = SharedArtifact;
 
 // Configuration for shared template management
 export const SHARED_TEMPLATE_CONFIG = {

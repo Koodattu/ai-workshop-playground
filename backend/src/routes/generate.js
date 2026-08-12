@@ -6,22 +6,13 @@
 const express = require("express");
 const { body } = require("express-validator");
 const { generateCode } = require("../controllers/aiController");
-const workshopGuard = require("../middleware/workshopGuard");
-const { apiKeyAuth } = require("../middleware/apiKeyAuth");
+const { grantGenerationAccess } = require("../middleware/workshopAccessAdapter");
 const validateRequest = require("../middleware/validateRequest");
 const { ERROR_CODES } = require("../constants/errorCodes");
 const { MODEL_PREFERENCE_IDS } = require("../services/modelSettings");
 
 const router = express.Router();
 const isApiKeyMode = (value, { req }) => req.body.authMode === "api-key";
-
-const generationAuth = (req, res, next) => {
-  if (req.body.authMode === "api-key") {
-    return apiKeyAuth(req, res, next);
-  }
-
-  return workshopGuard(req, res, next);
-};
 
 /**
  * Custom validator that attaches error code to validation error
@@ -129,7 +120,7 @@ router.post(
       .withMessage({ msg: "Model preference is invalid", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     validateRequest,
   ],
-  generationAuth,
+  grantGenerationAccess,
   generateCode,
 );
 

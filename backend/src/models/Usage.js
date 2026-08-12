@@ -58,36 +58,40 @@ const usageSchema = new mongoose.Schema(
 // Compound index for efficient lookups and uniqueness
 usageSchema.index({ passwordId: 1, visitorId: 1 }, { unique: true });
 
-// Static method to increment usage and check limit, optionally with token data
-usageSchema.statics.incrementUsage = async function (passwordId, visitorId, maxUses, tokenData = null) {
-  const updateOps = { $inc: { useCount: 1 } };
-
-  // Add token tracking if provided
-  if (tokenData) {
-    if (tokenData.promptTokens) {
-      updateOps.$inc.totalPromptTokens = tokenData.promptTokens;
-    }
-    if (tokenData.candidatesTokens) {
-      updateOps.$inc.totalCandidatesTokens = tokenData.candidatesTokens;
-    }
-    if (tokenData.thoughtsTokens) {
-      updateOps.$inc.totalThoughtsTokens = tokenData.thoughtsTokens;
-    }
-    if (tokenData.totalTokens) {
-      updateOps.$inc.totalTokens = tokenData.totalTokens;
-    }
-    if (tokenData.estimatedCost) {
-      updateOps.$inc.estimatedCost = tokenData.estimatedCost;
-    }
-  }
-
-  const usage = await this.findOneAndUpdate({ passwordId, visitorId }, updateOps, { returnDocument: "after", upsert: true, setDefaultsOnInsert: true });
-
-  return {
-    usage,
-    withinLimit: usage.useCount <= maxUses,
-    remaining: Math.max(0, maxUses - usage.useCount),
+// Atomically consumes one generation use only when quota remains.
+usageSchema.statics.consumeWithinLimit = async function (passwordId, visitorId, maxUses) {
+  const filter = {
+    passwordId,
+    visitorId,
+    $or: [{ useCount: { $lt: maxUses } }, { useCount: { $exists: false } }],
   };
+  const update = {
+    $inc: { useCount: 1 },
+    $setOnInsert: { passwordId, visitorId },
+  };
+
+  try {
+    const usage = await this.findOneAndUpdate(filter, update, { returnDocument: "after", upsert: true, setDefaultsOnInsert: true });
+
+    if (!usage) return null;
+
+    return {
+      usage,
+      remaining: Math.max(0, maxUses - usage.useCount),
+    };
+  } catch (error) {
+    if (error?.code === 11000) {
+      // A concurrent first use may win the upsert. Retry against that record
+      // without upserting so remaining quota can still be consumed.
+      const usage = await this.findOneAndUpdate(filter, { $inc: { useCount: 1 } }, { returnDocument: "after" });
+      if (!usage) return null;
+      return {
+        usage,
+        remaining: Math.max(0, maxUses - usage.useCount),
+      };
+    }
+    throw error;
+  }
 };
 
 // Static method to get usage without incrementing

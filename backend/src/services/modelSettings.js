@@ -1,6 +1,6 @@
 const SystemSetting = require("../models/SystemSetting");
+const { MODEL_OPTIONS, MODEL_OPTION_IDS } = require("./modelCatalog");
 
-const MODEL_PREFERENCE_IDS = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55", "gpt56luna", "deepseekv4flash"];
 const THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh", "max"];
 const MODEL_SETTINGS_KEY = "model-settings";
 
@@ -9,52 +9,20 @@ const THINKING_ALIASES = {
   minimal: "low",
 };
 
-const MODEL_DEFAULTS = {
-  fast: {
-    enabled: true,
-    thinking: "none",
-    thinkingOptions: ["none"],
-  },
-  balanced: {
-    enabled: true,
-    thinking: process.env.GEMINI_THINKING_LEVEL || "low",
-    thinkingOptions: ["low", "medium", "high"],
-  },
-  accurate: {
-    enabled: true,
-    thinking: process.env.GEMINI_THINKING_LEVEL || "low",
-    thinkingOptions: ["low", "medium", "high"],
-  },
-  gpt54mini: {
-    enabled: false,
-    thinking: "none",
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
-  },
-  gpt54: {
-    enabled: false,
-    thinking: "none",
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
-  },
-  gpt55: {
-    enabled: false,
-    thinking: "medium",
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh"],
-  },
-  gpt56luna: {
-    enabled: false,
-    thinking: "medium",
-    thinkingOptions: ["none", "low", "medium", "high", "xhigh", "max"],
-  },
-  deepseekv4flash: {
-    enabled: false,
-    thinking: "high",
-    thinkingOptions: ["none", "high", "max"],
-  },
-};
+const MODEL_DEFAULTS = Object.fromEntries(
+  MODEL_OPTION_IDS.map((id) => [
+    id,
+    {
+      enabled: MODEL_OPTIONS[id].defaultEnabled,
+      thinking: MODEL_OPTIONS[id].defaultThinking,
+      thinkingOptions: MODEL_OPTIONS[id].thinkingOptions,
+    },
+  ]),
+);
 
 // Quick runtime settings. Defaults favor existing Gemini behavior and cost savings.
 const modelSettings = Object.fromEntries(
-  MODEL_PREFERENCE_IDS.map((id) => [
+  MODEL_OPTION_IDS.map((id) => [
     id,
     {
       enabled: MODEL_DEFAULTS[id].enabled,
@@ -93,7 +61,7 @@ function normalizeModelSetting(id, setting = {}) {
 
 function normalizeModelSettings(settings = {}) {
   const normalized = {};
-  MODEL_PREFERENCE_IDS.forEach((id) => {
+  MODEL_OPTION_IDS.forEach((id) => {
     normalized[id] = normalizeModelSetting(id, settings[id] ?? modelSettings[id]);
   });
   return normalized;
@@ -118,13 +86,13 @@ async function getModelSettings() {
 
 async function getEnabledModelPreferences() {
   const settings = await getModelSettings();
-  return MODEL_PREFERENCE_IDS.filter((id) => settings[id].enabled);
+  return MODEL_OPTION_IDS.filter((id) => settings[id].enabled);
 }
 
 async function updateModelSettings(settings = {}) {
   const nextSettings = normalizeModelSettings(settings);
 
-  if (!MODEL_PREFERENCE_IDS.some((id) => nextSettings[id].enabled)) {
+  if (!MODEL_OPTION_IDS.some((id) => nextSettings[id].enabled)) {
     nextSettings.balanced.enabled = true;
   }
 
@@ -160,7 +128,8 @@ async function getAllowedModelPreference(requestedPreference, defaultPreference 
 }
 
 module.exports = {
-  MODEL_PREFERENCE_IDS,
+  MODEL_PREFERENCE_IDS: MODEL_OPTION_IDS,
+  MODEL_OPTION_IDS,
   MODEL_DEFAULTS,
   THINKING_LEVELS,
   getAllowedModelPreference,

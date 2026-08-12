@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ArtifactType, ChatMessage, ChatMode, ModelPreference } from "@/types";
+import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, ModelPreference } from "@/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -29,6 +29,7 @@ interface ChatPanelProps {
   modelPreference: ModelPreference;
   onModelPreferenceChange: (modelPreference: ModelPreference) => void;
   enabledModelPreferences: ModelPreference[];
+  modelOptions: Array<{ id: ModelPreference; order: number; provider: ApiKeyProvider; translationKey: string }>;
   onRetryMessage?: (prompt: string) => Promise<void>;
 }
 
@@ -164,6 +165,7 @@ export function ChatPanel({
   modelPreference,
   onModelPreferenceChange,
   enabledModelPreferences,
+  modelOptions,
   onRetryMessage,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
@@ -171,18 +173,11 @@ export function ChatPanel({
   const progressScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
-  const modelOptions = [
-    { value: "balanced", label: t("chat.modelGemini3") },
-    { value: "fast", label: t("chat.modelGemini25") },
-    { value: "accurate", label: t("chat.modelGemini35") },
-    { value: "gpt54mini", label: t("chat.modelGpt54Mini") },
-    { value: "gpt54", label: t("chat.modelGpt54") },
-    { value: "gpt55", label: t("chat.modelGpt55") },
-    { value: "gpt56luna", label: t("chat.modelGpt56Luna") },
-    { value: "deepseekv4flash", label: t("chat.modelDeepSeekV4Flash") },
-  ] satisfies Array<{ value: ModelPreference; label: string }>;
-  const enabledModelOptions = modelOptions.filter((option) => enabledModelPreferences.includes(option.value));
-  const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : modelOptions;
+  const orderedModelOptions = [...modelOptions]
+    .sort((a, b) => a.order - b.order)
+    .map((option) => ({ value: option.id, label: t(option.translationKey) }));
+  const enabledModelOptions = orderedModelOptions.filter((option) => enabledModelPreferences.includes(option.value));
+  const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : orderedModelOptions;
 
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {

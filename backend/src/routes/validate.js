@@ -6,10 +6,7 @@
 const express = require("express");
 const { body } = require("express-validator");
 const validateRequest = require("../middleware/validateRequest");
-const { AppError, asyncHandler } = require("../middleware/errorHandler");
-const { ERROR_CODES } = require("../constants/errorCodes");
-const Password = require("../models/Password");
-const Usage = require("../models/Usage");
+const { inspectWorkshopAccess } = require("../middleware/workshopAccessAdapter");
 
 const router = express.Router();
 
@@ -34,39 +31,19 @@ router.post(
     body("visitorId").trim().notEmpty().withMessage("Visitor ID is required").isLength({ min: 8 }).withMessage("Visitor ID must be at least 8 characters"),
     validateRequest,
   ],
-  asyncHandler(async (req, res) => {
-    const { password, visitorId } = req.body;
-
-    // Find password in database
-    const passwordDoc = await Password.findOne({
-      code: password,
-      isActive: true,
-    });
-
-    if (!passwordDoc) {
-      throw new AppError("Invalid workshop password", 401, ERROR_CODES.PASSWORD_INVALID);
-    }
-
-    // Check if password is expired
-    if (passwordDoc.isExpired) {
-      throw new AppError("Workshop password has expired", 401, ERROR_CODES.PASSWORD_EXPIRED);
-    }
-
-    // Get current usage for this visitor (without incrementing)
-    const currentUsage = await Usage.getUsage(passwordDoc._id, visitorId);
-    const remainingUses = Math.max(0, passwordDoc.maxUsesPerUser - currentUsage);
-
-    // Check if rate limited (but don't throw error, just inform)
+  inspectWorkshopAccess,
+  (req, res) => {
+    const remainingUses = req.workshopAccessGrant.remaining;
     const isRateLimited = remainingUses === 0;
 
     res.json({
       valid: true,
       message: isRateLimited ? "Password is valid but rate limit reached" : "Password is valid",
       remainingUses,
-      maxUses: passwordDoc.maxUsesPerUser,
+      maxUses: req.workshopAccessGrant.maxUses,
       isRateLimited,
     });
-  }),
+  },
 );
 
 module.exports = router;

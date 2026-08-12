@@ -19,9 +19,10 @@ import { useSharedTemplates, type InitialSharedTemplate } from "@/hooks/useShare
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { api } from "@/lib/api";
+import { getArtifactSource, isSavedArtifactId, planWorkspaceEdit, resolveArtifactLibraryEntry } from "@/lib/artifactLibrary";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage, parseApiError } from "@/lib/errorTranslation";
-import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, PreviewRuntimeIssue, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, CodeVersion, UserApiKeySettings, VersionListRequest } from "@/types";
+import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, PreviewRuntimeIssue, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, ModelOption, CodeVersion, UserApiKeySettings, VersionListRequest, GenerateRequest, StreamCallbacks } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -36,32 +37,22 @@ const STREAM_AUTO_FORMAT_MAX_CHARS = 60_000;
 const STREAM_AUTO_FORMAT_MAX_LINES = 1000;
 
 const MODEL_PREFERENCE_PRIORITY = ["balanced", "fast", "accurate", "gpt54mini", "gpt54", "gpt55", "gpt56luna", "deepseekv4flash"] as const satisfies readonly ModelPreference[];
-const MODEL_PROVIDER: Record<ModelPreference, ApiKeyProvider> = {
-  balanced: "gemini",
-  fast: "gemini",
-  accurate: "gemini",
-  gpt54mini: "openai",
-  gpt54: "openai",
-  gpt55: "openai",
-  gpt56luna: "openai",
-  deepseekv4flash: "deepseek",
-};
+type SelectableModelOption = Pick<ModelOption, "id" | "order" | "provider" | "translationKey" | "enabled">;
+const FALLBACK_MODEL_OPTIONS: SelectableModelOption[] = [
+  { id: "balanced", order: 0, provider: "gemini", translationKey: "chat.modelGemini3", enabled: true },
+  { id: "fast", order: 1, provider: "gemini", translationKey: "chat.modelGemini25", enabled: true },
+  { id: "accurate", order: 2, provider: "gemini", translationKey: "chat.modelGemini35", enabled: true },
+  { id: "gpt54mini", order: 3, provider: "openai", translationKey: "chat.modelGpt54Mini", enabled: false },
+  { id: "gpt54", order: 4, provider: "openai", translationKey: "chat.modelGpt54", enabled: false },
+  { id: "gpt55", order: 5, provider: "openai", translationKey: "chat.modelGpt55", enabled: false },
+  { id: "gpt56luna", order: 6, provider: "openai", translationKey: "chat.modelGpt56Luna", enabled: false },
+  { id: "deepseekv4flash", order: 7, provider: "deepseek", translationKey: "chat.modelDeepSeekV4Flash", enabled: false },
+];
 const EMPTY_API_KEYS: UserApiKeySettings = {
   gemini: "",
   openai: "",
   deepseek: "",
   accessToken: "",
-};
-
-const isModelPreference = (value: unknown): value is ModelPreference => {
-  return MODEL_PREFERENCE_PRIORITY.includes(value as ModelPreference);
-};
-
-const getAvailableModelPreferences = (models: unknown): ModelPreference[] => {
-  const enabledPreferences = new Set((Array.isArray(models) ? models : []).filter(isModelPreference));
-  const orderedPreferences = MODEL_PREFERENCE_PRIORITY.filter((preference) => enabledPreferences.has(preference));
-
-  return orderedPreferences.length > 0 ? orderedPreferences : [...MODEL_PREFERENCE_PRIORITY];
 };
 
 const countLines = (text: string) => {
@@ -121,36 +112,28 @@ const resolveInitialWorkspaceTemplate = (
     ? sharedTemplates.find((template) => template.shareId.toUpperCase() === pendingSharedTemplate.shareId.toUpperCase())
     : undefined;
   const preferredTemplateId = isSafeStart ? DEFAULT_TEMPLATE_ID : pendingTemplate?.id || savedTemplateId || DEFAULT_TEMPLATE_ID;
-  const sharedTemplate = sharedTemplates.find((template) => template.id === preferredTemplateId);
-
-  if (sharedTemplate) {
-    return {
-      id: sharedTemplate.id,
-      code: sharedTemplate.code,
-      artifactType: sharedTemplate.artifactType || "website",
-      useSavedArtifactType: false,
-    };
-  }
-
-  const customTemplate = customTemplates.find((template) => template.id === preferredTemplateId);
-  if (customTemplate) {
-    return {
-      id: customTemplate.id,
-      code: customTemplate.code,
-      artifactType: customTemplate.artifactType || "website",
-      useSavedArtifactType: false,
-    };
-  }
-
-  const builtInTemplate = getTemplateById(preferredTemplateId) || getTemplateById(DEFAULT_TEMPLATE_ID);
-  const templateId = builtInTemplate?.id || DEFAULT_TEMPLATE_ID;
-  const localizedCode = builtInTemplate ? getLocalizedTemplate(templateId, language, getMessages(language)) || builtInTemplate.code : "";
+  const resolve = (id: string) =>
+    resolveArtifactLibraryEntry(id, {
+      savedArtifacts: customTemplates,
+      sharedArtifacts: sharedTemplates,
+      getStarter: (starterId) => {
+        const starter = getTemplateById(starterId);
+        return starter
+          ? {
+              id: starter.id,
+              code: getLocalizedTemplate(starter.id, language, getMessages(language)) || starter.code,
+              artifactType: starter.artifactType || "website",
+            }
+          : undefined;
+      },
+    });
+  const artifact = resolve(preferredTemplateId) || resolve(DEFAULT_TEMPLATE_ID);
 
   return {
-    id: templateId,
-    code: localizedCode,
-    artifactType: builtInTemplate?.artifactType || "website",
-    useSavedArtifactType: templateId === DEFAULT_TEMPLATE_ID,
+    id: artifact?.id || DEFAULT_TEMPLATE_ID,
+    code: artifact?.code || "",
+    artifactType: artifact?.artifactType || "website",
+    useSavedArtifactType: artifact?.id === DEFAULT_TEMPLATE_ID,
   };
 };
 
@@ -163,10 +146,10 @@ export default function WorkspacePage() {
   const [pendingSharedTemplate] = useState(() => (isSafeStart ? undefined : readPendingSharedTemplate()));
 
   // Custom templates management (needed early for validation)
-  const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate, isCustomTemplateId } = useCustomTemplates();
+  const { templates: customTemplates, addTemplate, updateTemplate, removeTemplate } = useCustomTemplates();
 
   // Shared templates management (needed early for validation)
-  const { templates: sharedTemplates, removeTemplate: removeSharedTemplate, getTemplate: getSharedTemplate } = useSharedTemplates(pendingSharedTemplate);
+  const { templates: sharedTemplates, removeTemplate: removeSharedTemplate } = useSharedTemplates(pendingSharedTemplate);
 
   // Persist template selection to localStorage with validation
   const [savedTemplateId, setSavedTemplateId] = useLocalStorage<string>("current-template-id", DEFAULT_TEMPLATE_ID);
@@ -255,6 +238,7 @@ export default function WorkspacePage() {
   const [chatMode, setChatMode] = useLocalStorage<ChatMode>("chat-mode", "auto");
   const [modelPreference, setModelPreference] = useLocalStorage<ModelPreference>("model-preference", "balanced");
   const [enabledModelPreferences, setEnabledModelPreferences] = useState<ModelPreference[]>([...MODEL_PREFERENCE_PRIORITY]);
+  const [modelCatalog, setModelCatalog] = useState<SelectableModelOption[]>(FALLBACK_MODEL_OPTIONS);
 
   // Sequential counter for naming custom templates
   const templateCounterRef = useRef<number>(0);
@@ -272,7 +256,7 @@ export default function WorkspacePage() {
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
-  const [versions, setVersions] = useState<CodeVersion[]>([]);
+  const [versionLineage, setVersionLineage] = useState<CodeVersion[]>([]);
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -492,8 +476,6 @@ export default function WorkspacePage() {
       setIsLoadingVersions(true);
       try {
         const fetchedVersions = await api.getMyCodeVersions(request);
-        setVersions(fetchedVersions);
-
         if (options?.loadLatest && !isSafeStart && fetchedVersions.length > 0) {
           const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
           setCode(latest.code);
@@ -511,35 +493,51 @@ export default function WorkspacePage() {
     [getVersionListRequest, isSafeStart, setArtifactType],
   );
 
-  const currentProjectVersions = useMemo(() => {
-    if (!currentVersionId) return [];
+  const fetchCurrentVersionLineage = useCallback(async () => {
+    const request = getVersionListRequest(true);
+    if (!request || !currentVersionId) {
+      setVersionLineage([]);
+      return;
+    }
 
-    const currentVersion = versions.find((version) => version.id === currentVersionId);
-    if (!currentVersion) return [];
+    setIsLoadingVersions(true);
+    try {
+      setVersionLineage(await api.getCodeVersionLineage(currentVersionId, request));
+    } catch (error) {
+      console.warn("Failed to fetch code version lineage:", error);
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  }, [currentVersionId, getVersionListRequest]);
 
-    const rootVersionId = currentVersion.rootVersionId || currentVersion.id;
-    return versions.filter((version) => (version.rootVersionId || version.id) === rootVersionId);
-  }, [currentVersionId, versions]);
+  const handleOpenVersionHistory = useCallback(() => {
+    setIsVersionHistoryOpen(true);
+    void fetchCurrentVersionLineage();
+  }, [fetchCurrentVersionLineage]);
 
   const availableModelPreferences = useMemo(() => {
     if (authMode !== "api-key") {
-      return getAvailableModelPreferences(enabledModelPreferences);
+      return enabledModelPreferences;
     }
 
-    return MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(apiKeySettings[MODEL_PROVIDER[preference]]?.trim()));
-  }, [apiKeySettings, authMode, enabledModelPreferences]);
+    return modelCatalog.filter((option) => Boolean(apiKeySettings[option.provider]?.trim())).map((option) => option.id);
+  }, [apiKeySettings, authMode, enabledModelPreferences, modelCatalog]);
 
   useEffect(() => {
     let isMounted = true;
 
     const fetchEnabledModels = async () => {
       try {
-        const models = await api.getEnabledModels();
+        const options = await api.getModelCatalog();
         if (!isMounted) return;
 
-        const availableModels = getAvailableModelPreferences(models);
+        const orderedOptions = [...options].sort((a, b) => a.order - b.order);
+        const availableModels = orderedOptions.filter(({ enabled }) => enabled).map(({ id }) => id);
+        setModelCatalog(orderedOptions);
         setEnabledModelPreferences(availableModels);
-        setModelPreference(availableModels[0]);
+        if (availableModels.length > 0) {
+          setModelPreference(availableModels[0]);
+        }
       } catch (error) {
         console.warn("Failed to fetch enabled models:", error);
       }
@@ -570,8 +568,8 @@ export default function WorkspacePage() {
       if (isStreaming) return;
 
       // Check if we need to auto-convert from built-in to custom template
-      const wasBuiltInTemplate = !isCustomTemplateId(currentTemplateId);
-      const isFirstEdit = wasBuiltInTemplate && newCode !== originalCodeSnapshot;
+      const editPlan = planWorkspaceEdit({ source: getArtifactSource(currentTemplateId), code: originalCodeSnapshot }, newCode);
+      const isFirstEdit = editPlan.action === "fork-to-saved";
 
       if (isFirstEdit) {
         // First edit of a built-in template - convert to custom template
@@ -590,13 +588,13 @@ export default function WorkspacePage() {
         setCode(newCode);
       }
     },
-    [currentTemplateId, isCustomTemplateId, language, addTemplate, artifactType, isStreaming, originalCodeSnapshot, setSavedTemplateId],
+    [currentTemplateId, language, addTemplate, artifactType, isStreaming, originalCodeSnapshot, setSavedTemplateId],
   );
 
   // Auto-save code changes to custom templates (debounced)
   useEffect(() => {
     // Skip if not a custom template, if streaming, or if code hasn't changed
-    if (!isCustomTemplateId(currentTemplateId) || isStreaming || !isCodeDirty()) {
+    if (!isSavedArtifactId(currentTemplateId) || isStreaming || !isCodeDirty()) {
       return;
     }
 
@@ -607,7 +605,7 @@ export default function WorkspacePage() {
     }, 1000);
 
     return () => clearTimeout(saveTimer);
-  }, [code, currentTemplateId, isCustomTemplateId, isStreaming, isCodeDirty, updateTemplate]);
+  }, [code, currentTemplateId, isStreaming, isCodeDirty, updateTemplate]);
 
   useEffect(() => {
     if (!isSafeStart || hasAppliedSafeStartRef.current) return;
@@ -619,7 +617,7 @@ export default function WorkspacePage() {
   // Keep untouched built-in templates localized when the language changes.
   if (localizedLanguage !== language) {
     setLocalizedLanguage(language);
-    if (!isCustomTemplateId(currentTemplateId) && !isCodeDirty()) {
+    if (!isSavedArtifactId(currentTemplateId) && !isCodeDirty()) {
       const localizedCode = getLocalizedTemplate(currentTemplateId, language, getMessages(language));
       if (localizedCode) {
         setCode(localizedCode);
@@ -663,7 +661,6 @@ export default function WorkspacePage() {
               visitorId,
               includeCode: true,
             });
-            setVersions(fetchedVersions);
             if (!isSafeStart && fetchedVersions.length > 0) {
               const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
               setCode(latest.code);
@@ -794,21 +791,20 @@ export default function WorkspacePage() {
         content: msg.content,
       }));
 
-        // Use streaming API with new event handlers
-        const abort = await api.generateCodeStream(
-          {
-            ...authPayload,
-            visitorId,
-            prompt,
-            existingCode: code,
-            parentVersionId: currentVersionId,
-            messageHistory,
-            mode: requestMode,
-            artifactType,
-            modelPreference,
-            showThoughts,
-          },
-          {
+      const generationRequest = {
+        ...authPayload,
+        visitorId,
+        prompt,
+        existingCode: code,
+        parentVersionId: currentVersionId,
+        messageHistory,
+        mode: requestMode,
+        artifactType,
+        modelPreference,
+        showThoughts,
+      } satisfies GenerateRequest;
+
+      const streamViewHandlers = {
             onProgress: (delta: string) => {
               setProgressMessage((previous) => previous + delta);
             },
@@ -973,14 +969,13 @@ export default function WorkspacePage() {
               const versionMeta = data.version
                 ? {
                     currentVersionId: data.version.id,
-                    rootVersionId: data.version.rootVersionId || data.version.id,
                   }
                 : undefined;
 
               // In EDIT mode, update templates and code
               if (isEditResponse) {
                 // If user is in a custom template, update it instead of creating a new one
-                if (isCustomTemplateId(currentTemplateId)) {
+                if (isSavedArtifactId(currentTemplateId)) {
                   // Update the existing custom template with new code (and optionally projectName)
                   updateTemplate(currentTemplateId, finalCode, projectName, versionMeta, artifactType);
                   // Keep the same template ID
@@ -1010,7 +1005,8 @@ export default function WorkspacePage() {
                 setOriginalCodeSnapshot(finalCode);
                 if (data.version) {
                   setCurrentVersionId(data.version.id);
-                  setVersions((prev) => {
+                  setVersionLineage((prev) => {
+                    if (!generationRequest.parentVersionId) return [data.version as CodeVersion];
                     const withoutDuplicate = prev.filter((version) => version.id !== data.version?.id);
                     return [...withoutDuplicate, data.version as CodeVersion].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
                   });
@@ -1128,11 +1124,73 @@ export default function WorkspacePage() {
               setProgressMessage("");
               setIsStreaming(false);
             },
-          },
-        );
+      } satisfies Required<Pick<StreamCallbacks, "onProgress" | "onCodeStart" | "onCodeChunk" | "onCodeComplete" | "onMessageComplete" | "onDone" | "onError">>;
 
-      // Store the abort function
-      abortStreamRef.current = abort;
+      const generationRun = api.startArtifactGeneration(generationRequest);
+      abortStreamRef.current = generationRun.cancel;
+
+      let previousProgress = "";
+      let previousCode = "";
+      let codeStarted = false;
+      let codeCompleted = false;
+
+      for await (const view of generationRun.display) {
+        const progressDelta = view.progress.startsWith(previousProgress) ? view.progress.slice(previousProgress.length) : view.progress;
+        if (progressDelta) {
+          streamViewHandlers.onProgress(progressDelta);
+        }
+        previousProgress = view.progress;
+
+        if (view.message !== undefined) {
+          setProgressMessage("");
+          setStreamingMessage(view.message);
+        }
+
+        if (!view.artifact) continue;
+
+        if (!codeStarted) {
+          codeStarted = true;
+          streamViewHandlers.onCodeStart();
+        }
+
+        if (view.artifact.code !== previousCode) {
+          if (view.artifact.code.startsWith(previousCode)) {
+            streamViewHandlers.onCodeChunk(view.artifact.code.slice(previousCode.length));
+          } else if (requestMode !== "ask") {
+            codeBufferRef.current = view.artifact.code;
+            pendingEditorChunkRef.current = "";
+            clearEditorFlushTimer();
+            setCode(view.artifact.code);
+            monacoEditorRef.current?.getModel()?.setValue(view.artifact.code);
+          }
+          previousCode = view.artifact.code;
+        }
+
+        if (view.artifact.state === "complete" && !codeCompleted) {
+          codeCompleted = true;
+          streamViewHandlers.onCodeComplete();
+        }
+      }
+
+      const outcome = await generationRun.outcome;
+      abortStreamRef.current = null;
+
+      if (outcome.status === "completed") {
+        streamViewHandlers.onDone(outcome.result);
+      } else if (outcome.status === "failed") {
+        streamViewHandlers.onError(
+          outcome.error.message,
+          outcome.error.remainingUses,
+          outcome.error.errorCode,
+          outcome.error.details,
+        );
+      } else {
+        pendingEditorChunkRef.current = "";
+        clearEditorFlushTimer();
+        setStreamingMessage("");
+        setProgressMessage("");
+        setIsStreaming(false);
+      }
     },
     [
       visitorId,
@@ -1152,7 +1210,6 @@ export default function WorkspacePage() {
       runDeferredAutoFormat,
       language,
       currentTemplateId,
-      isCustomTemplateId,
       updateTemplate,
       addTemplate,
       chatMode,
@@ -1208,66 +1265,42 @@ export default function WorkspacePage() {
       // Save the new template ID to localStorage
       setSavedTemplateId(templateId);
       setCurrentVersionId(null);
+      setVersionLineage([]);
 
       const dirty = isCodeDirty();
 
       // Handle saving current template's changes before switching
       // Note: Built-in templates are automatically converted to custom templates on first edit,
       // so we only need to handle updating existing custom templates here
-      if (dirty && isCustomTemplateId(currentTemplateId)) {
+      if (dirty && isSavedArtifactId(currentTemplateId)) {
         // Current is a custom template - update it with the modified code
         updateTemplate(currentTemplateId, code);
       }
 
-      // Load the new template's code
-      // Check if it's a shared template
-      const sharedTemplate = getSharedTemplate(templateId);
-      if (sharedTemplate) {
-        setCode(sharedTemplate.code);
-        setArtifactType(sharedTemplate.artifactType || "website");
-        setOriginalCodeSnapshot(sharedTemplate.code);
-        setCurrentTemplateId(templateId);
-        // Clear context messages when switching templates
-        setContextMessages([]);
-        // Force instant preview update with the new code
-        previewControlRef.current?.forceRefresh(sharedTemplate.code, templateId);
-        return;
-      }
+      const artifact = resolveArtifactLibraryEntry(templateId, {
+        savedArtifacts: customTemplates,
+        sharedArtifacts: sharedTemplates,
+        getStarter: (id) => {
+          const starter = getTemplateById(id);
+          if (!starter) return undefined;
+          return {
+            id,
+            code: getLocalizedTemplate(id, language, getMessages(language)) || starter.code,
+            artifactType: starter.artifactType || "website",
+          };
+        },
+      });
+      if (!artifact) return;
 
-      if (isCustomTemplateId(templateId)) {
-        // Switch to a custom template
-        const customTemplate = customTemplates.find((t) => t.id === templateId);
-        if (customTemplate) {
-          setCode(customTemplate.code);
-          setArtifactType(customTemplate.artifactType || "website");
-          setOriginalCodeSnapshot(customTemplate.code);
-          setCurrentTemplateId(templateId);
-          setCurrentVersionId(customTemplate.currentVersionId || null);
-          // Clear context messages when switching templates
-          setContextMessages([]);
-          // Force instant preview update with the new code
-          previewControlRef.current?.forceRefresh(customTemplate.code, templateId);
-        }
-      } else {
-        // Switch to a built-in template
-        const template = getTemplateById(templateId);
-        if (template) {
-          // Use localized template based on current language
-          const messages = getMessages(language);
-          const localizedCode = getLocalizedTemplate(templateId, language, messages);
-          const newCode = localizedCode || template.code;
-          setCode(newCode);
-          setArtifactType(template.artifactType || "website");
-          setOriginalCodeSnapshot(newCode);
-          setCurrentTemplateId(templateId);
-          // Clear context messages when switching templates
-          setContextMessages([]);
-          // Force instant preview update with the new code
-          previewControlRef.current?.forceRefresh(newCode, templateId);
-        }
-      }
+      setCode(artifact.code);
+      setArtifactType(artifact.artifactType);
+      setOriginalCodeSnapshot(artifact.code);
+      setCurrentTemplateId(artifact.id);
+      setCurrentVersionId(artifact.currentVersionId);
+      setContextMessages([]);
+      previewControlRef.current?.forceRefresh(artifact.code, artifact.id);
     },
-    [currentTemplateId, code, language, isCodeDirty, isCustomTemplateId, updateTemplate, customTemplates, getSharedTemplate, setArtifactType, setSavedTemplateId],
+    [currentTemplateId, code, language, isCodeDirty, updateTemplate, customTemplates, sharedTemplates, setArtifactType, setSavedTemplateId],
   );
 
   const handleSelectVersion = useCallback(
@@ -1277,14 +1310,13 @@ export default function WorkspacePage() {
       setCode(version.code);
       setArtifactType(version.artifactType || "website");
       setCurrentVersionId(version.id);
-      if (isCustomTemplateId(currentTemplateId)) {
+      if (isSavedArtifactId(currentTemplateId)) {
         updateTemplate(
           currentTemplateId,
           version.code,
           version.projectName || undefined,
           {
             currentVersionId: version.id,
-            rootVersionId: version.rootVersionId || version.id,
           },
           version.artifactType || "website",
         );
@@ -1296,7 +1328,7 @@ export default function WorkspacePage() {
 
       showToast(t("versionHistory.loaded"), "success");
     },
-    [currentTemplateId, isCustomTemplateId, setArtifactType, showToast, t, updateTemplate],
+    [currentTemplateId, setArtifactType, showToast, t, updateTemplate],
   );
 
   const handleRemoveCustomTemplate = useCallback(
@@ -1330,11 +1362,11 @@ export default function WorkspacePage() {
   const handleArtifactTypeChange = useCallback(
     (nextArtifactType: ArtifactType) => {
       setArtifactType(nextArtifactType);
-      if (isCustomTemplateId(currentTemplateId)) {
+      if (isSavedArtifactId(currentTemplateId)) {
         updateTemplate(currentTemplateId, code, undefined, undefined, nextArtifactType);
       }
     },
-    [code, currentTemplateId, isCustomTemplateId, setArtifactType, updateTemplate],
+    [code, currentTemplateId, setArtifactType, updateTemplate],
   );
 
   const handleFixRuntimeIssue = useCallback(
@@ -1365,11 +1397,11 @@ export default function WorkspacePage() {
       setIsPasswordModalOpen(false);
       setAuthError(undefined);
       setRemainingUses(undefined);
-      setVersions([]);
+      setVersionLineage([]);
       setCurrentVersionId(null);
       setContextMessages([]);
 
-      const availableModels = MODEL_PREFERENCE_PRIORITY.filter((preference) => Boolean(savedApiKeys[MODEL_PROVIDER[preference]]));
+      const availableModels = modelCatalog.filter((option) => Boolean(savedApiKeys[option.provider])).map((option) => option.id);
       if (availableModels.length > 0 && !availableModels.includes(modelPreference)) {
         setModelPreference(availableModels[0]);
       }
@@ -1382,7 +1414,6 @@ export default function WorkspacePage() {
             apiKeyAccessToken: accessToken,
             includeCode: true,
           });
-          setVersions(fetchedVersions);
           if (!isSafeStart && fetchedVersions.length > 0) {
             const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
             setCode(latest.code);
@@ -1398,7 +1429,7 @@ export default function WorkspacePage() {
 
       showToast(t("apiKeys.saved"), "success");
     },
-    [apiKeySettings.accessToken, isSafeStart, modelPreference, setApiKeySettings, setArtifactType, setAuthMode, setModelPreference, showToast, t, visitorId],
+    [apiKeySettings.accessToken, isSafeStart, modelCatalog, modelPreference, setApiKeySettings, setArtifactType, setAuthMode, setModelPreference, showToast, t, visitorId],
   );
 
   const handleTestApiKey = useCallback(
@@ -1425,24 +1456,21 @@ export default function WorkspacePage() {
     setChatHistory([]);
     setContextMessages([]);
     setRemainingUses(undefined);
-    setVersions([]);
+    setVersionLineage([]);
     setCurrentVersionId(null);
   }, [authMode, setAuthMode, setPassword]);
 
   // Get the current template's projectName for sharing
   const getCurrentProjectName = useCallback((): string | undefined => {
-    // Check if current template is a custom template
-    const customTemplate = customTemplates.find((t) => t.id === currentTemplateId);
-    if (customTemplate?.projectName) {
-      return customTemplate.projectName;
-    }
-    // Check if it's a shared template
-    const sharedTemplate = getSharedTemplate(currentTemplateId);
-    if (sharedTemplate?.projectName) {
-      return sharedTemplate.projectName;
-    }
-    return undefined;
-  }, [customTemplates, currentTemplateId, getSharedTemplate]);
+    return resolveArtifactLibraryEntry(currentTemplateId, {
+      savedArtifacts: customTemplates,
+      sharedArtifacts: sharedTemplates,
+      getStarter: (id) => {
+        const starter = getTemplateById(id);
+        return starter ? { id, code: starter.code, artifactType: starter.artifactType || "website" } : undefined;
+      },
+    })?.projectName;
+  }, [customTemplates, currentTemplateId, sharedTemplates]);
 
   const handleShare = useCallback(async (): Promise<string | null> => {
     if (!code.trim()) return null;
@@ -1556,6 +1584,7 @@ export default function WorkspacePage() {
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
                 enabledModelPreferences={availableModelPreferences}
+                modelOptions={modelCatalog}
                 onRetryMessage={handleSendMessage}
               />
             </Panel>
@@ -1585,10 +1614,7 @@ export default function WorkspacePage() {
                 isStreaming={isStreaming}
                 isCollapsed={isEditorCollapsed}
                 onToggleCollapse={handleEditorCollapseToggle}
-                onOpenVersionHistory={() => {
-                  setIsVersionHistoryOpen(true);
-                  fetchVersions();
-                }}
+                onOpenVersionHistory={handleOpenVersionHistory}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming) {
@@ -1649,6 +1675,7 @@ export default function WorkspacePage() {
                 modelPreference={modelPreference}
                 onModelPreferenceChange={setModelPreference}
                 enabledModelPreferences={availableModelPreferences}
+                modelOptions={modelCatalog}
                 onRetryMessage={handleSendMessage}
               />
             )}
@@ -1663,10 +1690,7 @@ export default function WorkspacePage() {
                 sharedTemplates={sharedTemplates}
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
-                onOpenVersionHistory={() => {
-                  setIsVersionHistoryOpen(true);
-                  fetchVersions();
-                }}
+                onOpenVersionHistory={handleOpenVersionHistory}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming) {
@@ -1766,7 +1790,7 @@ export default function WorkspacePage() {
 
       {isVersionHistoryOpen && (
         <VersionHistoryDialog
-          versions={currentProjectVersions}
+          versions={versionLineage}
           currentVersionId={currentVersionId}
           isLoading={isLoadingVersions}
           onClose={() => setIsVersionHistoryOpen(false)}

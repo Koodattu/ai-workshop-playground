@@ -1,95 +1,36 @@
-const mongoose = require("mongoose");
-const CodeVersion = require("../models/CodeVersion");
-const { asyncHandler, AppError } = require("../middleware/errorHandler");
-
-const mapVersion = (version, includeCode = false) => {
-  const data = {
-    id: version._id.toString(),
-    visitorId: version.visitorId,
-    passwordId: version.passwordId?.toString() || null,
-    accessMode: version.accessMode || "password",
-    parentVersionId: version.parentVersionId?.toString() || null,
-    rootVersionId: version.rootVersionId?.toString() || null,
-    prompt: version.prompt,
-    message: version.message,
-    projectName: version.projectName,
-    artifactType: version.artifactType || "website",
-    modelProvider: version.modelProvider || null,
-    modelPreference: version.modelPreference || null,
-    modelId: version.modelId || null,
-    modelLabel: version.modelLabel || null,
-    modelShortLabel: version.modelShortLabel || null,
-    modelThinking: version.modelThinking || null,
-    editMode: version.editMode,
-    changeScope: version.changeScope || (version.editMode === "patch" ? "localized" : "rewrite"),
-    editCount: version.editCount,
-    edits: version.edits || [],
-    patchRetryAttempted: version.patchRetryAttempted || false,
-    patchApplyMethod: version.patchApplyMethod || null,
-    manualEditsSinceParent: version.manualEditsSinceParent,
-    createdAt: version.createdAt,
-    updatedAt: version.updatedAt,
-  };
-
-  if (includeCode) {
-    data.code = version.code;
-  } else {
-    data.codePreview = version.code.slice(0, 160);
-    data.codeLength = version.code.length;
-  }
-
-  return data;
-};
-
-const getMyVersionFilter = (workshop) => {
-  if (workshop?.authMode === "api-key") {
-    return {
-      visitorId: workshop.visitorId,
-      accessMode: "api-key",
-      ownerTokenHash: workshop.ownerTokenHash,
-    };
-  }
-
-  return {
-    visitorId: workshop.visitorId,
-    accessMode: { $ne: "api-key" },
-  };
-};
+const { asyncHandler } = require("../middleware/errorHandler");
+const { artifactVersionLineage, mapArtifactVersion } = require("../services/artifactVersionLineage");
 
 const listMyVersions = asyncHandler(async (req, res) => {
   const includeCode = req.body.includeCode !== false;
-  const versions = await CodeVersion.find(getMyVersionFilter(req.workshop)).sort({ createdAt: 1 }).lean();
+  const versions = await artifactVersionLineage.list(req.workshopAccessGrant, { includeCode });
 
   res.json({
     count: versions.length,
-    versions: versions.map((version) => mapVersion(version, includeCode)),
+    versions,
   });
 });
 
 const getMyVersion = asyncHandler(async (req, res) => {
   const { versionId } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(versionId)) {
-    throw new AppError("Invalid version ID", 400);
-  }
-
-  const version = await CodeVersion.findOne({
-    _id: versionId,
-    ...getMyVersionFilter(req.workshop),
-  }).lean();
-
-  if (!version) {
-    throw new AppError("Version not found", 404);
-  }
-
   res.json({
-    version: mapVersion(version, true),
+    version: await artifactVersionLineage.get(req.workshopAccessGrant, versionId),
   });
+});
+
+const getMyVersionLineage = asyncHandler(async (req, res) => {
+  const versions = await artifactVersionLineage.getLineage(req.workshopAccessGrant, req.params.versionId, {
+    includeCode: req.body.includeCode !== false,
+  });
+
+  res.json({ count: versions.length, versions });
 });
 
 module.exports = {
   listMyVersions,
   getMyVersion,
-  mapVersion,
-  getMyVersionFilter,
+  getMyVersionLineage,
+  mapVersion: mapArtifactVersion,
+  getMyVersionFilter: artifactVersionLineage.getOwnerFilter,
 };

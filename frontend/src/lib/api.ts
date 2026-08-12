@@ -1,4 +1,5 @@
 import { config } from "./config";
+import { createArtifactGenerationRun, type ArtifactGenerationRun } from "./artifactGenerationRun";
 import type {
   ArtifactType,
   GenerateRequest,
@@ -17,6 +18,7 @@ import type {
   ShareLinkEntry,
   CodeVersion,
   ModelPreference,
+  ModelOption,
   ModelSettings,
   ApiKeyProvider,
   VersionListRequest,
@@ -311,8 +313,25 @@ class ApiClient {
     return data.models;
   }
 
+  startArtifactGeneration(request: GenerateRequest): ArtifactGenerationRun {
+    return createArtifactGenerationRun((callbacks) => this.generateCodeStream(request, callbacks));
+  }
+
+  async getModelCatalog(): Promise<ModelOption[]> {
+    const { data } = await this.request<{ options: ModelOption[] }>("/api/models");
+    return data.options;
+  }
+
   async getMyCodeVersions(request: VersionListRequest): Promise<CodeVersion[]> {
     const { data } = await this.request<{ count: number; versions: CodeVersion[] }>("/api/versions/list", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return data.versions;
+  }
+
+  async getCodeVersionLineage(versionId: string, request: VersionListRequest): Promise<CodeVersion[]> {
+    const { data } = await this.request<{ count: number; versions: CodeVersion[] }>(`/api/versions/${encodeURIComponent(versionId)}/lineage`, {
       method: "POST",
       body: JSON.stringify(request),
     });
