@@ -49,7 +49,8 @@ const getModelBadge = (version: CodeVersion): { provider: ApiKeyProvider; shortL
 
   let shortLabel = version.modelShortLabel || "";
   if (!shortLabel) {
-    if (modelId.includes("5.6-luna")) shortLabel = "5.6 Luna";
+    if (modelId.includes("gpt-6-luna")) shortLabel = "6 Luna";
+    else if (modelId.includes("5.6-luna")) shortLabel = "5.6 Luna";
     else if (modelId.includes("v4-flash")) shortLabel = "V4 Flash";
     else if (modelId.includes("5.4-mini")) shortLabel = "5.4-mini";
     else if (modelId.includes("5.5")) shortLabel = "5.5";
