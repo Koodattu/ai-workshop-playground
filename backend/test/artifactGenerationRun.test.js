@@ -81,3 +81,14 @@ test("token persistence is best-effort after a version is created", async () => 
   assert.equal(result.usage.totalTokens, 0);
   assert.equal(errors.length, 1);
 });
+
+test("repair usage applies long-context pricing separately to each call", async () => {
+  const service = createArtifactGenerationRunService();
+  const result = await service.finish({
+    generation: { ...generation, mode: "ask" },
+    model: { ...model, pricing: { inputPerToken: 0.001, outputPerToken: 0, longContextInputTokenThreshold: 100, longContextInputMultiplier: 2 } },
+    usageMetadata: { promptTokenCount: 120 },
+    usageAttempts: [{ promptTokenCount: 60 }, { promptTokenCount: 60 }],
+  });
+  assert.equal(result.usage.estimatedCost, 12);
+});

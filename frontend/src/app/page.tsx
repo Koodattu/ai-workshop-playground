@@ -22,7 +22,7 @@ import { api } from "@/lib/api";
 import { getArtifactSource, isSavedArtifactId, planWorkspaceEdit, resolveArtifactLibraryEntry } from "@/lib/artifactLibrary";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage, parseApiError } from "@/lib/errorTranslation";
-import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, PreviewRuntimeIssue, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, ModelOption, CodeVersion, UserApiKeySettings, VersionListRequest, GenerateRequest, StreamCallbacks } from "@/types";
+import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, PreviewRuntimeIssue, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, ModelOption, CodeVersion, UserApiKeySettings, VersionListRequest, GenerateRequest, GenerationPhase, StreamCallbacks } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
 
@@ -251,6 +251,8 @@ export default function WorkspacePage() {
 
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
+  const [generationPhase, setGenerationPhase] = useState<GenerationPhase>("working");
+  const [generationStartedAt, setGenerationStartedAt] = useState(0);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [progressMessage, setProgressMessage] = useState<string>("");
 
@@ -417,6 +419,7 @@ export default function WorkspacePage() {
       }
 
       setTimeout(() => {
+        if (abortStreamRef.current || monacoEditorRef.current?.getModel()?.getValue() !== streamedCode) return;
         const formatAction = monacoEditorRef.current?.getAction("editor.action.formatDocument");
         Promise.resolve(formatAction?.run())
           .catch((error) => {
@@ -617,7 +620,7 @@ export default function WorkspacePage() {
   // Keep untouched built-in templates localized when the language changes.
   if (localizedLanguage !== language) {
     setLocalizedLanguage(language);
-    if (!isSavedArtifactId(currentTemplateId) && !isCodeDirty()) {
+    if (!isStreaming && !isSavedArtifactId(currentTemplateId) && !isCodeDirty()) {
       const localizedCode = getLocalizedTemplate(currentTemplateId, language, getMessages(language));
       if (localizedCode) {
         setCode(localizedCode);
@@ -746,7 +749,7 @@ export default function WorkspacePage() {
 
   const handleSendMessage = useCallback(
     async (prompt: string, modeOverride?: ChatMode) => {
-      if (!visitorId || !isAuthenticated) return;
+      if (!visitorId || !isAuthenticated || abortStreamRef.current) return;
       const requestMode = modeOverride ?? chatMode;
 
       const authPayload =
@@ -769,6 +772,9 @@ export default function WorkspacePage() {
       if (authMode === "api-key" && !apiKeySettings.gemini.trim() && !apiKeySettings.openai.trim() && !apiKeySettings.deepseek?.trim()) return;
 
       const codeBeforeGeneration = code;
+      const startedAt = Date.now();
+      setGenerationStartedAt(startedAt);
+      setGenerationPhase("working");
 
       // Add user message to chat
       const userMessage: ChatMessage = {
@@ -803,6 +809,42 @@ export default function WorkspacePage() {
         modelPreference,
         showThoughts,
       } satisfies GenerateRequest;
+
+      const restoreAfterUnsuccessfulRun = () => {
+        shouldFocusEditorForStreamingRef.current = false;
+        pendingEditorChunkRef.current = "";
+        clearEditorFlushTimer();
+
+        if (scrollIntervalRef.current) {
+          clearInterval(scrollIntervalRef.current);
+          scrollIntervalRef.current = null;
+        }
+
+        scrollFollowDisposableRef.current?.dispose();
+        scrollFollowDisposableRef.current = null;
+        if (monacoEditorRef.current) {
+          monacoEditorRef.current.updateOptions({ smoothScrolling: true });
+          if (originalSetValueRef.current) {
+            monacoEditorRef.current.setValue = originalSetValueRef.current;
+            originalSetValueRef.current = null;
+          }
+        }
+
+        if (requestMode !== "ask") {
+          codeBufferRef.current = codeBeforeGeneration;
+          setCode(codeBeforeGeneration);
+
+          try {
+            monacoEditorRef.current?.getModel()?.setValue(codeBeforeGeneration);
+          } catch (restoreError) {
+            console.warn("Failed to restore editor after generation error:", restoreError);
+          }
+
+          previewControlRef.current?.enableAutoRefresh();
+          previewControlRef.current?.forceRefresh(codeBeforeGeneration);
+          restoreSavedCursorPosition();
+        }
+      };
 
       const streamViewHandlers = {
             onProgress: (delta: string) => {
@@ -930,8 +972,6 @@ export default function WorkspacePage() {
               // Apply final code buffer to React state (for template switching, etc.)
               const finalStreamedCode = codeBufferRef.current;
               setCode(finalStreamedCode);
-
-              runDeferredAutoFormat(finalStreamedCode);
             },
 
             // Step 4: Message complete - show in chat
@@ -963,6 +1003,7 @@ export default function WorkspacePage() {
 
               const resolvedMode = data.mode ?? (requestMode === "ask" ? "ask" : "edit");
               const isEditResponse = resolvedMode === "edit";
+              if (!isEditResponse && codeStarted) restoreAfterUnsuccessfulRun();
               const finalMessage = data.message || t(isEditResponse ? "chat.codeGenerated" : "chat.responseReceived");
               const finalCode = data.code;
               const projectName = data.projectName;
@@ -1032,6 +1073,7 @@ export default function WorkspacePage() {
                 role: "assistant",
                 content: finalMessage,
                 timestamp: new Date(),
+                durationMs: Date.now() - startedAt,
               };
               setChatHistory((prev) => [...prev, assistantMessage]);
 
@@ -1046,6 +1088,7 @@ export default function WorkspacePage() {
               // Enable preview and update it (only in EDIT mode)
               if (isEditResponse) {
                 previewControlRef.current?.enableAutoRefresh();
+                runDeferredAutoFormat(finalCode);
                 // Mobile: Switch to preview panel to see the final result (if auto-switch enabled)
                 if (autoSwitchEnabled) {
                   setMobileActivePanel("preview");
@@ -1055,39 +1098,7 @@ export default function WorkspacePage() {
               showToast(t(isEditResponse ? "chat.codeGenerated" : "chat.responseReceived"), "success");
             },
             onError: (error, remainingUsesOnError, errorCode, details) => {
-              pendingEditorChunkRef.current = "";
-              clearEditorFlushTimer();
-
-              // Clean up scroll interval
-              if (scrollIntervalRef.current) {
-                clearInterval(scrollIntervalRef.current);
-                scrollIntervalRef.current = null;
-              }
-
-              // Clean up scroll following and restore setValue
-              scrollFollowDisposableRef.current?.dispose();
-              scrollFollowDisposableRef.current = null;
-              if (monacoEditorRef.current) {
-                monacoEditorRef.current.updateOptions({ smoothScrolling: true });
-                if (originalSetValueRef.current) {
-                  monacoEditorRef.current.setValue = originalSetValueRef.current;
-                  originalSetValueRef.current = null;
-                }
-              }
-
-              if (requestMode !== "ask") {
-                codeBufferRef.current = codeBeforeGeneration;
-                setCode(codeBeforeGeneration);
-
-                try {
-                  monacoEditorRef.current?.getModel()?.setValue(codeBeforeGeneration);
-                } catch (restoreError) {
-                  console.warn("Failed to restore editor after generation error:", restoreError);
-                }
-
-                previewControlRef.current?.enableAutoRefresh();
-                previewControlRef.current?.forceRefresh(codeBeforeGeneration);
-              }
+              restoreAfterUnsuccessfulRun();
 
               // Get translated error message based on error code
               const translatedErrorMessage = getErrorMessage(errorCode, t, error);
@@ -1113,6 +1124,7 @@ export default function WorkspacePage() {
                 role: "assistant",
                 content: translatedErrorMessage,
                 timestamp: new Date(),
+                durationMs: Date.now() - startedAt,
                 errorDetails: formattedErrorDetails,
                 errorCode: errorCode,
                 failedPrompt: prompt,
@@ -1135,6 +1147,7 @@ export default function WorkspacePage() {
       let codeCompleted = false;
 
       for await (const view of generationRun.display) {
+        if (view.status) setGenerationPhase(view.status.phase);
         const progressDelta = view.progress.startsWith(previousProgress) ? view.progress.slice(previousProgress.length) : view.progress;
         if (progressDelta) {
           streamViewHandlers.onProgress(progressDelta);
@@ -1185,8 +1198,8 @@ export default function WorkspacePage() {
           outcome.error.details,
         );
       } else {
-        pendingEditorChunkRef.current = "";
-        clearEditorFlushTimer();
+        restoreAfterUnsuccessfulRun();
+        setChatHistory((previous) => [...previous, { id: crypto.randomUUID(), role: "assistant", content: t("chat.stopped"), timestamp: new Date(), durationMs: Date.now() - startedAt }]);
         setStreamingMessage("");
         setProgressMessage("");
         setIsStreaming(false);
@@ -1208,6 +1221,7 @@ export default function WorkspacePage() {
       scheduleEditorFlush,
       syncStreamingBufferToEditor,
       runDeferredAutoFormat,
+      restoreSavedCursorPosition,
       language,
       currentTemplateId,
       updateTemplate,
@@ -1259,6 +1273,7 @@ export default function WorkspacePage() {
 
   const handleTemplateChange = useCallback(
     (templateId: string) => {
+      if (abortStreamRef.current) return;
       // Don't do anything if switching to the same template
       if (templateId === currentTemplateId) return;
 
@@ -1305,6 +1320,7 @@ export default function WorkspacePage() {
 
   const handleSelectVersion = useCallback(
     (version: CodeVersion) => {
+      if (abortStreamRef.current) return;
       if (!version.code) return;
 
       setCode(version.code);
@@ -1333,6 +1349,7 @@ export default function WorkspacePage() {
 
   const handleRemoveCustomTemplate = useCallback(
     (id: string) => {
+      if (abortStreamRef.current) return;
       removeTemplate(id);
       // If we're removing the currently active template, switch to default
       if (currentTemplateId === id) {
@@ -1447,6 +1464,7 @@ export default function WorkspacePage() {
   );
 
   const handleLogout = useCallback(() => {
+    abortStreamRef.current?.();
     setIsAuthenticated(false);
     if (authMode === "password") {
       setPassword("");
@@ -1565,6 +1583,9 @@ export default function WorkspacePage() {
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
                 isLoading={isStreaming}
+                generationPhase={generationPhase}
+                generationStartedAt={generationStartedAt}
+                onStop={() => abortStreamRef.current?.()}
                 remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}
@@ -1656,6 +1677,9 @@ export default function WorkspacePage() {
                 messages={chatHistory}
                 onSendMessage={handleSendMessage}
                 isLoading={isStreaming}
+                generationPhase={generationPhase}
+                generationStartedAt={generationStartedAt}
+                onStop={() => abortStreamRef.current?.()}
                 remainingUses={authMode === "password" ? remainingUses : undefined}
                 showToast={showToast}
                 streamingMessage={streamingMessage}

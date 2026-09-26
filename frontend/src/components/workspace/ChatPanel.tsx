@@ -4,12 +4,15 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, ModelPreference } from "@/types";
+import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference } from "@/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   onSendMessage: (prompt: string) => Promise<void>;
   isLoading: boolean;
+  generationPhase?: GenerationPhase;
+  generationStartedAt?: number;
+  onStop?: () => void;
   remainingUses?: number;
   showToast: (message: string, type: "success" | "error" | "info") => void;
   streamingMessage?: string;
@@ -33,112 +36,25 @@ interface ChatPanelProps {
   onRetryMessage?: (prompt: string) => Promise<void>;
 }
 
-const FUN_STATUS_KEYS = [
-  "chat.workingPhrases.pixelClouds",
-  "chat.workingPhrases.byteOrigami",
-  "chat.workingPhrases.semanticSoup",
-  "chat.workingPhrases.quantumButtons",
-  "chat.workingPhrases.cosmicCss",
-  "chat.workingPhrases.tameSemicolons",
-] as const;
-
-const STATUS_EXIT_MS = 220;
-const STATUS_HOLD_MIN_MS = 5200;
-const STATUS_HOLD_VARIANCE_MS = 3600;
-const STATUS_CHARACTER_MIN_MS = 24;
-const STATUS_CHARACTER_VARIANCE_MS = 28;
-
-function PlayfulStatusText() {
-  const { t } = useLanguage();
-  const [phraseIndex, setPhraseIndex] = useState(() => Math.floor(Math.random() * FUN_STATUS_KEYS.length));
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const [visibleCharacters, setVisibleCharacters] = useState(() => (prefersReducedMotion ? t(FUN_STATUS_KEYS[phraseIndex]).length : 0));
-  const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updatePreference = () => {
-      const nextPreference = mediaQuery.matches;
-      setPrefersReducedMotion(nextPreference);
-      setIsExiting(false);
-      setVisibleCharacters(nextPreference ? t(FUN_STATUS_KEYS[phraseIndex]).length : 0);
-    };
-
-    mediaQuery.addEventListener("change", updatePreference);
-    return () => mediaQuery.removeEventListener("change", updatePreference);
-  }, [phraseIndex, t]);
-
-  useEffect(() => {
-    const phrase = t(FUN_STATUS_KEYS[phraseIndex]);
-    let timeout: ReturnType<typeof setTimeout>;
-    let characterIndex = 0;
-    let cancelled = false;
-
-    const scheduleNextPhrase = () => {
-      const holdDuration = STATUS_HOLD_MIN_MS + Math.random() * STATUS_HOLD_VARIANCE_MS;
-      timeout = setTimeout(() => {
-        const nextPhraseIndex = (phraseIndex + 1 + Math.floor(Math.random() * (FUN_STATUS_KEYS.length - 1))) % FUN_STATUS_KEYS.length;
-        if (prefersReducedMotion) {
-          setVisibleCharacters(t(FUN_STATUS_KEYS[nextPhraseIndex]).length);
-          setPhraseIndex(nextPhraseIndex);
-          return;
-        }
-
-        setIsExiting(true);
-        timeout = setTimeout(() => {
-          setIsExiting(false);
-          setVisibleCharacters(0);
-          setPhraseIndex(nextPhraseIndex);
-        }, STATUS_EXIT_MS);
-      }, holdDuration);
-    };
-
-    const revealNextCharacter = () => {
-      if (cancelled) return;
-
-      characterIndex += 1;
-      setVisibleCharacters(characterIndex);
-
-      if (characterIndex < phrase.length) {
-        const characterDelay = STATUS_CHARACTER_MIN_MS + Math.random() * STATUS_CHARACTER_VARIANCE_MS;
-        timeout = setTimeout(revealNextCharacter, characterDelay);
-      } else {
-        scheduleNextPhrase();
-      }
-    };
-
-    if (prefersReducedMotion) {
-      scheduleNextPhrase();
-    } else {
-      timeout = setTimeout(revealNextCharacter, 120);
-    }
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [phraseIndex, prefersReducedMotion, t]);
-
-  const phrase = t(FUN_STATUS_KEYS[phraseIndex]);
-  const visibleText = phrase.slice(0, visibleCharacters);
-
-  return (
-    <span className={`whitespace-pre-wrap text-pretty ${isExiting ? "status-text-exit" : ""}`}>
-      {Array.from(visibleText).map((character, index) => (
-        <span key={`${phraseIndex}-${index}`} className="status-character-enter">
-          {character}
-        </span>
-      ))}
-      <span className="sr-only">{phrase.slice(visibleCharacters)}</span>
-    </span>
-  );
+function durationParts(durationMs: number) {
+  const seconds = Math.max(0, Math.floor(durationMs / 1000));
+  return { minutes: Math.floor(seconds / 60), seconds: seconds % 60 };
 }
 
-function ProviderStatusText({ text, hasProgress }: { text: string; hasProgress: boolean }) {
+function GenerationStatus({ phase, startedAt }: { phase: GenerationPhase; startedAt?: number }) {
+  const { t } = useLanguage();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   return (
-    <span key={hasProgress ? "provider-progress" : "provider-waiting"} className="status-text-enter whitespace-pre-wrap text-pretty">
-      {text}
-    </span>
+    <div className="min-w-0 text-sm text-gray-400 font-mono leading-relaxed">
+      <div role="status" aria-live="polite">{t(`chat.phases.${phase}`)}</div>
+      <div role="timer" aria-live="off" className="mt-1 text-xs text-gray-500 tabular-nums">
+        {t("chat.workingFor", durationParts(now - (startedAt ?? now)))}
+      </div>
+    </div>
   );
 }
 
@@ -146,6 +62,9 @@ export function ChatPanel({
   messages,
   onSendMessage,
   isLoading,
+  generationPhase = "working",
+  generationStartedAt,
+  onStop,
   remainingUses,
   showToast,
   streamingMessage,
@@ -342,6 +261,9 @@ export function ChatPanel({
                   ${message.role === "user" ? "bg-electric/20 border border-electric/30 text-white" : "bg-carbon border border-steel/50 text-gray-300"}
                 `}
               >
+                {message.role === "assistant" && message.durationMs !== undefined && (
+                  <p className="mb-2 text-xs font-mono text-gray-500 tabular-nums">{t("chat.workedFor", durationParts(message.durationMs))}</p>
+                )}
                 <p className="text-sm font-body whitespace-pre-wrap leading-relaxed">{message.content}</p>
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-[10px] font-mono text-gray-500 uppercase">
@@ -396,15 +318,22 @@ export function ChatPanel({
           </div>
         )}
 
-        {isLoading && !streamingMessage && (
+        {isLoading && (
           <div className="flex items-center gap-3 animate-fade-in">
             <div className="max-w-[90%] bg-carbon border border-steel/50 rounded-xl px-4 py-3">
               <div className="flex items-start gap-2">
                 <Spinner size="sm" />
-                <div ref={progressScrollRef} className="max-h-48 min-w-0 overflow-y-auto text-sm text-gray-400 font-mono leading-relaxed scrollbar-thin">
-                  {showThoughts ? <ProviderStatusText text={progressMessage || t("chat.generating")} hasProgress={Boolean(progressMessage)} /> : <PlayfulStatusText />}
-                </div>
+                <GenerationStatus phase={generationPhase} startedAt={generationStartedAt} />
               </div>
+              {showThoughts && progressMessage && (
+                <details className="mt-3 text-xs text-gray-400">
+                  <summary className="cursor-pointer">{t("chat.modelProgress")}</summary>
+                  <div ref={progressScrollRef} className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap scrollbar-thin">{progressMessage}</div>
+                </details>
+              )}
+              <Button type="button" size="sm" onClick={onStop} disabled={!onStop || generationPhase === "saving"} className="mt-3">
+                {t("chat.stop")}
+              </Button>
             </div>
           </div>
         )}

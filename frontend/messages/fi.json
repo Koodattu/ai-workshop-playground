@@ -100,13 +100,19 @@
     "modelGpt56Luna": "GPT-6 Luna",
     "modelDeepSeekV4Flash": "DeepSeek V4 Flash",
     "askButton": "Kysy",
-    "workingPhrases": {
-      "pixelClouds": "Pikselöidään pilviä...",
-      "byteOrigami": "Taitellaan bittiorigamia...",
-      "semanticSoup": "Hämmennetään semanttista soppaa...",
-      "quantumButtons": "Kiillotetaan kvanttinappeja...",
-      "cosmicCss": "Kohdistetaan kosmista CSS:ää...",
-      "tameSemicolons": "Kesytetään villejä puolipisteitä..."
+    "stop": "Pysäytä",
+    "stopped": "Pysäytetty.",
+    "workingFor": "Työskennelty {minutes} min {seconds} s",
+    "workedFor": "Työskenteli {minutes} min {seconds} s",
+    "modelProgress": "Mallin tilannepäivitykset",
+    "phases": {
+      "working": "Työskennellään…",
+      "thinking": "Pohditaan…",
+      "writing": "Kirjoitetaan koodia…",
+      "answering": "Kirjoitetaan vastausta…",
+      "checking": "Tarkistetaan tulosta…",
+      "repairing": "Korjataan tarkistuksessa havaittua virhettä…",
+      "saving": "Tallennetaan…"
     },
     "errors": {
       "VALIDATION_FAILED": "Validointi epäonnistui",
@@ -132,6 +138,7 @@
       "AI_RESPONSE_PARSE_FAILED": "Tekoälyn vastauksen ymmärtäminen epäonnistui",
       "AI_RESPONSE_INVALID": "Tekoälyn vastausmuoto on virheellinen",
       "AI_EDIT_UNSAFE": "Muutosta ei voitu tehdä turvallisesti. Alkuperäinen koodi säilytettiin; yritä uudelleen.",
+      "AI_GENERATION_TIMEOUT": "Luonti saavutti viiden minuutin aikarajan. Kokeile pienempää muutosta.",
       "AI_GENERATION_FAILED": "Koodin luonti epäonnistui",
       "INTERNAL_SERVER_ERROR": "Odottamaton virhe tapahtui",
       "API_QUOTA_EXCEEDED": "Palvelu väliaikaisesti poissa käytöstä. Yritä myöhemmin uudelleen.",

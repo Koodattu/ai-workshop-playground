@@ -50,7 +50,7 @@ function createArtifactGenerationRunService({
     }
   };
 
-  const finish = async ({ grant, parentVersionId, existingCode, generation, model, usageMetadata = {} }) => {
+  const finish = async ({ grant, parentVersionId, existingCode, generation, model, usageMetadata = {}, usageAttempts }) => {
     let version = null;
     if (generation.mode === "edit" && grant?.visitorId) {
       version = await versionLineage.create({
@@ -84,7 +84,11 @@ function createArtifactGenerationRunService({
     const thoughtsTokens = usageMetadata.thoughtsTokenCount || 0;
     const cachedTokens = usageMetadata.cachedContentTokenCount || 0;
     const totalTokens = usageMetadata.totalTokenCount || promptTokens + candidatesTokens + thoughtsTokens;
-    const estimatedCost = calculateCostInCents(promptTokens, candidatesTokens + thoughtsTokens, model.pricing, cachedTokens);
+    // Long-context thresholds apply per provider call, not to the sum of a repair and its primary call.
+    const estimatedCost = (usageAttempts?.length ? usageAttempts : [usageMetadata]).reduce((sum, attempt) =>
+      sum + calculateCostInCents(attempt?.promptTokenCount || 0,
+        (attempt?.candidatesTokenCount || 0) + (attempt?.thoughtsTokenCount || 0), model.pricing,
+        attempt?.cachedContentTokenCount || 0), 0);
     const codeChange = getCodeChangeSummary({
       mode: generation.mode,
       hasExistingCode: Boolean(existingCode?.trim()),

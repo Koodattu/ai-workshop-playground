@@ -2,6 +2,25 @@
 
 This is the current implementation guide for AI Workshop Playground. Domain language is defined in [CONTEXT.md](./CONTEXT.md).
 
+Generation emits `status` SSE events (`working`, `thinking`, `writing`, `answering`,
+`checking`, `repairing`, `saving`) independently of optional model progress text.
+The chat measures elapsed time locally, including time before response headers.
+`done.durationMs` reports server generation time. Stop aborts the fetch and provider
+request, discards provisional output and restores the prior editor/preview. The
+editor and artifact selection stay locked during generation. Saving is the commit
+boundary: Stop is disabled then, and disconnecting during persistence may still
+leave a saved version.
+
+`artifactResponse` validates the response contract, applies patches against the
+original snapshot and validates the resulting document. JSON, schema, patch and
+script syntax failures share **one** automatic repair. Rejected output never
+becomes the patch base or a saved version. Repairs are buffered until validated.
+Inline modules are parsed, without linking or execution, in a bounded Node
+subprocess. The generation and repair share a five-minute deadline; persistence
+uses the existing database timeouts. `[AI Run]` logs report all generation outcomes
+and per-attempt usage without recording prompt/code content. Comparison cases and
+the offline report command are in [backend/evals](./backend/evals/README.md).
+
 ## System shape
 
 The product is a Next.js workspace backed by an Express API and MongoDB. HTTP and SSE are transport adapters; workshop access, generation completion, model selection, and version lineage live behind application boundaries.

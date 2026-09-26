@@ -68,4 +68,39 @@ describe("Artifact Generation Run", () => {
     expect(await run.outcome).toEqual({ status: "cancelled" });
     expect(aborts).toBe(1);
   });
+
+  it("aborts before response headers arrive and ignores late events", async () => {
+    let callbacks: StreamCallbacks = {};
+    let signal: AbortSignal | undefined;
+    let ready: (cancel: () => void) => void = () => {};
+    let cleanupCount = 0;
+    const run = createArtifactGenerationRun((next, nextSignal) => {
+      callbacks = next;
+      signal = nextSignal;
+      return new Promise((resolve) => { ready = resolve; });
+    });
+    callbacks.onCodeStart?.();
+    callbacks.onCodeChunk?.("partial");
+    run.cancel();
+    expect(signal?.aborted).toBe(true);
+    callbacks.onCodeChunk?.("late");
+    callbacks.onDone?.({ code: "late", message: "late" });
+    ready(() => { cleanupCount += 1; });
+    await Promise.resolve();
+    expect(await collect(run.display)).toEqual([]);
+    expect(await run.outcome).toEqual({ status: "cancelled" });
+    expect(cleanupCount).toBe(1);
+  });
+
+  it("exposes phase updates even with thoughts disabled and no code chunks", async () => {
+    const run = createArtifactGenerationRun(async (callbacks) => {
+      callbacks.onStatus?.({ type: "status", phase: "repairing", requestId: "run-1", elapsedMs: 3000 });
+      callbacks.onDone?.({ code: "patched", message: "Done", durationMs: 4000 });
+      return () => {};
+    });
+    const views = await collect(run.display);
+    expect(views[0].status?.phase).toBe("repairing");
+    expect(views[0].progress).toBe("");
+    expect((await run.outcome).status).toBe("completed");
+  });
 });

@@ -109,7 +109,7 @@ class ApiClient {
   }
 
   // Generate code with streaming
-  async generateCodeStream(request: GenerateRequest, callbacks: StreamCallbacks): Promise<() => void> {
+  async generateCodeStream(request: GenerateRequest, callbacks: StreamCallbacks, signal?: AbortSignal): Promise<() => void> {
     const url = `${this.baseUrl}/api/generate`;
     const abortController = new AbortController();
 
@@ -120,7 +120,7 @@ class ApiClient {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(request),
-        signal: abortController.signal,
+        signal: signal ? AbortSignal.any([abortController.signal, signal]) : abortController.signal,
       });
 
       if (!response.ok) {
@@ -163,7 +163,7 @@ class ApiClient {
       };
 
       const finishWithError = (message: string, errorCode?: string, details?: string[]) => {
-        if (terminalEventReceived || cancelledByCaller) return;
+        if (terminalEventReceived || cancelledByCaller || signal?.aborted) return;
         terminalEventReceived = true;
         callbacks.onError?.(message, undefined, errorCode, details);
       };
@@ -201,6 +201,7 @@ class ApiClient {
             buffer = lines.pop() || ""; // Keep the last incomplete line in the buffer
 
             for (const line of lines) {
+              if (terminalEventReceived || cancelledByCaller || signal?.aborted) break;
               if (!line.trim()) continue;
 
               // Parse SSE format (lines starting with "data: ")
@@ -212,6 +213,9 @@ class ApiClient {
 
                   // Handle different event types
                   switch (event.type) {
+                    case "status":
+                      callbacks.onStatus?.(event);
+                      break;
                     case "chunk":
                       callbacks.onChunk?.(event.chunk, event.accumulated);
                       break;
@@ -267,6 +271,7 @@ class ApiClient {
                         version: event.version,
                         remaining: event.remaining,
                         usage: event.usage,
+                        durationMs: event.durationMs,
                       });
                       break;
                     case "error":
@@ -283,6 +288,7 @@ class ApiClient {
                 }
               }
             }
+            if (terminalEventReceived || cancelledByCaller || signal?.aborted) break;
           }
         } catch (error) {
           if (error instanceof Error && error.name !== "AbortError") {
@@ -290,6 +296,7 @@ class ApiClient {
           }
         } finally {
           clearInactivityTimer();
+          await reader.cancel().catch(() => {});
           reader.releaseLock();
         }
       })();
@@ -314,7 +321,7 @@ class ApiClient {
   }
 
   startArtifactGeneration(request: GenerateRequest): ArtifactGenerationRun {
-    return createArtifactGenerationRun((callbacks) => this.generateCodeStream(request, callbacks));
+    return createArtifactGenerationRun((callbacks, signal) => this.generateCodeStream(request, callbacks, signal));
   }
 
   async getModelCatalog(): Promise<ModelOption[]> {

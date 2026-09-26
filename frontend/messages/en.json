@@ -100,13 +100,19 @@
     "modelGpt56Luna": "GPT-6 Luna",
     "modelDeepSeekV4Flash": "DeepSeek V4 Flash",
     "askButton": "Ask",
-    "workingPhrases": {
-      "pixelClouds": "Pixelating clouds...",
-      "byteOrigami": "Folding byte origami...",
-      "semanticSoup": "Stirring semantic soup...",
-      "quantumButtons": "Polishing quantum buttons...",
-      "cosmicCss": "Aligning cosmic CSS...",
-      "tameSemicolons": "Taming wild semicolons..."
+    "stop": "Stop",
+    "stopped": "Stopped.",
+    "workingFor": "Working for {minutes}m {seconds}s",
+    "workedFor": "Worked for {minutes}m {seconds}s",
+    "modelProgress": "Model progress",
+    "phases": {
+      "working": "Working…",
+      "thinking": "Thinking…",
+      "writing": "Writing code…",
+      "answering": "Writing a response…",
+      "checking": "Checking the result…",
+      "repairing": "Fixing a validation issue…",
+      "saving": "Saving…"
     },
     "errors": {
       "VALIDATION_FAILED": "Validation failed",
@@ -132,6 +138,7 @@
       "AI_RESPONSE_PARSE_FAILED": "Failed to understand AI response",
       "AI_RESPONSE_INVALID": "AI response format is invalid",
       "AI_EDIT_UNSAFE": "The change could not be applied safely. Your original code was kept; please retry.",
+      "AI_GENERATION_TIMEOUT": "Generation reached the five-minute time limit. Try a smaller change.",
       "AI_GENERATION_FAILED": "Code generation failed",
       "INTERNAL_SERVER_ERROR": "An unexpected error occurred",
       "API_QUOTA_EXCEEDED": "Service temporarily unavailable. Please try again later.",

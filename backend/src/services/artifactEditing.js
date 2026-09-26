@@ -1,8 +1,10 @@
 const vm = require("node:vm");
+const { spawnSync } = require("node:child_process");
 
 const MAX_ARTIFACT_SIZE = 500000;
 const MAX_PATCH_EDITS = 8;
 const MAX_PATCH_CHANGE_RATIO = 0.35;
+const MAX_PATCH_CONTEXT_RATIO = 0.5;
 
 class ArtifactEditError extends Error {
   constructor(message, reason, details = {}) {
@@ -34,6 +36,10 @@ function buildRetryFeedback(reason, details) {
       return `Edits ${details.firstEditNumber} and ${details.secondEditNumber} overlap. Combine them into one replacement or make them disjoint.`;
     case "change-too-large":
       return `The patch changes about ${Math.round(details.changeRatio * 100)}% of the document. Use replace_all with changeScope "cross_cutting" or "rewrite" if that much code truly must change; otherwise return smaller edits.`;
+    case "patch-context-too-large":
+      return "The patch repeats too much of the original document. Copy only the smallest unique oldText blocks needed for the change; never put the entire document in a patch. Use replace_all for a broad rewrite.";
+    case "invalid-response":
+      return details.feedback || "Return one JSON object that satisfies the response schema, with no Markdown or surrounding text.";
     case "artifact-empty":
       return "The resulting document is empty. Return a complete runnable HTML document.";
     case "artifact-too-large":
@@ -64,7 +70,7 @@ function countOccurrences(haystack, needle) {
     position = haystack.indexOf(needle, position);
     if (position !== -1) {
       count += 1;
-      position += needle.length;
+      position += 1;
     }
   }
   return count;
@@ -162,15 +168,15 @@ function applyArtifactEdits(originalCode, edits) {
 
     if (!oldText) fail(`Patch edit ${editNumber} is missing oldText`, "missing-old-text", { editNumber });
     if (typeof newText !== "string") fail(`Patch edit ${editNumber} has invalid newText`, "invalid-new-text", { editNumber });
-    if (oldText === newText) fail(`Patch edit ${editNumber} does not change the code`, "no-op", { editNumber });
+    if (normalizeLineEndings(oldText) === normalizeLineEndings(newText)) fail(`Patch edit ${editNumber} does not change the code`, "no-op", { editNumber });
 
-    changedCharacters += countChangedCharacters(oldText, newText);
+    changedCharacters += countChangedCharacters(normalizeLineEndings(oldText), normalizeLineEndings(newText));
     const exactOccurrences = countOccurrences(originalCode, oldText);
 
     let replacement;
     if (exactOccurrences === 1) {
       const start = originalCode.indexOf(oldText);
-      replacement = { start, end: start + oldText.length, newText, appliedWith: "exact" };
+      replacement = { start, end: start + oldText.length, newText: applyLineEnding(newText, getDominantLineEnding(originalCode)), appliedWith: "exact" };
     } else if (exactOccurrences > 1) {
       fail(`Patch edit ${editNumber} matched multiple locations`, "ambiguous", {
         editNumber,
@@ -190,7 +196,7 @@ function applyArtifactEdits(originalCode, edits) {
       }
     }
 
-    return { ...replacement, editNumber, oldText, newText };
+    return { ...replacement, editNumber, oldText };
   });
 
   const ascending = [...replacements].sort((left, right) => left.start - right.start || left.end - right.end);
@@ -210,6 +216,13 @@ function applyArtifactEdits(originalCode, edits) {
     fail("Patch changes too much of the document", "change-too-large", { changeRatio, changedCharacters });
   }
 
+  const matchedCharacters = replacements.reduce((sum, replacement) => sum + replacement.end - replacement.start, 0);
+  // Allow useful context in short documents, but never a disguised full rewrite.
+  const coversDocument = replacements.some(({ oldText }) => normalizeLineEndings(oldText).trim() === normalizeLineEndings(originalCode).trim());
+  if (coversDocument || matchedCharacters === originalCode.length || matchedCharacters > Math.max(1000, originalCode.length * MAX_PATCH_CONTEXT_RATIO)) {
+    fail("Patch repeats too much of the document", "patch-context-too-large", { matchedCharacters });
+  }
+
   let code = originalCode;
   for (const replacement of [...replacements].sort((left, right) => right.start - left.start)) {
     code = code.slice(0, replacement.start) + replacement.newText + code.slice(replacement.end);
@@ -222,10 +235,11 @@ function applyArtifactEdits(originalCode, edits) {
   };
 }
 
-function validateClassicInlineScripts(code) {
+function validateInlineScripts(code) {
   const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
   let match;
   let scriptNumber = 0;
+  const modules = [];
 
   while ((match = scriptPattern.exec(code)) !== null) {
     scriptNumber += 1;
@@ -235,8 +249,12 @@ function validateClassicInlineScripts(code) {
 
     const typeMatch = attributes.match(/\btype\s*=\s*["']?([^\s"'>]+)/i);
     const type = typeMatch?.[1]?.toLowerCase();
-    if (type && type !== "text/javascript" && type !== "application/javascript") continue;
+    if (type && type !== "module" && type !== "text/javascript" && type !== "application/javascript") continue;
     if (!source.trim()) continue;
+    if (type === "module") {
+      modules.push({ source, scriptNumber });
+      continue;
+    }
 
     try {
       new vm.Script(source, { filename: `inline-script-${scriptNumber}.js` });
@@ -246,6 +264,27 @@ function validateClassicInlineScripts(code) {
         scriptNumber,
         syntaxMessage,
       });
+    }
+  }
+
+  if (modules.length) {
+    // Parse all modules in one short-lived process. Never link or execute generated code.
+    // SourceTextModule requires this flag on Node 24; no production dependency is needed.
+    const parser = spawnSync(process.execPath, ["--experimental-vm-modules", "-e", `
+      const vm = require('node:vm');
+      const scripts = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
+      for (const { source, scriptNumber } of scripts) {
+        try { new vm.SourceTextModule(source); }
+        catch (error) {
+          process.stdout.write(JSON.stringify({ scriptNumber, syntaxMessage: error.message }));
+          break;
+        }
+      }
+    `], { input: JSON.stringify(modules), encoding: "utf8", timeout: 3000, maxBuffer: 65536, windowsHide: true });
+    if (parser.error || parser.status !== 0) throw new Error("JavaScript module validation could not complete");
+    if (parser.stdout) {
+      const details = JSON.parse(parser.stdout);
+      fail(`Inline script ${details.scriptNumber} has invalid JavaScript`, "inline-script-syntax", details);
     }
   }
 }
@@ -273,7 +312,7 @@ function validateGeneratedArtifact(code) {
     fail("Generated document contains omitted placeholder content", "placeholder-content");
   }
 
-  validateClassicInlineScripts(code);
+  validateInlineScripts(code);
   return { codeLength: code.length };
 }
 

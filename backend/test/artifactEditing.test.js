@@ -29,6 +29,8 @@ test("accepts a unique match with different line endings", () => {
 
   assert.match(result.code, /<p>Welcome<\/p>/);
   assert.equal(result.appliedEdits[0].appliedWith, "line-ending-normalized");
+  assert.equal(result.code.replace(/\r\n/g, "").includes("\n"), false);
+  assert.equal(result.appliedEdits[0].newText, "<main>\r\n  <p>Welcome</p>\r\n</main>");
 });
 
 test("rejects a near match instead of guessing", () => {
@@ -36,6 +38,12 @@ test("rejects a near match instead of guessing", () => {
     () => applyArtifactEdits(document("<p>Actual text</p>"), [{ oldText: "<p>Actuel text</p>", newText: "<p>Changed</p>" }]),
     (error) => error instanceof ArtifactEditError && error.reason === "not-found",
   );
+});
+
+test("new lines in an exact patch follow the document's line endings", () => {
+  const original = document("<p>Hello</p>").replace(/\n/g, "\r\n");
+  const result = applyArtifactEdits(original, [{ oldText: "<p>Hello</p>", newText: "<p>Hello\nworld</p>" }]);
+  assert.match(result.code, /Hello\r\nworld/);
 });
 
 test("rejects ambiguous and overlapping edits", () => {
@@ -75,7 +83,7 @@ test("validates a complete document and classic inline JavaScript", () => {
   );
 });
 
-test("allows import maps and module scripts that require browser parsing", () => {
+test("parses browser module syntax without resolving imports or executing code", () => {
   const code = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -85,6 +93,22 @@ test("allows import maps and module scripts that require browser parsing", () =>
 </html>`;
 
   assert.doesNotThrow(() => validateGeneratedArtifact(code));
+  assert.throws(() => validateGeneratedArtifact(code.replace('import * as THREE from "three";', "const = ;")),
+    (error) => error.reason === "inline-script-syntax");
+  assert.doesNotThrow(() => validateGeneratedArtifact(document('<script type="module">throw new Error("do not execute"); await Promise.resolve();</script>')));
+});
+
+test("rejects whole-document and excessive-context patches even for a one-character change", () => {
+  const original = document(`<p>Red</p>${" ".repeat(4000)}`);
+  assert.throws(() => applyArtifactEdits(original, [{ oldText: original, newText: original.replace("Red", "Bed") }]),
+    (error) => error.reason === "patch-context-too-large");
+  assert.throws(() => applyArtifactEdits(original, [{ oldText: original.slice(0, 3000), newText: original.slice(0, 3000).replace("Red", "Bed") }]),
+    (error) => error.reason === "patch-context-too-large");
+});
+
+test("overlapping occurrences are ambiguous too", () => {
+  assert.throws(() => applyArtifactEdits(document("aaa"), [{ oldText: "aa", newText: "ab" }]),
+    (error) => error.reason === "ambiguous");
 });
 
 test("rejects wrappers, incomplete documents, and omission placeholders", () => {

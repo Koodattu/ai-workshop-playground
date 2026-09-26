@@ -6,6 +6,7 @@ export interface ChatMessage {
   errorDetails?: string;
   errorCode?: string;
   failedPrompt?: string;
+  durationMs?: number;
 }
 
 // Auto delegates the choice; explicit modes force a code change or chat response.
@@ -13,6 +14,14 @@ export type ChatMode = "auto" | "edit" | "ask";
 export type ResolvedChatMode = Exclude<ChatMode, "auto">;
 export type ArtifactType = "website" | "game";
 export type ChangeScope = "localized" | "cross_cutting" | "rewrite";
+export type GenerationPhase = "working" | "thinking" | "writing" | "answering" | "checking" | "repairing" | "saving";
+
+export interface GenerationStatus {
+  type: "status";
+  phase: GenerationPhase;
+  requestId: string;
+  elapsedMs: number;
+}
 
 // Stable Model Option identity supplied by the backend Model Catalog.
 export type ModelPreference = string;
@@ -91,6 +100,7 @@ export interface GenerateRequest {
 }
 
 export interface GenerateResponse {
+  durationMs?: number;
   message: string;
   code: string;
   mode?: ResolvedChatMode;
@@ -176,6 +186,7 @@ export interface StreamMessageComplete {
 }
 
 export interface StreamDoneEvent {
+  durationMs?: number;
   type: "done";
   message: string;
   code: string;
@@ -212,6 +223,7 @@ export interface StreamProgress {
 }
 
 export type StreamEvent =
+  | GenerationStatus
   | StreamChunk
   | StreamCodeStart
   | StreamCodeChunk
@@ -224,6 +236,7 @@ export type StreamEvent =
   | StreamProgress;
 
 export interface StreamCallbacks {
+  onStatus?: (status: GenerationStatus) => void;
   onChunk?: (chunk: string, accumulated: string) => void;
   onMessageUpdate?: (message: string) => void;
   onProgress?: (delta: string) => void;
@@ -232,7 +245,7 @@ export interface StreamCallbacks {
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; mode?: ResolvedChatMode; projectName?: string; artifactType?: ArtifactType; editMode?: "replace_all" | "patch"; changeScope?: ChangeScope; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
+  onDone?: (data: GenerateResponse & { remaining?: number }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 

@@ -1,8 +1,9 @@
-import type { GenerateResponse, GenerationUsageSummary, StreamCallbacks } from "@/types";
+import type { GenerateResponse, GenerationStatus, GenerationUsageSummary, StreamCallbacks } from "@/types";
 
 export interface ArtifactGenerationView {
   revision: number;
   progress: string;
+  status?: GenerationStatus;
   message?: string;
   artifact?: {
     code: string;
@@ -39,8 +40,9 @@ class AsyncViewQueue implements AsyncIterable<ArtifactGenerationView> {
     else this.values.push(value);
   }
 
-  close() {
+  close(discardPending = false) {
     if (this.closed) return;
+    if (discardPending) this.values = [];
     this.closed = true;
     this.waiters.splice(0).forEach((waiter) => waiter({ value: undefined, done: true }));
   }
@@ -57,11 +59,13 @@ class AsyncViewQueue implements AsyncIterable<ArtifactGenerationView> {
   }
 }
 
-export function createArtifactGenerationRun(start: (callbacks: StreamCallbacks) => Promise<() => void>): ArtifactGenerationRun {
+export function createArtifactGenerationRun(start: (callbacks: StreamCallbacks, signal: AbortSignal) => Promise<() => void>): ArtifactGenerationRun {
   const display = new AsyncViewQueue();
+  const controller = new AbortController();
   let revision = 0;
   let progress = "";
   let message: string | undefined;
+  let status: GenerationStatus | undefined;
   let artifact: ArtifactGenerationView["artifact"];
   let abort: (() => void) | undefined;
   let settled = false;
@@ -72,10 +76,12 @@ export function createArtifactGenerationRun(start: (callbacks: StreamCallbacks) 
   });
 
   const publish = () => {
+    if (settled) return;
     revision += 1;
     display.push({
       revision,
       progress,
+      status,
       message,
       artifact: artifact ? { ...artifact } : undefined,
     });
@@ -84,11 +90,15 @@ export function createArtifactGenerationRun(start: (callbacks: StreamCallbacks) 
   const finish = (nextOutcome: ArtifactGenerationOutcome) => {
     if (settled) return;
     settled = true;
-    display.close();
+    display.close(nextOutcome.status !== "completed");
     settleOutcome(nextOutcome);
   };
 
   void start({
+    onStatus(nextStatus) {
+      status = nextStatus;
+      publish();
+    },
     onProgress(delta) {
       progress += delta;
       publish();
@@ -123,7 +133,7 @@ export function createArtifactGenerationRun(start: (callbacks: StreamCallbacks) 
     onError(errorMessage, remainingUses, errorCode, details) {
       finish({ status: "failed", error: { message: errorMessage, remainingUses, errorCode, details } });
     },
-  })
+  }, controller.signal)
     .then((cancelTransport) => {
       abort = cancelTransport;
       if (settled) cancelTransport();
@@ -137,8 +147,9 @@ export function createArtifactGenerationRun(start: (callbacks: StreamCallbacks) 
     outcome,
     cancel() {
       if (settled) return;
-      abort?.();
       finish({ status: "cancelled" });
+      controller.abort();
+      abort?.();
     },
   };
 }

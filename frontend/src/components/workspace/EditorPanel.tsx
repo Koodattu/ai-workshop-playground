@@ -108,8 +108,9 @@ export function EditorPanel({
   );
 
   const handleFormat = useCallback(() => {
+    if (isStreaming) return;
     editorRef.current?.getAction("editor.action.formatDocument")?.run();
-  }, []);
+  }, [isStreaming]);
 
   const handleCopy = useCallback(async () => {
     if (code) {
@@ -132,12 +133,14 @@ export function EditorPanel({
   }, [code]);
 
   const handleUndo = useCallback(() => {
+    if (isStreaming) return;
     editorRef.current?.trigger("keyboard", "undo", null);
-  }, []);
+  }, [isStreaming]);
 
   const handleRedo = useCallback(() => {
+    if (isStreaming) return;
     editorRef.current?.trigger("keyboard", "redo", null);
-  }, []);
+  }, [isStreaming]);
 
   const handleTemplateSelect = useCallback(
     (templateId: string) => {
@@ -222,6 +225,7 @@ export function EditorPanel({
           <div className="relative">
             <button
               ref={buttonRef}
+              disabled={isStreaming}
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-carbon text-gray-300 hover:text-white hover:bg-graphite transition-all border border-steel/30 hover:border-steel/50"
               title={t("editor.selectTemplate")}
@@ -647,18 +651,18 @@ export function EditorPanel({
           {/* Desktop: Individual toolbar buttons */}
           <div className="hidden md:flex items-center gap-0">
             <div className="w-px h-4 bg-steel/50" />
-            <button onClick={handleUndo} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors ml-2" title={t("editor.undoTitle")}>
+            <button onClick={handleUndo} disabled={isStreaming} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors ml-2" title={t("editor.undoTitle")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
               </svg>
             </button>
-            <button onClick={handleRedo} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.redoTitle")}>
+            <button onClick={handleRedo} disabled={isStreaming} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.redoTitle")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
               </svg>
             </button>
             <div className="w-px h-4 bg-steel/50 mx-2" />
-            <button onClick={handleFormat} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.formatTitle")}>
+            <button onClick={handleFormat} disabled={isStreaming} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.formatTitle")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
               </svg>
@@ -711,7 +715,7 @@ export function EditorPanel({
             automaticLayout: true,
             tabSize: 2,
             wordWrap: "on",
-            readOnly: false,
+            readOnly: isStreaming,
             domReadOnly: isStreaming,
           }}
         />
