@@ -200,7 +200,7 @@ export function EditorPanel({
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="absolute inset-0 flex cursor-pointer flex-col items-center justify-start bg-obsidian transition-colors hover:bg-graphite focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-electric"
+          className="absolute inset-0 flex cursor-pointer flex-col items-center justify-start bg-obsidian outline-none transition-colors hover:bg-graphite focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/25"
           aria-label={t("editor.expandEditor")}
           aria-expanded="false"
           title={t("editor.expandEditor")}

@@ -18,7 +18,7 @@ export function LanguageSwitcher() {
         bg-graphite border border-steel rounded
         transition-all duration-200 ease-out
         hover:text-white hover:border-electric/50 hover:bg-steel
-        focus:outline-none focus:ring-2 focus:ring-electric focus:ring-offset-2 focus:ring-offset-void
+        outline-none focus-visible:ring-1 focus-visible:ring-white/25
         active:scale-[0.98]
       "
       aria-label="Toggle language"
