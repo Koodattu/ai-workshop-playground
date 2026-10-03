@@ -28,7 +28,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Body parsers
-app.use(express.json({ limit: "1mb" }));
+// One resized screenshot plus a complete artifact and bounded diagnostic context.
+app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Request logging (development only)

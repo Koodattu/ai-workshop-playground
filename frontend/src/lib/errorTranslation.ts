@@ -33,17 +33,18 @@ export function getErrorMessage(errorCode: string | undefined, t: (key: string) 
  * @param error - Error object or string from API
  * @returns Object with errorCode, message, and details
  */
-export function parseApiError(error: any): {
+export function parseApiError(error: unknown): {
   errorCode?: string;
   message: string;
   details?: string[];
 } {
   // If error is already a parsed object with errorCode
   if (error && typeof error === "object") {
+    const apiError = error as Record<string, unknown>;
     return {
-      errorCode: error.errorCode,
-      message: error.error || error.message || "Unknown error",
-      details: error.details,
+      errorCode: typeof apiError.errorCode === "string" ? apiError.errorCode : undefined,
+      message: typeof apiError.error === "string" ? apiError.error : typeof apiError.message === "string" ? apiError.message : "Unknown error",
+      details: Array.isArray(apiError.details) && apiError.details.every((detail) => typeof detail === "string") ? apiError.details : undefined,
     };
   }
 

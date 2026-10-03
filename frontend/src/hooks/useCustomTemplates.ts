@@ -1,27 +1,24 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import type { CustomTemplate } from "@/types";
+import type { ArtifactType, CustomTemplate } from "@/types";
 import { CUSTOM_TEMPLATE_CONFIG } from "@/types";
 
 interface UseCustomTemplatesReturn {
   /** All custom templates, sorted by creation time (newest first) */
   templates: CustomTemplate[];
   /** Add a new custom template, auto-deletes oldest if exceeding max */
-  addTemplate: (name: string, code: string, projectName?: string, versionMeta?: VersionMeta) => CustomTemplate;
+  addTemplate: (name: string, code: string, projectName?: string, versionMeta?: VersionMeta, artifactType?: ArtifactType) => CustomTemplate;
   /** Update an existing custom template's code and optionally projectName */
-  updateTemplate: (id: string, code: string, projectName?: string, versionMeta?: VersionMeta) => void;
+  updateTemplate: (id: string, code: string, projectName?: string, versionMeta?: VersionMeta, artifactType?: ArtifactType) => void;
   /** Remove a custom template by id */
   removeTemplate: (id: string) => void;
   /** Get a custom template by id */
   getTemplate: (id: string) => CustomTemplate | undefined;
-  /** Check if an id belongs to a custom template */
-  isCustomTemplateId: (id: string) => boolean;
   /** Generate a unique custom template id */
   generateId: () => string;
 }
 
 interface VersionMeta {
   currentVersionId?: string | null;
-  rootVersionId?: string | null;
 }
 
 /**
@@ -55,11 +52,6 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
     return `${CUSTOM_TEMPLATE_CONFIG.ID_PREFIX}${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }, []);
 
-  /** Check if an id belongs to a custom template */
-  const isCustomTemplateId = useCallback((id: string): boolean => {
-    return id.startsWith(CUSTOM_TEMPLATE_CONFIG.ID_PREFIX);
-  }, []);
-
   /** Get a custom template by id */
   const getTemplate = useCallback(
     (id: string): CustomTemplate | undefined => {
@@ -73,15 +65,15 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
    * If the number of templates exceeds MAX_TEMPLATES, the oldest template is removed.
    */
   const addTemplate = useCallback(
-    (name: string, code: string, projectName?: string, versionMeta?: VersionMeta): CustomTemplate => {
+    (name: string, code: string, projectName?: string, versionMeta?: VersionMeta, artifactType: ArtifactType = "website"): CustomTemplate => {
       const now = Date.now();
       const newTemplate: CustomTemplate = {
         id: generateId(),
         name,
         code,
+        artifactType,
         projectName,
         currentVersionId: versionMeta?.currentVersionId || null,
-        rootVersionId: versionMeta?.rootVersionId || null,
         createdAt: now,
         updatedAt: now,
       };
@@ -107,19 +99,19 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
   );
 
   /** Update an existing custom template's code and optionally projectName/name */
-  const updateTemplate = useCallback((id: string, code: string, projectName?: string, versionMeta?: VersionMeta): void => {
+  const updateTemplate = useCallback((id: string, code: string, projectName?: string, versionMeta?: VersionMeta, artifactType?: ArtifactType): void => {
     setTemplates((prev) =>
       prev.map((t) =>
         t.id === id
           ? {
               ...t,
               code,
+              ...(artifactType ? { artifactType } : {}),
               // Update both name and projectName if a new projectName is provided
               ...(projectName ? { name: projectName, projectName } : {}),
               ...(versionMeta
                 ? {
                     currentVersionId: versionMeta.currentVersionId ?? t.currentVersionId ?? null,
-                    rootVersionId: versionMeta.rootVersionId ?? t.rootVersionId ?? null,
                   }
                 : {}),
               updatedAt: Date.now(),
@@ -145,7 +137,6 @@ export function useCustomTemplates(): UseCustomTemplatesReturn {
     updateTemplate,
     removeTemplate,
     getTemplate,
-    isCustomTemplateId,
     generateId,
   };
 }

@@ -26,6 +26,11 @@ const sharedCodeSchema = new mongoose.Schema(
       maxlength: [50, "Project name cannot exceed 50 characters"],
       default: null,
     },
+    artifactType: {
+      type: String,
+      enum: ["website", "game"],
+      default: "website",
+    },
   },
   {
     timestamps: true,

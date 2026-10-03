@@ -7,7 +7,7 @@ type Language = "fi" | "en";
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string, params?: Record<string, any>) => string;
+  t: (key: string, params?: Record<string, unknown>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -15,24 +15,20 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 const STORAGE_KEY = "workshop-language";
 const DEFAULT_LANGUAGE: Language = "fi";
 
+const getInitialLanguage = (): Language => {
+  if (typeof window === "undefined") return DEFAULT_LANGUAGE;
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored === "fi" || stored === "en" ? stored : DEFAULT_LANGUAGE;
+};
+
 interface LanguageProviderProps {
   children: ReactNode;
 }
 
 export function LanguageProvider({ children }: LanguageProviderProps) {
-  const [language, setLanguageState] = useState<Language>(DEFAULT_LANGUAGE);
-  const [messages, setMessages] = useState<Record<string, any>>({});
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [language, setLanguageState] = useState<Language>(getInitialLanguage);
+  const [messages, setMessages] = useState<Record<string, unknown>>({});
   const [messagesLoaded, setMessagesLoaded] = useState(false);
-
-  // Load language preference from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && (stored === "fi" || stored === "en")) {
-      setLanguageState(stored);
-    }
-    setIsLoaded(true);
-  }, []);
 
   // Load messages when language changes
   useEffect(() => {
@@ -40,14 +36,14 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       setMessagesLoaded(false);
       try {
         const msgs = await import(`../../messages/${language}.json`);
-        setMessages(msgs.default);
+        setMessages(msgs.default as Record<string, unknown>);
         setMessagesLoaded(true);
       } catch (error) {
         console.error(`Failed to load messages for language: ${language}`, error);
         // Fallback to default language if loading fails
         if (language !== DEFAULT_LANGUAGE) {
           const fallbackMsgs = await import(`../../messages/${DEFAULT_LANGUAGE}.json`);
-          setMessages(fallbackMsgs.default);
+          setMessages(fallbackMsgs.default as Record<string, unknown>);
         }
         setMessagesLoaded(true);
       }
@@ -56,21 +52,21 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
     loadMessages();
   }, [language]);
 
-  const setLanguage = (lang: Language) => {
+  const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem(STORAGE_KEY, lang);
-  };
+  }, []);
 
   // Translation function with nested key support (e.g., "common.loading")
   // and parameter interpolation (e.g., "Hello {name}" with params: { name: "World" })
   const t = useCallback(
-    (key: string, params?: Record<string, any>): string => {
+    (key: string, params?: Record<string, unknown>): string => {
       const keys = key.split(".");
-      let value: any = messages;
+      let value: unknown = messages;
 
       for (const k of keys) {
         if (value && typeof value === "object" && k in value) {
-          value = value[k];
+          value = (value as Record<string, unknown>)[k];
         } else {
           // Return key itself if translation not found
           console.warn(`Translation missing for key: ${key}`);
@@ -95,7 +91,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
   );
 
   // Don't render children until language and messages are loaded
-  if (!isLoaded || !messagesLoaded) {
+  if (!messagesLoaded) {
     return null;
   }
 

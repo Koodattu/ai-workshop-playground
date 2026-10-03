@@ -1,0 +1,106 @@
+[
+  {
+    "id": "new-website",
+    "artifactType": "website",
+    "mode": "auto",
+    "existingCode": "",
+    "prompt": "Create a responsive landing page for a ceramics studio with three workshop cards and a working FAQ accordion. Use one HTML file and no external images.",
+    "acceptance": [
+      "Complete HTML",
+      "Three workshop cards",
+      "FAQ opens and closes",
+      "No horizontal scrolling at 390px width"
+    ]
+  },
+  {
+    "id": "new-game",
+    "artifactType": "game",
+    "mode": "auto",
+    "existingCode": "",
+    "prompt": "Make a small canvas game where a basket catches falling stars. Support arrow keys and touch dragging, show the score, end after three misses, and provide restart. No external assets.",
+    "acceptance": [
+      "Keyboard and touch work",
+      "Catches increase score",
+      "Three misses ends the game",
+      "Restart resets score and misses without doubling the animation loop"
+    ]
+  },
+  {
+    "id": "button-color",
+    "artifactType": "website",
+    "mode": "auto",
+    "existingCode": "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{font:20px sans-serif;padding:3rem}button{background:#c22;color:white;padding:1rem;border:0}</style></head><body><h1>Counter</h1><button id=\"count\">Count: 0</button><p>Keep this text unchanged.</p><script>let count=0;document.getElementById('count').onclick=function(){this.textContent='Count: '+(++count)};</script></body></html>",
+    "prompt": "Make the button background blue. Keep everything else the same.",
+    "acceptance": [
+      "Small patch",
+      "Blue button",
+      "Counter still works",
+      "Copy and layout unchanged"
+    ]
+  },
+  {
+    "id": "short-followup",
+    "artifactType": "website",
+    "mode": "edit",
+    "existingCode": "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{font:20px sans-serif;padding:3rem}button{background:#c22;color:white;padding:1rem;border:0}</style></head><body><h1>Counter</h1><button id=\"count\">Count: 0</button><p>Keep this text unchanged.</p><script>let count=0;document.getElementById('count').onclick=function(){this.textContent='Count: '+(++count)};</script></body></html>",
+    "prompt": "Bigger",
+    "acceptance": [
+      "Short prompt accepted",
+      "Counter button or its text gets larger",
+      "Click behavior preserved",
+      "No document-scale patch"
+    ]
+  },
+  {
+    "id": "answer-only",
+    "artifactType": "website",
+    "mode": "auto",
+    "existingCode": "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{font:20px sans-serif;padding:3rem}button{background:#c22;color:white;padding:1rem;border:0}</style></head><body><h1>Counter</h1><button id=\"count\">Count: 0</button><p>Keep this text unchanged.</p><script>let count=0;document.getElementById('count').onclick=function(){this.textContent='Count: '+(++count)};</script></body></html>",
+    "prompt": "How does the counter work? Explain without changing anything.",
+    "acceptance": [
+      "Resolves to ask",
+      "Explains the click handler",
+      "Document unchanged",
+      "No new code version"
+    ]
+  },
+  {
+    "id": "module-edit",
+    "artifactType": "website",
+    "mode": "edit",
+    "existingCode": "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{font:20px sans-serif;padding:2rem}button{padding:1rem}</style></head><body><h1>Dice Roller</h1><button id=\"roll\">Roll</button><output id=\"result\">Ready</output><script type=\"module\">const roll=document.getElementById('roll');const result=document.getElementById('result');roll.onclick=()=>{result.textContent=String(1+Math.floor(Math.random()*6))};</script></body></html>",
+    "prompt": "Change the dice to 20 sides and show 'You rolled N'. Keep the rest unchanged.",
+    "acceptance": [
+      "Module syntax validates",
+      "Rolls are integers 1 through 20",
+      "Requested result text",
+      "Unrelated styling and markup unchanged"
+    ]
+  },
+  {
+    "id": "game-loop-fix",
+    "artifactType": "game",
+    "mode": "edit",
+    "existingCode": "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{margin:0;display:grid;place-items:center;background:#112;color:white;font:20px sans-serif}canvas{max-width:100%;background:#234}button{padding:1rem}</style></head><body><h1>Bouncing Ball</h1><canvas id=\"game\" width=\"400\" height=\"300\"></canvas><button id=\"restart\">Restart</button><script>const canvas=document.getElementById('game');const ctx=canvas.getContext('2d');let x=30,y=150,vx=2;function tick(){x+=vx;if(x<10||x>390)vx=-vx;ctx.clearRect(0,0,400,300);ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fillStyle='gold';ctx.fill();requestAnimationFrame(tick)}document.getElementById('restart').onclick=()=>{x=30;vx=2;tick()};tick();</script></body></html>",
+    "prompt": "Restart makes the ball move faster each time. Fix that without changing the appearance or normal speed.",
+    "acceptance": [
+      "One animation loop after repeated restarts",
+      "Ball resets position",
+      "Normal speed preserved",
+      "Appearance unchanged"
+    ]
+  },
+  {
+    "id": "game-controls",
+    "artifactType": "game",
+    "mode": "edit",
+    "existingCode": "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{margin:0;display:grid;place-items:center;background:#112;color:white;font:20px sans-serif}canvas{max-width:100%;background:#234}button{padding:1rem}</style></head><body><h1>Bouncing Ball</h1><canvas id=\"game\" width=\"400\" height=\"300\"></canvas><button id=\"restart\">Restart</button><script>const canvas=document.getElementById('game');const ctx=canvas.getContext('2d');let x=30,y=150,vx=2;function tick(){x+=vx;if(x<10||x>390)vx=-vx;ctx.clearRect(0,0,400,300);ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fillStyle='gold';ctx.fill();requestAnimationFrame(tick)}document.getElementById('restart').onclick=()=>{x=30;vx=2};tick();</script></body></html>",
+    "prompt": "Add a Pause/Resume button that works on touch screens too. Preserve restart and the existing game.",
+    "acceptance": [
+      "Pause freezes movement",
+      "Resume continues once",
+      "Restart works without speeding up the loop",
+      "Touch target usable at 390px width"
+    ]
+  }
+]

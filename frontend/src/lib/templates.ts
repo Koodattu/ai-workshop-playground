@@ -1,19 +1,15 @@
+import type { ArtifactType } from "@/types";
+import { seededCollectorCode } from "./seededCollector";
+
 export interface Template {
   id: string;
   nameKey: string;
   code: string;
+  artifactType?: ArtifactType;
 }
 
-// Type for translation messages
-type Messages = {
-  templateContent: {
-    [key: string]: {
-      [key: string]: string;
-    };
-  };
-};
-
 export const TEMPLATES: Template[] = [
+  { id: "seeded-collector", nameKey: "templates.seededCollector", code: seededCollectorCode, artifactType: "game" },
   {
     id: "simple-welcome",
     nameKey: "templates.simpleWelcome",
@@ -472,6 +468,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "snake",
     nameKey: "templates.snake",
+    artifactType: "game",
     code: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -894,6 +891,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "tictactoe",
     nameKey: "templates.tictactoe",
+    artifactType: "game",
     code: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1220,7 +1218,7 @@ export const TEMPLATES: Template[] = [
   },
 ];
 
-export const DEFAULT_TEMPLATE_ID = "simple-welcome";
+export const DEFAULT_TEMPLATE_ID = "welcome";
 
 export function getTemplateById(id: string): Template | undefined {
   return TEMPLATES.find((template) => template.id === id);
@@ -1232,7 +1230,7 @@ export function getTemplateById(id: string): Template | undefined {
  * @param language - The language code ('en' or 'fi')
  * @returns The template code with placeholders replaced with translations
  */
-export function getLocalizedTemplate(templateId: string, language: "en" | "fi", messages: any): string {
+export function getLocalizedTemplate(templateId: string, language: "en" | "fi", messages: Record<string, unknown>): string {
   const template = getTemplateById(templateId);
 
   if (!template) {
@@ -1245,7 +1243,7 @@ export function getLocalizedTemplate(templateId: string, language: "en" | "fi", 
   }
 
   // Ensure we have messages
-  if (!messages || !messages.templateContent) {
+  if (!messages.templateContent) {
     console.error("No translations available");
     return template.code;
   }
@@ -1257,11 +1255,11 @@ export function getLocalizedTemplate(templateId: string, language: "en" | "fi", 
   localizedCode = localizedCode.replace(placeholderRegex, (match, path) => {
     // Parse the path (e.g., "templateContent.welcome.title")
     const parts = path.split(".");
-    let value: any = messages;
+    let value: unknown = messages;
 
     for (const part of parts) {
       if (value && typeof value === "object" && part in value) {
-        value = value[part];
+        value = (value as Record<string, unknown>)[part];
       } else {
         // If translation not found, return the placeholder as-is
         return match;

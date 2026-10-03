@@ -21,6 +21,8 @@ interface EditorPanelProps {
   onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
   isStreaming?: boolean;
   onOpenVersionHistory?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export function EditorPanel({
@@ -35,20 +37,17 @@ export function EditorPanel({
   onEditorReady,
   isStreaming = false,
   onOpenVersionHistory,
+  isCollapsed = false,
+  onToggleCollapse,
 }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const actionsButtonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [actionsPosition, setActionsPosition] = useState({ top: 0, left: 0 });
   const { t } = useLanguage();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Update dropdown position when it opens
   useEffect(() => {
@@ -72,31 +71,34 @@ export function EditorPanel({
     }
   }, [isActionsMenuOpen]);
 
-  const handleEditorMount: OnMount = useCallback((editor) => {
-    editorRef.current = editor;
-    onEditorReady?.(editor);
+  const handleEditorMount: OnMount = useCallback(
+    (editor) => {
+      editorRef.current = editor;
+      onEditorReady?.(editor);
 
     // Configure editor settings
-    editor.updateOptions({
-      fontSize: 14,
-      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-      fontLigatures: true,
-      lineHeight: 1.6,
-      letterSpacing: 0.5,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      renderLineHighlight: "all",
-      cursorBlinking: "smooth",
-      cursorSmoothCaretAnimation: "on",
-      smoothScrolling: true,
-      padding: { top: 16, bottom: 16 },
-      bracketPairColorization: { enabled: true },
-      guides: {
-        bracketPairs: true,
-        indentation: true,
-      },
-    });
-  }, []);
+      editor.updateOptions({
+        fontSize: 14,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontLigatures: true,
+        lineHeight: 1.6,
+        letterSpacing: 0.5,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        renderLineHighlight: "all",
+        cursorBlinking: "smooth",
+        cursorSmoothCaretAnimation: "on",
+        smoothScrolling: true,
+        padding: { top: 16, bottom: 16 },
+        bracketPairColorization: { enabled: true },
+        guides: {
+          bracketPairs: true,
+          indentation: true,
+        },
+      });
+    },
+    [onEditorReady],
+  );
 
   const handleChange: OnChange = useCallback(
     (value) => {
@@ -106,8 +108,9 @@ export function EditorPanel({
   );
 
   const handleFormat = useCallback(() => {
+    if (isStreaming) return;
     editorRef.current?.getAction("editor.action.formatDocument")?.run();
-  }, []);
+  }, [isStreaming]);
 
   const handleCopy = useCallback(async () => {
     if (code) {
@@ -130,12 +133,14 @@ export function EditorPanel({
   }, [code]);
 
   const handleUndo = useCallback(() => {
+    if (isStreaming) return;
     editorRef.current?.trigger("keyboard", "undo", null);
-  }, []);
+  }, [isStreaming]);
 
   const handleRedo = useCallback(() => {
+    if (isStreaming) return;
     editorRef.current?.trigger("keyboard", "redo", null);
-  }, []);
+  }, [isStreaming]);
 
   const handleTemplateSelect = useCallback(
     (templateId: string) => {
@@ -166,16 +171,52 @@ export function EditorPanel({
     return t("templates.customCode");
   }, [currentTemplateId, customTemplates, sharedTemplates, t]);
 
+  const collapseToggle = onToggleCollapse && (
+    <button
+      type="button"
+      onClick={onToggleCollapse}
+      className="relative shrink-0 rounded p-1.5 text-gray-400 transition-colors hover:bg-graphite hover:text-white after:absolute after:left-1/2 after:top-1/2 after:size-10 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']"
+      aria-label={t("editor.collapseEditor")}
+      aria-expanded="true"
+      title={t("editor.collapseEditor")}
+    >
+      <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v18" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m16 15-3-3 3-3" />
+      </svg>
+    </button>
+  );
+
   return (
-    <div className="flex flex-col h-full bg-void">
+    <div className="relative flex h-full flex-col overflow-hidden bg-void">
+      {isCollapsed && onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="absolute inset-0 flex cursor-pointer flex-col items-center justify-start bg-obsidian transition-colors hover:bg-graphite focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-electric"
+          aria-label={t("editor.expandEditor")}
+          aria-expanded="false"
+          title={t("editor.expandEditor")}
+        >
+          <div className="mt-16 flex rotate-90 items-center gap-2 whitespace-nowrap">
+            <svg className="h-4 w-4 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            <h2 className="font-display text-sm font-semibold tracking-wide text-white">{t("editor.header")}</h2>
+          </div>
+        </button>
+      )}
+
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.25 border-b border-steel/50 bg-obsidian">
+      <div className={`flex items-center justify-between px-4 py-2.25 border-b border-steel/50 bg-obsidian ${isCollapsed ? "invisible" : ""}`}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 text-ember" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
             <h2 className="font-display text-sm font-semibold text-white tracking-wide">{t("editor.header")}</h2>
+            {collapseToggle}
           </div>
         </div>
 
@@ -184,6 +225,7 @@ export function EditorPanel({
           <div className="relative">
             <button
               ref={buttonRef}
+              disabled={isStreaming}
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-carbon text-gray-300 hover:text-white hover:bg-graphite transition-all border border-steel/30 hover:border-steel/50"
               title={t("editor.selectTemplate")}
@@ -202,8 +244,7 @@ export function EditorPanel({
               </svg>
             </button>
 
-            {mounted &&
-              isDropdownOpen &&
+            {isDropdownOpen &&
               createPortal(
                 <>
                   <div className="fixed inset-0 z-9998" onClick={() => setIsDropdownOpen(false)} />
@@ -525,8 +566,7 @@ export function EditorPanel({
               </svg>
             </button>
 
-            {mounted &&
-              isActionsMenuOpen &&
+            {isActionsMenuOpen &&
               createPortal(
                 <>
                   <div className="fixed inset-0 z-9998" onClick={() => setIsActionsMenuOpen(false)} />
@@ -611,18 +651,18 @@ export function EditorPanel({
           {/* Desktop: Individual toolbar buttons */}
           <div className="hidden md:flex items-center gap-0">
             <div className="w-px h-4 bg-steel/50" />
-            <button onClick={handleUndo} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors ml-2" title={t("editor.undoTitle")}>
+            <button onClick={handleUndo} disabled={isStreaming} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors ml-2" title={t("editor.undoTitle")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
               </svg>
             </button>
-            <button onClick={handleRedo} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.redoTitle")}>
+            <button onClick={handleRedo} disabled={isStreaming} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.redoTitle")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
               </svg>
             </button>
             <div className="w-px h-4 bg-steel/50 mx-2" />
-            <button onClick={handleFormat} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.formatTitle")}>
+            <button onClick={handleFormat} disabled={isStreaming} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-graphite transition-colors" title={t("editor.formatTitle")}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
               </svg>
@@ -647,7 +687,7 @@ export function EditorPanel({
       </div>
 
       {/* Editor */}
-      <div className="flex-1 overflow-hidden">
+      <div className={`flex-1 overflow-hidden ${isCollapsed ? "invisible" : ""}`}>
         <Editor
           defaultLanguage="html"
           value={code}
@@ -675,7 +715,7 @@ export function EditorPanel({
             automaticLayout: true,
             tabSize: 2,
             wordWrap: "on",
-            readOnly: false,
+            readOnly: isStreaming,
             domReadOnly: isStreaming,
           }}
         />

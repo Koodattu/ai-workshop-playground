@@ -58,9 +58,14 @@ const codeVersionSchema = new mongoose.Schema(
       maxlength: [50, "Project name cannot exceed 50 characters"],
       default: null,
     },
+    artifactType: {
+      type: String,
+      enum: ["website", "game"],
+      default: "website",
+    },
     modelProvider: {
       type: String,
-      enum: ["gemini", "openai", null],
+      enum: ["gemini", "openai", "deepseek", null],
       default: null,
     },
     modelPreference: {
@@ -93,6 +98,11 @@ const codeVersionSchema = new mongoose.Schema(
       enum: ["replace_all", "patch"],
       default: "replace_all",
     },
+    changeScope: {
+      type: String,
+      enum: ["localized", "cross_cutting", "rewrite"],
+      default: "rewrite",
+    },
     editCount: {
       type: Number,
       default: 0,
@@ -114,6 +124,15 @@ const codeVersionSchema = new mongoose.Schema(
         },
       ],
       default: [],
+    },
+    patchRetryAttempted: {
+      type: Boolean,
+      default: false,
+    },
+    patchApplyMethod: {
+      type: String,
+      enum: ["exact", "line-ending-normalized", "mixed", null],
+      default: null,
     },
     manualEditsSinceParent: {
       type: Boolean,

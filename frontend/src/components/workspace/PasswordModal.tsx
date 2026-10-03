@@ -14,6 +14,8 @@ interface PasswordModalProps {
   initialPassword?: string;
   initialMode?: AuthMode;
   apiKeys: UserApiKeySettings;
+  showThoughts: boolean;
+  onShowThoughtsChange: (showThoughts: boolean) => void;
   onSaveApiKeys: (apiKeys: UserApiKeySettings) => void;
   onTestApiKey: (provider: ApiKeyProvider, apiKey: string) => Promise<boolean>;
   onClose: () => void;
@@ -24,7 +26,15 @@ type TestState = "idle" | "testing" | "valid" | "invalid";
 const PROVIDERS: Array<{ id: ApiKeyProvider; label: string }> = [
   { id: "gemini", label: "Gemini" },
   { id: "openai", label: "OpenAI" },
+  { id: "deepseek", label: "DeepSeek" },
 ];
+
+const normalizeApiKeys = (apiKeys: UserApiKeySettings): UserApiKeySettings => ({
+  gemini: apiKeys.gemini || "",
+  openai: apiKeys.openai || "",
+  deepseek: apiKeys.deepseek || "",
+  accessToken: apiKeys.accessToken || "",
+});
 
 export function PasswordModal({
   onAuthenticate,
@@ -33,36 +43,24 @@ export function PasswordModal({
   initialPassword,
   initialMode = "password",
   apiKeys: initialApiKeys,
+  showThoughts,
+  onShowThoughtsChange,
   onSaveApiKeys,
   onTestApiKey,
   onClose,
 }: PasswordModalProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [password, setPassword] = useState(initialPassword || "");
-  const [apiKeys, setApiKeys] = useState<UserApiKeySettings>(initialApiKeys);
+  const [apiKeys, setApiKeys] = useState<UserApiKeySettings>(() => normalizeApiKeys(initialApiKeys));
   const [apiKeyError, setApiKeyError] = useState<string | undefined>();
   const [testStates, setTestStates] = useState<Record<ApiKeyProvider, TestState>>({
     gemini: "idle",
     openai: "idle",
+    deepseek: "idle",
   });
   const { t } = useLanguage();
   const modalRef = useRef<HTMLDivElement>(null);
   const testResetTimersRef = useRef<Partial<Record<ApiKeyProvider, ReturnType<typeof setTimeout>>>>({});
-
-  useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
-
-  useEffect(() => {
-    setApiKeys(initialApiKeys);
-  }, [initialApiKeys]);
-
-  useEffect(() => {
-    if (initialPassword) {
-      setPassword(initialPassword);
-      setMode("password");
-    }
-  }, [initialPassword]);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
@@ -81,8 +79,9 @@ export function PasswordModal({
   }, [onClose, isValidating]);
 
   useEffect(() => {
+    const resetTimers = testResetTimersRef.current;
     return () => {
-      Object.values(testResetTimersRef.current).forEach((timer) => {
+      Object.values(resetTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
     };
@@ -138,9 +137,10 @@ export function PasswordModal({
       ...apiKeys,
       gemini: apiKeys.gemini.trim(),
       openai: apiKeys.openai.trim(),
+      deepseek: apiKeys.deepseek.trim(),
     };
 
-    if (!nextKeys.gemini && !nextKeys.openai) {
+    if (!nextKeys.gemini && !nextKeys.openai && !nextKeys.deepseek) {
       setApiKeyError(t("apiKeys.oneKeyRequired"));
       return;
     }
@@ -172,7 +172,7 @@ export function PasswordModal({
     return t("apiKeys.test");
   };
 
-  const hasAnyApiKey = Boolean(apiKeys.gemini.trim() || apiKeys.openai.trim());
+  const hasAnyApiKey = Boolean(apiKeys.gemini.trim() || apiKeys.openai.trim() || apiKeys.deepseek.trim());
   const isTesting = Object.values(testStates).includes("testing");
 
   return (
@@ -285,6 +285,29 @@ export function PasswordModal({
               </button>
             </form>
           )}
+
+          <div className="mt-6 border-t border-steel/40 pt-5">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showThoughts}
+              onClick={() => onShowThoughtsChange(!showThoughts)}
+              className="flex min-h-12 w-full items-center justify-between gap-4 rounded-xl bg-carbon/60 px-4 py-3 text-left transition-[background-color,box-shadow,scale] duration-200 ease-out hover:bg-carbon hover:shadow-inner-glow active:scale-[0.96]"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-white">{t("settings.showThoughts")}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-gray-400 text-pretty">{t("settings.showThoughtsDescription")}</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${showThoughts ? "bg-electric" : "bg-steel"}`}
+              >
+                <span
+                  className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${showThoughts ? "translate-x-6" : "translate-x-1"}`}
+                />
+              </span>
+            </button>
+          </div>
 
           <div className="mt-6 space-y-3">
             <div className="flex justify-center">

@@ -1,18 +1,27 @@
 "use client";
 
 import { useState, useRef, useEffect, FormEvent } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ChatMessage, ChatMode, ModelPreference } from "@/types";
+import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference, GenerationAttachment, PreviewFeedback } from "@/types";
+import { prepareScreenshot } from "@/lib/previewFeedback";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
-  onSendMessage: (prompt: string) => Promise<void>;
+  onSendMessage: (prompt: string, attachment?: GenerationAttachment) => Promise<void>;
+  previewFeedback?: PreviewFeedback;
+  onClearFeedback?: () => void;
   isLoading: boolean;
+  generationPhase?: GenerationPhase;
+  generationStartedAt?: number;
+  onStop?: () => void;
   remainingUses?: number;
   showToast: (message: string, type: "success" | "error" | "info") => void;
   streamingMessage?: string;
+  progressMessage?: string;
+  showThoughts?: boolean;
   onClearMessages?: () => void;
   onOpenSettings?: () => void;
   onOpenUsage?: () => void;
@@ -22,19 +31,49 @@ interface ChatPanelProps {
   onUnlockClick: () => void;
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
+  artifactType: ArtifactType;
+  onArtifactTypeChange: (artifactType: ArtifactType) => void;
   modelPreference: ModelPreference;
   onModelPreferenceChange: (modelPreference: ModelPreference) => void;
   enabledModelPreferences: ModelPreference[];
+  modelOptions: Array<{ id: ModelPreference; order: number; provider: ApiKeyProvider; translationKey: string }>;
   onRetryMessage?: (prompt: string) => Promise<void>;
+}
+
+function durationParts(durationMs: number) {
+  const seconds = Math.max(0, Math.floor(durationMs / 1000));
+  return { minutes: Math.floor(seconds / 60), seconds: seconds % 60 };
+}
+
+function GenerationStatus({ phase, startedAt }: { phase: GenerationPhase; startedAt?: number }) {
+  const { t } = useLanguage();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="min-w-0 text-sm text-gray-400 font-mono leading-relaxed">
+      <div role="status" aria-live="polite">{t(`chat.phases.${phase}`)}</div>
+      <div role="timer" aria-live="off" className="mt-1 text-xs text-gray-500 tabular-nums">
+        {t("chat.workingFor", durationParts(now - (startedAt ?? now)))}
+      </div>
+    </div>
+  );
 }
 
 export function ChatPanel({
   messages,
   onSendMessage,
   isLoading,
+  generationPhase = "working",
+  generationStartedAt,
+  onStop,
   remainingUses,
   showToast,
   streamingMessage,
+  progressMessage = "",
+  showThoughts = false,
   onClearMessages,
   onOpenSettings,
   onOpenUsage,
@@ -44,30 +83,41 @@ export function ChatPanel({
   onUnlockClick,
   mode,
   onModeChange,
+  artifactType,
+  onArtifactTypeChange,
   modelPreference,
   onModelPreferenceChange,
   enabledModelPreferences,
+  modelOptions,
   onRetryMessage,
+  previewFeedback,
+  onClearFeedback,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
+  const [screenshot, setScreenshot] = useState<string>();
+  const [preparingImage, setPreparingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const progressScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { t } = useLanguage();
-  const modelOptions = [
-    { value: "balanced", label: t("chat.modelGemini3") },
-    { value: "fast", label: t("chat.modelGemini25") },
-    { value: "accurate", label: t("chat.modelGemini35") },
-    { value: "gpt54mini", label: t("chat.modelGpt54Mini") },
-    { value: "gpt54", label: t("chat.modelGpt54") },
-    { value: "gpt55", label: t("chat.modelGpt55") },
-  ] satisfies Array<{ value: ModelPreference; label: string }>;
-  const enabledModelOptions = modelOptions.filter((option) => enabledModelPreferences.includes(option.value));
-  const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : modelOptions;
+  const orderedModelOptions = [...modelOptions]
+    .sort((a, b) => a.order - b.order)
+    .map((option) => ({ value: option.id, label: t(option.translationKey) }));
+  const enabledModelOptions = orderedModelOptions.filter((option) => enabledModelPreferences.includes(option.value));
+  const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : orderedModelOptions;
 
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingMessage]);
+  }, [messages, streamingMessage, progressMessage]);
+
+  useEffect(() => {
+    const progressContainer = progressScrollRef.current;
+    if (progressContainer && showThoughts) {
+      progressContainer.scrollTop = progressContainer.scrollHeight;
+    }
+  }, [progressMessage, showThoughts]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -87,13 +137,14 @@ export function ChatPanel({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (prompt.trim() && !isLoading) {
+    if (prompt.trim() && !isLoading && !preparingImage) {
       const trimmedPrompt = prompt.trim();
       // Clear the prompt immediately
       setPrompt("");
       try {
-        await onSendMessage(trimmedPrompt);
-      } catch (err) {
+        await onSendMessage(trimmedPrompt, { previewFeedback, screenshot });
+        setScreenshot(undefined);
+      } catch {
         // Restore the prompt on error so user can retry
         setPrompt(trimmedPrompt);
         // Error handling is done in the parent component
@@ -198,8 +249,8 @@ export function ChatPanel({
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-electric/20 to-ember/20 flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-2">
+              <svg className="w-10 h-10 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -220,6 +271,9 @@ export function ChatPanel({
                   ${message.role === "user" ? "bg-electric/20 border border-electric/30 text-white" : "bg-carbon border border-steel/50 text-gray-300"}
                 `}
               >
+                {message.role === "assistant" && message.durationMs !== undefined && (
+                  <p className="mb-2 text-xs font-mono text-gray-500 tabular-nums">{t("chat.workedFor", durationParts(message.durationMs))}</p>
+                )}
                 <p className="text-sm font-body whitespace-pre-wrap leading-relaxed">{message.content}</p>
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-[10px] font-mono text-gray-500 uppercase">
@@ -274,13 +328,22 @@ export function ChatPanel({
           </div>
         )}
 
-        {isLoading && !streamingMessage && (
+        {isLoading && (
           <div className="flex items-center gap-3 animate-fade-in">
-            <div className="bg-carbon border border-steel/50 rounded-xl px-4 py-3">
-              <div className="flex items-center gap-2">
+            <div className="max-w-[90%] bg-carbon border border-steel/50 rounded-xl px-4 py-3">
+              <div className="flex items-start gap-2">
                 <Spinner size="sm" />
-                <span className="text-sm text-gray-400 font-mono">{t("chat.generating")}</span>
+                <GenerationStatus phase={generationPhase} startedAt={generationStartedAt} />
               </div>
+              {showThoughts && progressMessage && (
+                <details className="mt-3 text-xs text-gray-400">
+                  <summary className="cursor-pointer">{t("chat.modelProgress")}</summary>
+                  <div ref={progressScrollRef} className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap scrollbar-thin">{progressMessage}</div>
+                </details>
+              )}
+              <Button type="button" size="sm" onClick={onStop} disabled={!onStop || generationPhase === "saving"} className="mt-3">
+                {t("chat.stop")}
+              </Button>
             </div>
           </div>
         )}
@@ -351,13 +414,31 @@ export function ChatPanel({
         ) : (
           /* Normal authenticated state - Show input form */
           <form onSubmit={handleSubmit} className="space-y-3">
+            {previewFeedback && (
+              <div className="rounded-lg border border-electric/30 bg-electric/10 p-2 text-xs text-gray-300">
+                <div className="flex items-center justify-between gap-2">
+                  <span>{t("chat.previewAttached")}</span>
+                  <button type="button" onClick={onClearFeedback} disabled={isLoading} className="text-electric">{t("chat.removeAttachment")}</button>
+                </div>
+                <p className="mt-1 text-gray-400">{t("chat.describeProblem")}</p>
+              </div>
+            )}
+            {screenshot && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-steel p-2 text-xs text-gray-300">
+                <div className="relative h-12 w-16 shrink-0">
+                  <Image src={screenshot} alt={t("chat.screenshotAttached")} fill sizes="64px" unoptimized className="rounded object-contain" />
+                </div>
+                <span className="min-w-0 flex-1 break-words">{t("chat.screenshotAttached")}</span>
+                <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading} className="shrink-0 text-electric">{t("chat.removeAttachment")}</button>
+              </div>
+            )}
             <div className="relative">
               <textarea
                 ref={textareaRef}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={t("chat.sendPlaceholder")}
+                placeholder={artifactType === "game" ? t("chat.gamePlaceholder") : t("chat.websitePlaceholder")}
                 rows={1}
                 disabled={isLoading}
                 className="
@@ -372,37 +453,106 @@ export function ChatPanel({
               />
             </div>
 
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" aria-label={t("chat.attachScreenshot")}
+                disabled={isLoading || preparingImage} onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  setPreparingImage(true);
+                  try { setScreenshot(await prepareScreenshot(file)); }
+                  catch { showToast(t("chat.screenshotInvalid"), "error"); }
+                  finally { setPreparingImage(false); }
+                }} />
+              <button type="button" onClick={() => imageInputRef.current?.click()} disabled={isLoading || preparingImage} className="rounded px-1 py-1 hover:text-white disabled:opacity-40">
+                {preparingImage ? t("chat.preparingScreenshot") : t("chat.attachScreenshot")}
+              </button>
+            </div>
+
             <div className="flex items-end justify-between gap-2 flex-wrap">
-              {/* Left side: Mode toggle + auto-switch (mobile only) */}
+              {/* Left side: Artifact/action modes + auto-switch (mobile only) */}
               <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
-                {/* ASK/EDIT Mode Toggle */}
-                <div className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5 md:p-1">
-                  <button
-                    type="button"
-                    onClick={() => onModeChange("ask")}
-                    disabled={isLoading}
-                    className={`
-                      px-2 py-0.5 md:px-4 md:py-1.5 rounded text-[10px] md:text-xs font-mono transition-all duration-200
-                      ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                    title={t("chat.askModeTooltip")}
-                  >
-                    {t("chat.askMode")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onModeChange("edit")}
-                    disabled={isLoading}
-                    className={`
-                      px-2 py-0.5 md:px-4 md:py-1.5 rounded text-[10px] md:text-xs font-mono transition-all duration-200
-                      ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                    title={t("chat.editModeTooltip")}
-                  >
-                    {t("chat.editMode")}
-                  </button>
+                <div className="flex flex-col gap-1">
+                  <div role="group" aria-label={t("chat.artifactModeLabel")} className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onArtifactTypeChange("website")}
+                      disabled={isLoading}
+                      aria-pressed={artifactType === "website"}
+                      className={`
+                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${artifactType === "website" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.websiteModeTooltip")}
+                    >
+                      {t("chat.websiteMode")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onArtifactTypeChange("game")}
+                      disabled={isLoading}
+                      aria-pressed={artifactType === "game"}
+                      className={`
+                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${artifactType === "game" ? "bg-purple-500/20 text-purple-300 border border-purple-400/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.gameModeTooltip")}
+                    >
+                      {t("chat.gameMode")}
+                    </button>
+                  </div>
+
+                  <div role="group" aria-label={t("chat.actionModeLabel")} className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onModeChange("auto")}
+                      disabled={isLoading}
+                      aria-pressed={mode === "auto"}
+                      className={`
+                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${mode === "auto" ? "bg-white/10 text-white border border-white/15" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.autoModeTooltip")}
+                    >
+                      {t("chat.autoMode")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onModeChange("ask")}
+                      disabled={isLoading}
+                      aria-pressed={mode === "ask"}
+                      className={`
+                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.askModeTooltip")}
+                    >
+                      {t("chat.askMode")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onModeChange("edit")}
+                      disabled={isLoading}
+                      aria-pressed={mode === "edit"}
+                      className={`
+                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
+                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
+                        ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
+                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+                      `}
+                      title={t("chat.editModeTooltip")}
+                    >
+                      {t("chat.editMode")}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Mobile only: Auto-switch checkbox */}
@@ -469,7 +619,7 @@ export function ChatPanel({
                 </select>
               </div>
 
-              <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>
+              <Button type="submit" size="md" disabled={!prompt.trim() || isLoading || preparingImage} isLoading={isLoading}>
                 {mode === "edit" ? (
                   <>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -477,7 +627,7 @@ export function ChatPanel({
                     </svg>
                     {t("chat.generateButton")}
                   </>
-                ) : (
+                ) : mode === "ask" ? (
                   <>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
@@ -488,6 +638,13 @@ export function ChatPanel({
                       />
                     </svg>
                     {t("chat.askButton")}
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                    {t("chat.sendButton")}
                   </>
                 )}
               </Button>

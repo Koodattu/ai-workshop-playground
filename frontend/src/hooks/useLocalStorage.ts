@@ -1,45 +1,40 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
-  // State to store our value
-  const [storedValue, setStoredValue] = useState<T>(initialValue);
-  const storedValueRef = useRef<T>(initialValue);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === "undefined") return initialValue;
 
-  // Load from localStorage on mount
-  useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
-      if (item) {
-        const parsedValue = JSON.parse(item);
-        storedValueRef.current = parsedValue;
-        setStoredValue(parsedValue);
-      }
+      return item ? (JSON.parse(item) as T) : initialValue;
     } catch (error) {
       console.warn(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
     }
-    setIsHydrated(true);
-  }, [key]);
+  });
+  const storedValueRef = useRef<T>(storedValue);
 
   // Return a wrapped version of useState's setter function that
   // persists the new value to localStorage
-  const setValue = (value: T | ((prev: T) => T)) => {
-    try {
-      // Allow value to be a function so we have the same API as useState.
-      const valueToStore = value instanceof Function ? value(storedValueRef.current) : value;
-      storedValueRef.current = valueToStore;
-      setStoredValue(valueToStore);
+  const setValue = useCallback(
+    (value: T | ((prev: T) => T)) => {
+      try {
+        // Allow value to be a function so we have the same API as useState.
+        const valueToStore = value instanceof Function ? value(storedValueRef.current) : value;
+        storedValueRef.current = valueToStore;
+        setStoredValue(valueToStore);
 
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        }
+      } catch (error) {
+        console.warn(`Error setting localStorage key "${key}":`, error);
       }
-    } catch (error) {
-      console.warn(`Error setting localStorage key "${key}":`, error);
-    }
-  };
+    },
+    [key],
+  );
 
-  // Return initial value during SSR, actual value after hydration
-  return [isHydrated ? storedValue : initialValue, setValue];
+  return [storedValue, setValue];
 }

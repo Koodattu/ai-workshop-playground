@@ -1,4 +1,6 @@
-This is a comprehensive, technical blueprint for building the **AI Workshop Playground**. This plan covers the architecture, data schemas, specific logic for the "Workshop Auth," and the integration of the code execution environment.
+> Historical note: this is the original implementation plan and does not describe the current architecture. Use [`TECHNICAL.md`](../TECHNICAL.md) for the maintained system design and [`CONTEXT.md`](../CONTEXT.md) for domain language.
+
+This is the original technical blueprint for building the **AI Workshop Playground**. It is retained as project history.
 
 ---
 

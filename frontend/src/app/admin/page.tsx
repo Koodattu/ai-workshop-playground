@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, FormEvent, useCallback, useEffect, useRef } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { PasswordManager } from "@/components/admin/PasswordManager";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
@@ -43,7 +45,7 @@ export default function AdminPage() {
           setAdminSecret("");
           setError(t("admin.invalidSecret"));
         }
-      } catch (err) {
+      } catch {
         // Clear invalid/expired secret from localStorage
         setAdminSecret("");
         setError(t("admin.invalidSecret"));
@@ -133,9 +135,9 @@ export default function AdminPage() {
 
             {/* Footer */}
             <div className="mt-6 text-center">
-              <a href="/" className="text-xs text-gray-500 hover:text-gray-300 font-body transition-colors">
+              <Link href="/" className="text-xs text-gray-500 hover:text-gray-300 font-body transition-colors">
                 ← {t("admin.backToWorkshop")}
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -152,7 +154,7 @@ export default function AdminPage() {
       <header className="sticky top-0 z-10 border-b border-steel/30 bg-obsidian/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/web-app-manifest-192x192.png" alt="App icon" className="w-10 h-10 object-contain" />
+            <Image src="/web-app-manifest-192x192.png" alt="App icon" width={40} height={40} className="w-10 h-10 object-contain" />
             <div>
               <h1 className="font-display text-xl font-bold text-white tracking-tight">{t("admin.dashboardTitle")}</h1>
               <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">{t("admin.dashboardSubtitle")}</p>
@@ -161,12 +163,12 @@ export default function AdminPage() {
 
           <div className="flex items-center gap-4">
             <LanguageSwitcher />
-            <a href="/" className="text-sm font-mono text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+            <Link href="/" className="text-sm font-mono text-gray-400 hover:text-white transition-colors flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               {t("admin.workspaceLink")}
-            </a>
+            </Link>
             <Button
               onClick={() => {
                 setIsAuthenticated(false);

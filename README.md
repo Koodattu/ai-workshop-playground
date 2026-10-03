@@ -34,13 +34,13 @@ The easiest way to get started:
 git clone https://github.com/yourusername/ai-workshop-playground.git
 cd ai-workshop-playground
 
-# 2. Set up your environment
-cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY and ADMIN_SECRET
-# Add OPENAI_API_KEY too if you enable OpenAI models in the admin panel
+# 2. Set up your backend environment
+cp backend/.env.example backend/.env
+# Edit backend/.env and add your GEMINI_API_KEY and ADMIN_SECRET
+# Add OPENAI_API_KEY and/or DEEPSEEK_API_KEY if you enable those models in the admin panel
 
 # 3. Start everything with Docker Compose
-docker-compose up --build
+docker compose up --build
 
 # 4. Open your browser
 # Visit http://localhost:3000
@@ -58,24 +58,26 @@ If you prefer to run services individually:
 
 **Prerequisites:**
 
-- Node.js 20 or higher
+- Node.js 24 or higher
 - MongoDB running locally or in Docker
 - Google Gemini API key ([get one free](https://makersuite.google.com/app/apikey))
 - Optional OpenAI API key for GPT models
+- Optional DeepSeek API key for DeepSeek models
 
 ```bash
 # Start MongoDB
-docker run -d -p 27017:27017 mongo:latest
+docker run -d -p 27017:27017 mongo:8.0
 
 # Start the backend
 cd backend
-npm install
-cp .env.example .env  # Add your GEMINI_API_KEY, ADMIN_SECRET, and optional OPENAI_API_KEY
+npm ci
+cp .env.example .env  # Add your GEMINI_API_KEY, ADMIN_SECRET, and optional provider keys
 npm run dev
 
 # In another terminal, start the frontend
 cd frontend
-npm install
+npm ci
+cp .env.example .env
 npm run dev
 ```
 
@@ -103,7 +105,7 @@ graph LR
 ### For Participants
 
 - **Three-Panel IDE**: Professional development environment with chat, code editor (Monaco), and live preview
-- **Smart AI Assistant**: Powered by selectable Google Gemini Flash models for fast, high-quality code generation
+- **Smart AI Assistant**: Powered by selectable Gemini, OpenAI, and DeepSeek models for fast, high-quality code generation
 - **Template Library**: Start with pre-built templates or generate from scratch
 - **Code Editing**: Full Monaco editor with syntax highlighting, auto-formatting, and undo/redo
 - **Bilingual**: Full support for English and Finnish interfaces
@@ -163,20 +165,21 @@ ai-workshop-playground/
 │   │   └── lib/          # API client & utilities
 │   └── Dockerfile
 ├── docker-compose.yml # Run everything together
-└── .env.example       # Configuration template
+├── backend/.env.example  # Backend configuration template
+└── frontend/.env.example # Frontend configuration template
 ```
 
 ## 🛠️ Technology Stack
 
 - **Frontend**: Next.js 15, React, TypeScript, Tailwind CSS, Monaco Editor
 - **Backend**: Node.js, Express.js, MongoDB
-- **AI**: Google Gemini Flash API
+- **AI**: Google Gemini, OpenAI, and DeepSeek APIs
 - **Deployment**: Docker & Docker Compose
 
 ## 🔒 Security & Safety
 
 - **Sandboxed Execution**: Generated code runs in an isolated iframe
-- **API Key Protection**: Your Gemini API key never leaves the server
+- **API Key Protection**: Server-managed provider keys never leave the backend
 - **Rate Limiting**: Per-machine limits prevent abuse
 - **Access Control**: Workshop passwords required for all code generation
 - **Admin Protection**: Dashboard secured with secret key

@@ -1,5 +1,7 @@
 import { config } from "./config";
+import { createArtifactGenerationRun, type ArtifactGenerationRun } from "./artifactGenerationRun";
 import type {
+  ArtifactType,
   GenerateRequest,
   GenerateResponse,
   PasswordEntry,
@@ -16,6 +18,7 @@ import type {
   ShareLinkEntry,
   CodeVersion,
   ModelPreference,
+  ModelOption,
   ModelSettings,
   ApiKeyProvider,
   VersionListRequest,
@@ -41,12 +44,19 @@ class ApiClient {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }));
+        const error = (await response.json().catch(() => ({ error: this.getHttpErrorMessage(response.status) }))) as {
+          error?: string;
+          errorCode?: string;
+          details?: string[];
+        };
         // Create an error object that includes both the message and the error code
-        const errorObj = new Error(error.error || this.getHttpErrorMessage(response.status));
+        const errorObj = new Error(error.error || this.getHttpErrorMessage(response.status)) as Error & {
+          errorCode?: string;
+          details?: string[];
+        };
         // Attach errorCode and details as properties so they can be accessed by error handlers
-        (errorObj as any).errorCode = error.errorCode;
-        (errorObj as any).details = error.details;
+        errorObj.errorCode = error.errorCode;
+        errorObj.details = error.details;
         throw errorObj;
       }
 
@@ -99,7 +109,7 @@ class ApiClient {
   }
 
   // Generate code with streaming
-  async generateCodeStream(request: GenerateRequest, callbacks: StreamCallbacks): Promise<() => void> {
+  async generateCodeStream(request: GenerateRequest, callbacks: StreamCallbacks, signal?: AbortSignal): Promise<() => void> {
     const url = `${this.baseUrl}/api/generate`;
     const abortController = new AbortController();
 
@@ -110,7 +120,7 @@ class ApiClient {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(request),
-        signal: abortController.signal,
+        signal: signal ? AbortSignal.any([abortController.signal, signal]) : abortController.signal,
       });
 
       if (!response.ok) {
@@ -130,6 +140,9 @@ class ApiClient {
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let terminalEventReceived = false;
+      let cancelledByCaller = false;
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
       const streamDiagnostics = {
         eventTypes: {} as Record<string, number>,
         codeChunks: 0,
@@ -142,6 +155,29 @@ class ApiClient {
         console.info(`[SSE Stream Diagnostic] ${event}`, payload);
       };
 
+      const clearInactivityTimer = () => {
+        if (inactivityTimer) {
+          clearTimeout(inactivityTimer);
+          inactivityTimer = null;
+        }
+      };
+
+      const finishWithError = (message: string, errorCode?: string, details?: string[]) => {
+        if (terminalEventReceived || cancelledByCaller || signal?.aborted) return;
+        terminalEventReceived = true;
+        callbacks.onError?.(message, undefined, errorCode, details);
+      };
+
+      const armInactivityTimer = () => {
+        clearInactivityTimer();
+        inactivityTimer = setTimeout(() => {
+          finishWithError("The generation stream stopped responding.", "AI_GENERATION_FAILED", ["No stream data was received for 120 seconds."]);
+          abortController.abort();
+        }, 120000);
+      };
+
+      armInactivityTimer();
+
       // Start reading the stream
       (async () => {
         try {
@@ -149,8 +185,13 @@ class ApiClient {
             const { done, value } = await reader.read();
 
             if (done) {
+              if (!terminalEventReceived && !cancelledByCaller) {
+                finishWithError("The generation stream ended before completion.", "AI_GENERATION_FAILED", ["The server closed the stream without a final event."]);
+              }
               break;
             }
+
+            armInactivityTimer();
 
             // Decode the chunk and add to buffer
             buffer += decoder.decode(value, { stream: true });
@@ -160,6 +201,7 @@ class ApiClient {
             buffer = lines.pop() || ""; // Keep the last incomplete line in the buffer
 
             for (const line of lines) {
+              if (terminalEventReceived || cancelledByCaller || signal?.aborted) break;
               if (!line.trim()) continue;
 
               // Parse SSE format (lines starting with "data: ")
@@ -171,6 +213,9 @@ class ApiClient {
 
                   // Handle different event types
                   switch (event.type) {
+                    case "status":
+                      callbacks.onStatus?.(event);
+                      break;
                     case "chunk":
                       callbacks.onChunk?.(event.chunk, event.accumulated);
                       break;
@@ -202,10 +247,15 @@ class ApiClient {
                     case "message-update":
                       callbacks.onMessageUpdate?.(event.message);
                       break;
+                    case "progress":
+                      callbacks.onProgress?.(event.delta);
+                      break;
                     case "code-update":
                       callbacks.onCodeUpdate?.(event.code);
                       break;
                     case "done":
+                      if (terminalEventReceived) break;
+                      terminalEventReceived = true;
                       logStreamDiagnostic("summary", {
                         ...streamDiagnostics,
                         elapsedMs: Date.now() - streamDiagnostics.startedAt,
@@ -213,34 +263,50 @@ class ApiClient {
                       callbacks.onDone?.({
                         message: event.message,
                         code: event.code,
+                        mode: event.mode,
                         projectName: event.projectName,
+                        artifactType: event.artifactType,
                         editMode: event.editMode,
+                        changeScope: event.changeScope,
                         version: event.version,
                         remaining: event.remaining,
                         usage: event.usage,
+                        durationMs: event.durationMs,
                       });
                       break;
                     case "error":
+                      if (terminalEventReceived) break;
+                      terminalEventReceived = true;
                       callbacks.onError?.(event.error, event.remainingUses, event.errorCode, event.details);
                       break;
                   }
                 } catch (parseError) {
                   console.error("Failed to parse SSE data:", parseError);
+                  finishWithError("Failed to parse the generation stream.", "AI_RESPONSE_PARSE_FAILED");
+                  abortController.abort();
+                  break;
                 }
               }
             }
+            if (terminalEventReceived || cancelledByCaller || signal?.aborted) break;
           }
         } catch (error) {
           if (error instanceof Error && error.name !== "AbortError") {
-            callbacks.onError?.(error.message || "NETWORK_ERROR");
+            finishWithError(error.message || "NETWORK_ERROR");
           }
         } finally {
+          clearInactivityTimer();
+          await reader.cancel().catch(() => {});
           reader.releaseLock();
         }
       })();
 
       // Return cleanup function
-      return () => abortController.abort();
+      return () => {
+        cancelledByCaller = true;
+        clearInactivityTimer();
+        abortController.abort();
+      };
     } catch (error) {
       if (error instanceof Error && error.name !== "AbortError") {
         callbacks.onError?.(error.message || "NETWORK_ERROR");
@@ -254,8 +320,25 @@ class ApiClient {
     return data.models;
   }
 
+  startArtifactGeneration(request: GenerateRequest): ArtifactGenerationRun {
+    return createArtifactGenerationRun((callbacks, signal) => this.generateCodeStream(request, callbacks, signal));
+  }
+
+  async getModelCatalog(): Promise<ModelOption[]> {
+    const { data } = await this.request<{ options: ModelOption[] }>("/api/models");
+    return data.options;
+  }
+
   async getMyCodeVersions(request: VersionListRequest): Promise<CodeVersion[]> {
     const { data } = await this.request<{ count: number; versions: CodeVersion[] }>("/api/versions/list", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return data.versions;
+  }
+
+  async getCodeVersionLineage(versionId: string, request: VersionListRequest): Promise<CodeVersion[]> {
+    const { data } = await this.request<{ count: number; versions: CodeVersion[] }>(`/api/versions/${encodeURIComponent(versionId)}/lineage`, {
       method: "POST",
       body: JSON.stringify(request),
     });
@@ -440,10 +523,10 @@ class ApiClient {
   }
 
   // Create a share link
-  async createShareLink(code: string, title?: string, projectName?: string): Promise<CreateShareResponse> {
+  async createShareLink(code: string, title?: string, projectName?: string, artifactType: ArtifactType = "website"): Promise<CreateShareResponse> {
     const { data } = await this.request<{ message: string; data: CreateShareResponse }>("/api/share", {
       method: "POST",
-      body: JSON.stringify({ code, title, projectName }),
+      body: JSON.stringify({ code, title, projectName, artifactType }),
     });
     return data.data;
   }

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState, use, useCallback } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { ArtifactType } from "@/types";
 
 interface SharePageProps {
   params: Promise<{ id: string }>;
@@ -16,6 +18,7 @@ interface SharedCodeData {
   code: string;
   title: string | null;
   projectName?: string;
+  artifactType?: ArtifactType;
   createdAt: string;
 }
 
@@ -69,6 +72,7 @@ export default function SharePage({ params }: SharePageProps) {
       code: sharedData.code,
       title: sharedData.title,
       projectName: sharedData.projectName,
+      artifactType: sharedData.artifactType || "website",
       createdAt: sharedData.createdAt,
     };
     sessionStorage.setItem("pending-shared-template", JSON.stringify(pendingShare));
@@ -180,7 +184,7 @@ export default function SharePage({ params }: SharePageProps) {
         {/* Left side: Logo and title */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <img src="/web-app-manifest-192x192.png" alt="App icon" className="w-8 h-8 object-contain" />
+            <Image src="/web-app-manifest-192x192.png" alt="App icon" width={32} height={32} className="w-8 h-8 object-contain" />
             <span className="font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
           </div>
         </div>
@@ -223,7 +227,7 @@ export default function SharePage({ params }: SharePageProps) {
         {sharedData?.code ? (
           <iframe
             srcDoc={processedCode}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-pointer-lock"
             className="w-full h-full border-0"
             title="Shared Preview"
           />

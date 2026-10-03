@@ -6,21 +6,14 @@
 const express = require("express");
 const { body } = require("express-validator");
 const { generateCode } = require("../controllers/aiController");
-const workshopGuard = require("../middleware/workshopGuard");
-const { apiKeyAuth } = require("../middleware/apiKeyAuth");
+const { grantGenerationAccess } = require("../middleware/workshopAccessAdapter");
 const validateRequest = require("../middleware/validateRequest");
 const { ERROR_CODES } = require("../constants/errorCodes");
+const { MODEL_PREFERENCE_IDS } = require("../services/modelSettings");
+const { validatePreviewFeedback, validateScreenshot } = require("../services/generationContext");
 
 const router = express.Router();
 const isApiKeyMode = (value, { req }) => req.body.authMode === "api-key";
-
-const generationAuth = (req, res, next) => {
-  if (req.body.authMode === "api-key") {
-    return apiKeyAuth(req, res, next);
-  }
-
-  return workshopGuard(req, res, next);
-};
 
 /**
  * Custom validator that attaches error code to validation error
@@ -36,14 +29,14 @@ const withCode = (validationChain, errorCode) => {
 
 /**
  * POST /api/generate
- * Generate code using Gemini AI
+ * Generate code using the selected AI model
  *
  * Request body:
  * - password: Workshop access password
  * - visitorId: Unique identifier for the visitor/machine
  * - prompt: The code generation prompt
  * - messageHistory: (optional) Array of previous messages for context
- * - modelPreference: (optional) "fast", "balanced", "accurate", "gpt54mini", "gpt54", or "gpt55"
+ * - modelPreference: (optional) model preference ID exposed by the model settings service
  *
  * Response:
  * - code: Generated HTML/CSS/JS code
@@ -79,6 +72,12 @@ router.post(
       .trim()
       .isLength({ max: 4096 })
       .withMessage({ msg: "OpenAI API key is too long", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("apiKeys.deepseek")
+      .if(isApiKeyMode)
+      .optional({ checkFalsy: true })
+      .trim()
+      .isLength({ max: 4096 })
+      .withMessage({ msg: "DeepSeek API key is too long", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("visitorId")
       .trim()
       .notEmpty()
@@ -91,33 +90,36 @@ router.post(
       .notEmpty()
       .withMessage({ msg: "Prompt is required", errorCode: ERROR_CODES.PROMPT_REQUIRED })
       .bail()
-      .isLength({ min: 10 })
-      .withMessage({ msg: "Prompt must be at least 10 characters", errorCode: ERROR_CODES.PROMPT_TOO_SHORT })
-      .bail()
       .isLength({ max: 10000 })
       .withMessage({ msg: "Prompt must not exceed 10000 characters", errorCode: ERROR_CODES.PROMPT_TOO_LONG }),
-    body("messageHistory").optional().isArray().withMessage({ msg: "Message history must be an array", errorCode: ERROR_CODES.MESSAGE_HISTORY_INVALID }),
+    body("messageHistory").optional().isArray({ max: 10 }).withMessage({ msg: "Message history must contain at most 10 messages", errorCode: ERROR_CODES.MESSAGE_HISTORY_INVALID }),
     body("messageHistory.*.role")
-      .optional()
       .isIn(["user", "assistant"])
       .withMessage({ msg: "Message role must be either 'user' or 'assistant'", errorCode: ERROR_CODES.MESSAGE_ROLE_INVALID }),
     body("messageHistory.*.content")
-      .optional()
       .isString()
       .withMessage({ msg: "Message content must be a string", errorCode: ERROR_CODES.MESSAGE_CONTENT_INVALID })
       .bail()
-      .isLength({ max: 5000 })
-      .withMessage({ msg: "Message content must not exceed 5000 characters", errorCode: ERROR_CODES.MESSAGE_CONTENT_TOO_LONG }),
+      .isLength({ max: 10000 })
+      .withMessage({ msg: "Message content must not exceed 10000 characters", errorCode: ERROR_CODES.MESSAGE_CONTENT_TOO_LONG }),
     body("existingCode").optional().isString().withMessage({ msg: "Existing code must be a string", errorCode: ERROR_CODES.VALIDATION_FAILED }).isLength({ max: 500000 }),
+    body("artifactName").optional().isString().isLength({ max: 50 }).withMessage({ msg: "Artifact name is invalid", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("previewFeedback").optional().custom((value, { req }) => validatePreviewFeedback(value, req.body.existingCode)).withMessage({ msg: "Preview feedback is invalid or belongs to a different document", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("screenshot").optional().custom(validateScreenshot).withMessage({ msg: "Screenshot must be a small PNG or JPEG image", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("parentVersionId").optional({ nullable: true, checkFalsy: true }).isMongoId().withMessage({ msg: "Parent version ID is invalid", errorCode: ERROR_CODES.INVALID_OBJECT_ID }),
-    body("mode").optional().isIn(["edit", "ask"]).withMessage({ msg: "Mode must be either 'edit' or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("mode").optional().isIn(["auto", "edit", "ask"]).withMessage({ msg: "Mode must be 'auto', 'edit', or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("artifactType")
+      .optional()
+      .isIn(["website", "game"])
+      .withMessage({ msg: "Artifact type must be either 'website' or 'game'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("showThoughts").optional().isBoolean().withMessage({ msg: "Show thoughts must be a boolean", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("modelPreference")
       .optional()
-      .isIn(["fast", "balanced", "accurate", "gpt54mini", "gpt54", "gpt55"])
-      .withMessage({ msg: "Model preference must be one of 'fast', 'balanced', 'accurate', 'gpt54mini', 'gpt54', or 'gpt55'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+      .isIn(MODEL_PREFERENCE_IDS)
+      .withMessage({ msg: "Model preference is invalid", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     validateRequest,
   ],
-  generationAuth,
+  grantGenerationAccess,
   generateCode,
 );
 

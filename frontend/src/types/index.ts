@@ -6,20 +6,57 @@ export interface ChatMessage {
   errorDetails?: string;
   errorCode?: string;
   failedPrompt?: string;
+  durationMs?: number;
 }
 
-// Chat mode type - determines whether AI generates code (EDIT) or just responds (ASK)
-export type ChatMode = "edit" | "ask";
+// Auto delegates the choice; explicit modes force a code change or chat response.
+export type ChatMode = "auto" | "edit" | "ask";
+export type ResolvedChatMode = Exclude<ChatMode, "auto">;
+export type ArtifactType = "website" | "game";
+export type ChangeScope = "localized" | "cross_cutting" | "rewrite";
+export type GenerationPhase = "working" | "thinking" | "writing" | "answering" | "checking" | "repairing" | "saving";
 
-// AI model preference sent as a symbolic value; backend maps it to provider model IDs.
-export type ModelPreference = "fast" | "balanced" | "accurate" | "gpt54mini" | "gpt54" | "gpt55";
-export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh";
+export interface GenerationStatus {
+  type: "status";
+  phase: GenerationPhase;
+  requestId: string;
+  elapsedMs: number;
+}
+
+// Stable Model Option identity supplied by the backend Model Catalog.
+export type ModelPreference = string;
+export type ThinkingLevel = "none" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AuthMode = "password" | "api-key";
-export type ApiKeyProvider = "gemini" | "openai";
+export type ApiKeyProvider = "gemini" | "openai" | "deepseek";
+
+export interface ModelOption {
+  id: ModelPreference;
+  order: number;
+  provider: ApiKeyProvider;
+  model: string;
+  label: string;
+  adminLabel: string;
+  shortLabel: string;
+  description: string;
+  translationKey: string;
+  pricing: {
+    inputPerToken: number;
+    cachedInputPerToken?: number;
+    outputPerToken: number;
+    longContextInputTokenThreshold?: number;
+    longContextInputMultiplier?: number;
+    longContextOutputMultiplier?: number;
+  };
+  thinkingOptions: ThinkingLevel[];
+  defaultThinking: ThinkingLevel;
+  thinking: ThinkingLevel;
+  enabled: boolean;
+}
 
 export interface UserApiKeySettings {
   gemini: string;
   openai: string;
+  deepseek: string;
   accessToken: string;
 }
 
@@ -29,7 +66,8 @@ export interface GenerationUsageSummary {
   modelId: string;
   modelLabel: string;
   modelThinking?: ThinkingLevel | string | null;
-  mode: ChatMode;
+  mode: ResolvedChatMode;
+  artifactType: ArtifactType;
   promptTokens: number;
   candidatesTokens: number;
   thoughtsTokens: number;
@@ -56,14 +94,37 @@ export interface GenerateRequest {
   parentVersionId?: string | null;
   messageHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   mode?: ChatMode;
+  artifactType?: ArtifactType;
   modelPreference?: ModelPreference;
+  showThoughts?: boolean;
+  artifactName?: string;
+  previewFeedback?: PreviewFeedback;
+  screenshot?: string;
+}
+
+export interface PreviewFeedback {
+  codeHash: string;
+  versionId?: string | null;
+  capturedAt: string;
+  viewport: { width: number; height: number };
+  error?: string;
+  stateJson?: string;
+}
+
+export interface GenerationAttachment {
+  previewFeedback?: PreviewFeedback;
+  screenshot?: string;
 }
 
 export interface GenerateResponse {
+  durationMs?: number;
   message: string;
   code: string;
+  mode?: ResolvedChatMode;
   projectName?: string;
+  artifactType?: ArtifactType;
   editMode?: "replace_all" | "patch";
+  changeScope?: ChangeScope;
   version?: CodeVersion;
   usage?: GenerationUsageSummary | null;
 }
@@ -142,11 +203,14 @@ export interface StreamMessageComplete {
 }
 
 export interface StreamDoneEvent {
+  durationMs?: number;
   type: "done";
   message: string;
   code: string;
   projectName?: string;
+  artifactType?: ArtifactType;
   editMode?: "replace_all" | "patch";
+  changeScope?: ChangeScope;
   version?: CodeVersion;
   remaining?: number;
   usage?: GenerationUsageSummary | null;
@@ -170,7 +234,13 @@ export interface StreamCodeUpdate {
   code: string;
 }
 
+export interface StreamProgress {
+  type: "progress";
+  delta: string;
+}
+
 export type StreamEvent =
+  | GenerationStatus
   | StreamChunk
   | StreamCodeStart
   | StreamCodeChunk
@@ -179,17 +249,20 @@ export type StreamEvent =
   | StreamDoneEvent
   | StreamErrorEvent
   | StreamMessageUpdate
-  | StreamCodeUpdate;
+  | StreamCodeUpdate
+  | StreamProgress;
 
 export interface StreamCallbacks {
+  onStatus?: (status: GenerationStatus) => void;
   onChunk?: (chunk: string, accumulated: string) => void;
   onMessageUpdate?: (message: string) => void;
+  onProgress?: (delta: string) => void;
   onCodeUpdate?: (code: string) => void;
   onCodeStart?: () => void;
   onCodeChunk?: (chunk: string) => void;
   onCodeComplete?: () => void;
   onMessageComplete?: (message: string) => void;
-  onDone?: (data: { message: string; code: string; projectName?: string; editMode?: "replace_all" | "patch"; version?: CodeVersion; remaining?: number; usage?: GenerationUsageSummary | null }) => void;
+  onDone?: (data: GenerateResponse & { remaining?: number }) => void;
   onError?: (error: string, remainingUses?: number, errorCode?: string, details?: string[]) => void;
 }
 
@@ -197,20 +270,35 @@ export interface StreamCallbacks {
 export interface PreviewControl {
   disableAutoRefresh: () => void;
   enableAutoRefresh: () => void;
-  forceRefresh: (newCode?: string) => void;
+  forceRefresh: (newCode?: string, projectId?: string) => void;
+  copyStateTo: (projectId: string) => void;
 }
 
-// Custom template interface for user-created templates
-export interface CustomTemplate {
+export interface PreviewRuntimeIssue {
+  kind: "javascript" | "promise" | "resource";
+  message: string;
+  source?: string;
+  line?: number;
+  column?: number;
+  documentId?: string;
+}
+
+// A user-owned artifact persisted in the browser Artifact Library.
+export interface SavedArtifact {
   id: string;
   name: string;
   code: string;
+  artifactType?: ArtifactType;
   projectName?: string; // LLM-provided project name
   currentVersionId?: string | null; // latest AI version for this creation
-  rootVersionId?: string | null; // root version tree for this creation
+  /** @deprecated Lineage roots are resolved by the Artifact Version Lineage service. */
+  rootVersionId?: string | null;
   createdAt: number; // timestamp for sorting/deletion
   updatedAt: number; // timestamp for tracking last modification
 }
+
+/** @deprecated Use SavedArtifact. Kept for local-storage and component compatibility. */
+export type CustomTemplate = SavedArtifact;
 
 // Configuration for custom template management
 export const CUSTOM_TEMPLATE_CONFIG = {
@@ -322,15 +410,19 @@ export interface TimeSeriesResponse {
   dataPoints: TimeSeriesDataPoint[];
 }
 
-// Shared template interface for templates loaded from share links
-export interface SharedTemplate {
+// An immutable artifact loaded from a share link.
+export interface SharedArtifact {
   id: string; // local id (shared-{timestamp})
   shareId: string; // the 4-letter share code from the server
   code: string;
   title: string | null;
   projectName?: string; // LLM-provided project name for shared projects
+  artifactType?: ArtifactType;
   loadedAt: number; // timestamp when loaded
 }
+
+/** @deprecated Use SharedArtifact. Kept for local-storage and component compatibility. */
+export type SharedTemplate = SharedArtifact;
 
 // Configuration for shared template management
 export const SHARED_TEMPLATE_CONFIG = {
@@ -350,6 +442,7 @@ export interface GetShareResponse {
   code: string;
   title: string | null;
   projectName?: string;
+  artifactType?: ArtifactType;
   createdAt: string;
 }
 
@@ -360,6 +453,7 @@ export interface ShareLinkEntry {
   code: string;
   title: string | null;
   projectName: string | null;
+  artifactType?: ArtifactType;
   createdAt: string;
 }
 
@@ -377,15 +471,19 @@ export interface CodeVersion {
   prompt: string;
   message: string;
   projectName?: string | null;
-  modelProvider?: "gemini" | "openai" | null;
+  artifactType?: ArtifactType;
+  modelProvider?: ApiKeyProvider | null;
   modelPreference?: ModelPreference | string | null;
   modelId?: string | null;
   modelLabel?: string | null;
   modelShortLabel?: string | null;
   modelThinking?: ThinkingLevel | string | null;
   editMode: "replace_all" | "patch";
+  changeScope?: ChangeScope;
   editCount: number;
   edits?: Array<{ oldText: string; newText: string }>;
+  patchRetryAttempted?: boolean;
+  patchApplyMethod?: "exact" | "line-ending-normalized" | "mixed" | null;
   manualEditsSinceParent?: boolean;
   createdAt: string;
   updatedAt?: string;

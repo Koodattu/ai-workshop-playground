@@ -1,24 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const VISITOR_ID_KEY = "ai-workshop-visitor-id";
 
-export function useVisitorId(): string | null {
-  const [visitorId, setVisitorId] = useState<string | null>(null);
+function getOrCreateVisitorId(): string | null {
+  if (typeof window === "undefined") return null;
 
-  useEffect(() => {
-    // Check localStorage for existing visitorId
+  try {
     let id = localStorage.getItem(VISITOR_ID_KEY);
-
     if (!id) {
-      // Generate new UUID if not found
       id = crypto.randomUUID();
       localStorage.setItem(VISITOR_ID_KEY, id);
     }
+    return id;
+  } catch {
+    return null;
+  }
+}
 
-    setVisitorId(id);
-  }, []);
+export function useVisitorId(): string | null {
+  const [visitorId] = useState(getOrCreateVisitorId);
 
   return visitorId;
 }
