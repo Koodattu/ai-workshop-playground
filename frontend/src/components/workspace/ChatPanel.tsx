@@ -404,10 +404,13 @@ export function ChatPanel({
           </div>
         ) : (
           /* Normal authenticated state - Show input form */
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <div role="group" aria-label={t("chat.artifactModeLabel")} className="flex rounded-lg bg-carbon p-0.5">
-                {(["website", "game"] as const).map((value) => (
+          <form onSubmit={handleSubmit} className="space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div role="group" aria-label={t("chat.artifactModeLabel")} className="flex grow rounded-lg bg-carbon p-0.5">
+                {([
+                  { value: "website", selectedClass: "border-electric/40 bg-electric/15 text-electric" },
+                  { value: "game", selectedClass: "border-violet-400/40 bg-violet-500/20 text-violet-300" },
+                ] as const).map(({ value, selectedClass }) => (
                   <button
                     key={value}
                     type="button"
@@ -415,28 +418,30 @@ export function ChatPanel({
                     disabled={isLoading}
                     onClick={() => onArtifactTypeChange(value)}
                     title={t(value === "game" ? "chat.gameModeTooltip" : "chat.websiteModeTooltip")}
-                    className={`h-8 rounded-md px-2 font-mono text-[11px] uppercase outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/25 disabled:opacity-50 ${artifactType === value ? "bg-steel/60 text-white" : "text-gray-400 hover:bg-graphite hover:text-white"}`}
+                    className={`h-9 min-w-16 flex-1 rounded-md border px-3 font-mono text-sm font-semibold uppercase outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/25 disabled:opacity-50 ${artifactType === value ? selectedClass : "border-transparent text-gray-400 hover:bg-graphite hover:text-white"}`}
                   >
                     {t(value === "game" ? "chat.gameMode" : "chat.websiteMode")}
                   </button>
                 ))}
               </div>
-              <div className="border-l border-steel/60 pl-2">
-                <div role="group" aria-label={t("chat.actionModeLabel")} className="flex rounded-lg bg-carbon p-0.5">
-                  {(["auto", "ask", "edit"] as const).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={mode === value}
-                      disabled={isLoading}
-                      onClick={() => onModeChange(value)}
-                      title={t(`chat.${value}ModeTooltip`)}
-                      className={`h-8 rounded-md px-2 font-mono text-[11px] uppercase outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/25 disabled:opacity-50 ${mode === value ? "bg-steel/60 text-white" : "text-gray-400 hover:bg-graphite hover:text-white"}`}
-                    >
-                      {t(`chat.${value}Mode`)}
-                    </button>
-                  ))}
-                </div>
+              <div role="group" aria-label={t("chat.actionModeLabel")} className="flex grow rounded-lg bg-carbon p-0.5">
+                {([
+                  { value: "auto", selectedClass: "border-blue-400/40 bg-blue-500/20 text-blue-300" },
+                  { value: "ask", selectedClass: "border-success/40 bg-success/15 text-green-300" },
+                  { value: "edit", selectedClass: "border-ember/40 bg-ember/15 text-orange-300" },
+                ] as const).map(({ value, selectedClass }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={mode === value}
+                    disabled={isLoading}
+                    onClick={() => onModeChange(value)}
+                    title={t(`chat.${value}ModeTooltip`)}
+                    className={`h-9 min-w-14 flex-1 rounded-md border px-3 font-mono text-sm font-semibold uppercase outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/25 disabled:opacity-50 ${mode === value ? selectedClass : "border-transparent text-gray-400 hover:bg-graphite hover:text-white"}`}
+                  >
+                    {t(`chat.${value}Mode`)}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -461,60 +466,60 @@ export function ChatPanel({
                 placeholder={artifactType === "game" ? t("chat.gamePlaceholder") : t("chat.websitePlaceholder")}
                 rows={2}
                 disabled={isLoading}
-                className="block min-h-20 w-full resize-none bg-transparent px-3 py-3 font-body text-sm leading-relaxed text-white placeholder-gray-500 focus:outline-none scrollbar-thin disabled:opacity-50 disabled:cursor-not-allowed"
+                className="block w-full resize-none bg-transparent px-3 py-2.5 font-body text-sm leading-6 text-white placeholder-gray-500 focus:outline-none scrollbar-thin disabled:opacity-50 disabled:cursor-not-allowed"
               />
-              <div className="flex items-center gap-1 border-t border-steel/40 p-2">
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  aria-label={t("chat.attachScreenshot")}
-                  disabled={isLoading || preparingImage}
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    if (!file) return;
-                    setPreparingImage(true);
-                    try { setScreenshot(await prepareScreenshot(file)); }
-                    catch { showToast(t("chat.screenshotInvalid"), "error"); }
-                    finally { setPreparingImage(false); }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={isLoading || preparingImage}
-                  aria-label={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
-                  title={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 outline-none transition-colors hover:bg-steel/50 hover:text-white focus-visible:ring-1 focus-visible:ring-white/25 disabled:opacity-40"
-                >
-                  {preparingImage ? <Spinner size="sm" /> : (
-                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.48-8.48l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                    </svg>
-                  )}
-                </button>
-                <ModelPicker
-                  value={modelPreference}
-                  options={visibleModelOptions}
-                  onChange={onModelPreferenceChange}
-                  disabled={isLoading}
-                />
-                <button
-                  type="submit"
-                  disabled={!prompt.trim() || isLoading || preparingImage}
-                  aria-label={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
-                  title={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-electric text-void outline-none transition-colors hover:bg-electric-dim focus-visible:ring-1 focus-visible:ring-white/25 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {isLoading ? <Spinner size="sm" /> : (
-                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m-6 6 6-6 6 6" />
-                    </svg>
-                  )}
-                </button>
-              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                aria-label={t("chat.attachScreenshot")}
+                disabled={isLoading || preparingImage}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  setPreparingImage(true);
+                  try { setScreenshot(await prepareScreenshot(file)); }
+                  catch { showToast(t("chat.screenshotInvalid"), "error"); }
+                  finally { setPreparingImage(false); }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={isLoading || preparingImage}
+                aria-label={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
+                title={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg text-gray-400 outline-none transition-colors hover:bg-steel/50 hover:text-white focus-visible:ring-1 focus-visible:ring-white/25 disabled:opacity-40"
+              >
+                {preparingImage ? <Spinner size="sm" /> : (
+                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.48-8.48l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                )}
+              </button>
+              <ModelPicker
+                value={modelPreference}
+                options={visibleModelOptions}
+                onChange={onModelPreferenceChange}
+                disabled={isLoading}
+              />
+              <button
+                type="submit"
+                disabled={!prompt.trim() || isLoading || preparingImage}
+                aria-label={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
+                title={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-electric text-void outline-none transition-colors hover:bg-electric-dim focus-visible:ring-1 focus-visible:ring-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isLoading ? <Spinner size="sm" /> : (
+                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m-6 6 6-6 6 6" />
+                  </svg>
+                )}
+              </button>
             </div>
             {onAutoSwitchChange && (
               <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-gray-400 md:hidden">
