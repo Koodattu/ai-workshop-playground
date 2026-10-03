@@ -52,10 +52,13 @@ function GenerationStatus({ phase, startedAt }: { phase: GenerationPhase; starte
     return () => clearInterval(timer);
   }, []);
   return (
-    <div className="min-w-0 text-sm text-gray-400 font-mono leading-relaxed">
-      <div role="status" aria-live="polite">{t(`chat.phases.${phase}`)}</div>
-      <div role="timer" aria-live="off" className="mt-1 text-xs text-gray-500 tabular-nums">
+    <div className="min-w-0">
+      <div role="timer" aria-live="off" className="mb-2 text-xs font-mono text-gray-500 tabular-nums">
         {t("chat.workingFor", durationParts(now - (startedAt ?? now)))}
+      </div>
+      <div className="flex items-center gap-2 text-sm font-mono text-gray-400 leading-relaxed">
+        <Spinner size="sm" />
+        <div role="status" aria-live="polite">{t(`chat.phases.${phase}`)}</div>
       </div>
     </div>
   );
@@ -104,6 +107,7 @@ export function ChatPanel({
   const enabledModelOptions = orderedModelOptions.filter((option) => enabledModelPreferences.includes(option.value));
   const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : orderedModelOptions;
   const hasConversation = messages.length > 0 || Boolean(streamingMessage) || isLoading;
+  const actionLabel = t(isLoading ? "chat.stop" : mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton");
 
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
@@ -322,19 +326,13 @@ export function ChatPanel({
         {isLoading && (
           <div className="flex items-center gap-3 animate-fade-in">
             <div className="max-w-[90%] bg-carbon border border-steel/50 rounded-xl px-4 py-3">
-              <div className="flex items-start gap-2">
-                <Spinner size="sm" />
-                <GenerationStatus phase={generationPhase} startedAt={generationStartedAt} />
-              </div>
+              <GenerationStatus phase={generationPhase} startedAt={generationStartedAt} />
               {showThoughts && progressMessage && (
                 <details className="mt-3 text-xs text-gray-400">
                   <summary className="cursor-pointer">{t("chat.modelProgress")}</summary>
                   <div ref={progressScrollRef} className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap scrollbar-thin">{progressMessage}</div>
                 </details>
               )}
-              <Button type="button" size="sm" onClick={onStop} disabled={!onStop || generationPhase === "saving"} className="mt-3">
-                {t("chat.stop")}
-              </Button>
             </div>
           </div>
         )}
@@ -508,13 +506,22 @@ export function ChatPanel({
                 disabled={isLoading}
               />
               <button
-                type="submit"
-                disabled={!prompt.trim() || isLoading || preparingImage}
-                aria-label={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
-                title={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
-                className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-electric text-void outline-none transition-colors hover:bg-electric-dim focus-visible:ring-1 focus-visible:ring-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+                type={isLoading ? "button" : "submit"}
+                onClick={isLoading ? (event) => {
+                  // Cancellation can restore type="submit" before this click's default action.
+                  event.preventDefault();
+                  onStop?.();
+                } : undefined}
+                disabled={isLoading ? !onStop || generationPhase === "saving" : !prompt.trim() || preparingImage}
+                aria-label={actionLabel}
+                title={actionLabel}
+                className={`flex size-10 shrink-0 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-1 focus-visible:ring-white/25 disabled:cursor-not-allowed disabled:opacity-40 ${isLoading ? "bg-danger text-white hover:bg-red-500" : "bg-electric text-void hover:bg-electric-dim"}`}
               >
-                {isLoading ? <Spinner size="sm" /> : (
+                {isLoading ? (
+                  <svg className="size-4" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="2" y="2" width="12" height="12" rx="2" />
+                  </svg>
+                ) : (
                   <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m-6 6 6-6 6 6" />
                   </svg>
