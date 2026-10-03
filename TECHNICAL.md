@@ -28,7 +28,7 @@ native user/assistant messages (at most ten); the current HTML is quoted as data
 followed by the artifact name, optional observations, and the latest user request.
 Existing names are preserved unless the user asks to rename them. New artifacts
 carry a small, validated `workshop-brief` JSON script with their purpose and up to
-six constraints. Legacy artifacts do not need one. The preview displays this brief.
+six constraints. Legacy artifacts do not need one. The brief is model context only.
 
 Game requests receive only relevant source recipes: independent seeded random
 streams, small procedural audio effects, and a reusable canvas texture. These are
@@ -36,9 +36,9 @@ examples to copy into the exported HTML, not host globals or provider tools. Sma
 unrelated edits receive no recipe catalog. The Star Gatherer Starter demonstrates
 keyboard/pointer controls, predictable restart, mute and the state contract.
 
-“Report a problem” captures the exact document hash, viewport, timestamp, current
-version, and up to 12,000 characters of serializable state. Runtime fixes add the
-error and corrected source location. Changed documents invalidate old feedback;
+Runtime fixes capture the exact document hash, viewport, timestamp, current
+version, up to 12,000 characters of serializable state, and the error with its
+corrected source location. Changed documents invalidate old feedback;
 iframe messages also carry a document identifier to reject stale messages.
 First edits copy supported progress from the Starter/Shared Artifact into the new
 Saved Artifact. Startup saves cannot replace progress while it is being restored.
@@ -105,6 +105,12 @@ Express middleware and React components adapt these contracts. They should not a
 8. Emit the terminal outcome and close the SSE response.
 
 The browser converts wire deltas into cumulative Artifact Generation Views. UI consumers do not depend on SSE event ordering or provider SDK types.
+
+Only the current viewport's editor and preview are mounted. A hidden mobile editor
+must never replace the desktop editor ref when auto-switching panels during a run.
+Stream deltas own Monaco's model until completion, so React cannot overwrite a
+chunk in the same batch as `code-start`. Remounting an editor resumes the buffered
+code; remounting a preview retains the original document until the run succeeds.
 
 ### Compatibility contract
 

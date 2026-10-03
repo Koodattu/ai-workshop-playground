@@ -13,16 +13,6 @@ export function snapshotState(state: unknown): string | undefined {
   } catch { return undefined; }
 }
 
-export function readArtifactBrief(code: string): { purpose: string; preserve: string[] } | null {
-  const match = [...code.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)].find((entry) => /\bid\s*=\s*["']workshop-brief["']/i.test(entry[1]));
-  if (!match || match[2].length > 1200) return null;
-  try {
-    const brief = JSON.parse(match[2]);
-    if (typeof brief?.purpose !== "string" || !Array.isArray(brief.preserve) || brief.preserve.length > 6 || brief.preserve.some((value: unknown) => typeof value !== "string")) return null;
-    return brief;
-  } catch { return null; }
-}
-
 export function isCurrentPreviewMessage(data: { projectId?: string; documentId?: string }, document: { projectId: string; documentId: string }): boolean {
   return data.projectId === document.projectId && data.documentId === document.documentId;
 }

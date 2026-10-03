@@ -14,6 +14,7 @@ import { ApiKeyUsageDialog } from "@/components/workspace/ApiKeyUsageDialog";
 import { useToast } from "@/components/ui/Toast";
 import { useVisitorId } from "@/hooks/useVisitorId";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useMobileLayout } from "@/hooks/useMobileLayout";
 import { useCustomTemplates } from "@/hooks/useCustomTemplates";
 import { useSharedTemplates, type InitialSharedTemplate } from "@/hooks/useSharedTemplates";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -257,7 +258,8 @@ export default function WorkspacePage() {
   const [generationStartedAt, setGenerationStartedAt] = useState(0);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [progressMessage, setProgressMessage] = useState<string>("");
-  const [pendingFeedback, setPendingFeedback] = useState<{ artifactId: string; feedback: PreviewFeedback } | null>(null);
+  const [previewCodeSnapshot, setPreviewCodeSnapshot] = useState("");
+  const isMobileLayout = useMobileLayout();
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
@@ -387,6 +389,10 @@ export default function WorkspacePage() {
       console.warn("Failed to sync streamed code to editor:", error);
     }
   }, [clearEditorFlushTimer]);
+
+  const handleEditorDispose = useCallback((editor: editor.IStandaloneCodeEditor) => {
+    if (monacoEditorRef.current === editor) monacoEditorRef.current = null;
+  }, []);
 
   const restoreSavedCursorPosition = useCallback(() => {
     if (!savedCursorPositionRef.current) return;
@@ -781,6 +787,7 @@ export default function WorkspacePage() {
       if (authMode === "api-key" && !apiKeySettings.gemini.trim() && !apiKeySettings.openai.trim() && !apiKeySettings.deepseek?.trim()) return;
 
       const codeBeforeGeneration = code;
+      setPreviewCodeSnapshot(code);
       const startedAt = Date.now();
       setGenerationStartedAt(startedAt);
       setGenerationPhase("working");
@@ -796,7 +803,8 @@ export default function WorkspacePage() {
       setIsStreaming(true);
       setStreamingMessage("");
       setProgressMessage("");
-      codeBufferRef.current = "";
+      // Until code-start, a newly mounted editor should retain the current code.
+      codeBufferRef.current = codeBeforeGeneration;
       pendingEditorChunkRef.current = "";
       clearEditorFlushTimer();
 
@@ -1110,7 +1118,6 @@ export default function WorkspacePage() {
               }
 
               showToast(t(isEditResponse ? "chat.codeGenerated" : "chat.responseReceived"), "success");
-              setPendingFeedback(null);
             },
             onError: (error, remainingUsesOnError, errorCode, details) => {
               restoreAfterUnsuccessfulRun();
@@ -1417,13 +1424,6 @@ export default function WorkspacePage() {
     [handleSendMessage, isStreaming, setChatMode, t, currentVersionId],
   );
 
-  const handleReportProblem = (feedback: PreviewFeedback) => {
-    if (isStreaming) return;
-    setPendingFeedback({ artifactId: currentTemplateId, feedback: { ...feedback, versionId: currentVersionId } });
-    setChatMode("edit");
-    setMobileActivePanel("chat");
-  };
-
   const handleSaveApiKeys = useCallback(
     async (nextApiKeys: UserApiKeySettings) => {
       const accessToken = nextApiKeys.accessToken || apiKeySettings.accessToken || crypto.randomUUID();
@@ -1609,8 +1609,6 @@ export default function WorkspacePage() {
               <ChatPanel
                 messages={chatHistory}
                 onSendMessage={(prompt, attachment) => handleSendMessage(prompt, undefined, attachment)}
-                previewFeedback={pendingFeedback?.artifactId === currentTemplateId ? pendingFeedback.feedback : undefined}
-                onClearFeedback={() => setPendingFeedback(null)}
                 isLoading={isStreaming}
                 generationPhase={generationPhase}
                 generationStartedAt={generationStartedAt}
@@ -1652,7 +1650,7 @@ export default function WorkspacePage() {
               className="border-r border-steel/30 panel-animate"
               style={{ animationDelay: "0.1s" }}
             >
-              <EditorPanel
+              {!isMobileLayout && <EditorPanel
                 code={code}
                 onChange={handleCodeChange}
                 currentTemplateId={currentTemplateId}
@@ -1665,6 +1663,7 @@ export default function WorkspacePage() {
                 isCollapsed={isEditorCollapsed}
                 onToggleCollapse={handleEditorCollapseToggle}
                 onOpenVersionHistory={handleOpenVersionHistory}
+                onEditorDispose={handleEditorDispose}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming) {
@@ -1675,15 +1674,15 @@ export default function WorkspacePage() {
                     shouldFocusEditorForStreamingRef.current = false;
                   }
                 }}
-              />
+              />}
             </Panel>
 
             <Separator className="w-px bg-steel/30 hover:bg-electric transition-colors" />
 
             {/* Preview Panel */}
             <Panel defaultSize={500} minSize={200} className="panel-animate" style={{ animationDelay: "0.2s" }}>
-              <PreviewPanel
-                code={code}
+              {!isMobileLayout && <PreviewPanel
+                code={isStreaming ? previewCodeSnapshot : code}
                 projectId={currentTemplateId}
                 onControlReady={(control) => {
                   previewControlRef.current = control;
@@ -1692,8 +1691,7 @@ export default function WorkspacePage() {
                 isSharing={isSharing}
                 isGenerating={isStreaming}
                 onFixRuntimeIssue={handleFixRuntimeIssue}
-                onReportProblem={isAuthenticated ? handleReportProblem : undefined}
-              />
+              />}
             </Panel>
           </Group>
         </main>
@@ -1706,8 +1704,6 @@ export default function WorkspacePage() {
               <ChatPanel
                 messages={chatHistory}
                 onSendMessage={(prompt, attachment) => handleSendMessage(prompt, undefined, attachment)}
-                previewFeedback={pendingFeedback?.artifactId === currentTemplateId ? pendingFeedback.feedback : undefined}
-                onClearFeedback={() => setPendingFeedback(null)}
                 isLoading={isStreaming}
                 generationPhase={generationPhase}
                 generationStartedAt={generationStartedAt}
@@ -1735,7 +1731,7 @@ export default function WorkspacePage() {
                 onRetryMessage={handleSendMessage}
               />
             </div>
-            {mobileActivePanel === "editor" && (
+            {isMobileLayout && mobileActivePanel === "editor" && (
               <EditorPanel
                 code={code}
                 onChange={handleCodeChange}
@@ -1747,6 +1743,7 @@ export default function WorkspacePage() {
                 onRemoveSharedTemplate={removeSharedTemplate}
                 isStreaming={isStreaming}
                 onOpenVersionHistory={handleOpenVersionHistory}
+                onEditorDispose={handleEditorDispose}
                 onEditorReady={(editor) => {
                   monacoEditorRef.current = editor;
                   if (isStreaming) {
@@ -1759,9 +1756,9 @@ export default function WorkspacePage() {
                 }}
               />
             )}
-            {mobileActivePanel === "preview" && (
+            {isMobileLayout && mobileActivePanel === "preview" && (
               <PreviewPanel
-                code={code}
+                code={isStreaming ? previewCodeSnapshot : code}
                 projectId={currentTemplateId}
                 onControlReady={(control) => {
                   previewControlRef.current = control;
@@ -1770,7 +1767,6 @@ export default function WorkspacePage() {
                 isSharing={isSharing}
                 isGenerating={isStreaming}
                 onFixRuntimeIssue={handleFixRuntimeIssue}
-                onReportProblem={isAuthenticated ? handleReportProblem : undefined}
               />
             )}
           </div>

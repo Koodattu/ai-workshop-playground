@@ -5,14 +5,12 @@ import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference, GenerationAttachment, PreviewFeedback } from "@/types";
+import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference, GenerationAttachment } from "@/types";
 import { prepareScreenshot } from "@/lib/previewFeedback";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   onSendMessage: (prompt: string, attachment?: GenerationAttachment) => Promise<void>;
-  previewFeedback?: PreviewFeedback;
-  onClearFeedback?: () => void;
   isLoading: boolean;
   generationPhase?: GenerationPhase;
   generationStartedAt?: number;
@@ -90,8 +88,6 @@ export function ChatPanel({
   enabledModelPreferences,
   modelOptions,
   onRetryMessage,
-  previewFeedback,
-  onClearFeedback,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [screenshot, setScreenshot] = useState<string>();
@@ -142,7 +138,7 @@ export function ChatPanel({
       // Clear the prompt immediately
       setPrompt("");
       try {
-        await onSendMessage(trimmedPrompt, { previewFeedback, screenshot });
+        await onSendMessage(trimmedPrompt, { screenshot });
         setScreenshot(undefined);
       } catch {
         // Restore the prompt on error so user can retry
@@ -246,7 +242,7 @@ export function ChatPanel({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-2">
@@ -352,7 +348,7 @@ export function ChatPanel({
       </div>
 
       {/* Input Area - Conditional based on authentication and rate limit */}
-      <div className="p-4 border-t border-steel/50">
+      <div className="shrink-0 border-t border-steel/50 p-3">
         {!isAuthenticated ? (
           /* Locked state - Not authenticated */
           <div className="flex flex-col items-center justify-center py-4 space-y-4">
@@ -413,242 +409,126 @@ export function ChatPanel({
           </div>
         ) : (
           /* Normal authenticated state - Show input form */
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {previewFeedback && (
-              <div className="rounded-lg border border-electric/30 bg-electric/10 p-2 text-xs text-gray-300">
-                <div className="flex items-center justify-between gap-2">
-                  <span>{t("chat.previewAttached")}</span>
-                  <button type="button" onClick={onClearFeedback} disabled={isLoading} className="text-electric">{t("chat.removeAttachment")}</button>
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                aria-label={t("chat.artifactModeLabel")}
+                value={artifactType}
+                onChange={(event) => onArtifactTypeChange(event.target.value as ArtifactType)}
+                disabled={isLoading}
+                title={t(artifactType === "game" ? "chat.gameModeTooltip" : "chat.websiteModeTooltip")}
+                className="h-9 min-w-0 rounded-lg border border-steel/50 bg-carbon px-2 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
+              >
+                <option value="website">{t("chat.websiteMode")}</option>
+                <option value="game">{t("chat.gameMode")}</option>
+              </select>
+              <select
+                aria-label={t("chat.actionModeLabel")}
+                value={mode}
+                onChange={(event) => onModeChange(event.target.value as ChatMode)}
+                disabled={isLoading}
+                title={t(mode === "edit" ? "chat.editModeTooltip" : mode === "ask" ? "chat.askModeTooltip" : "chat.autoModeTooltip")}
+                className="h-9 min-w-0 rounded-lg border border-steel/50 bg-carbon px-2 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
+              >
+                <option value="auto">{t("chat.autoMode")}</option>
+                <option value="ask">{t("chat.askMode")}</option>
+                <option value="edit">{t("chat.editMode")}</option>
+              </select>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-steel bg-carbon transition-colors focus-within:border-electric/60">
+              {screenshot && (
+                <div className="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-steel/50 p-2 text-xs text-gray-300">
+                  <div className="relative h-12 w-16 shrink-0">
+                    <Image src={screenshot} alt={t("chat.screenshotAttached")} fill sizes="64px" unoptimized className="rounded object-contain" />
+                  </div>
+                  <span className="min-w-0 flex-1 break-words">{t("chat.screenshotAttached")}</span>
+                  <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading} className="shrink-0 rounded p-1 text-electric focus-visible:outline-2 focus-visible:outline-electric">
+                    {t("chat.removeAttachment")}
+                  </button>
                 </div>
-                <p className="mt-1 text-gray-400">{t("chat.describeProblem")}</p>
-              </div>
-            )}
-            {screenshot && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-steel p-2 text-xs text-gray-300">
-                <div className="relative h-12 w-16 shrink-0">
-                  <Image src={screenshot} alt={t("chat.screenshotAttached")} fill sizes="64px" unoptimized className="rounded object-contain" />
-                </div>
-                <span className="min-w-0 flex-1 break-words">{t("chat.screenshotAttached")}</span>
-                <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading} className="shrink-0 text-electric">{t("chat.removeAttachment")}</button>
-              </div>
-            )}
-            <div className="relative">
+              )}
               <textarea
                 ref={textareaRef}
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                onChange={(event) => setPrompt(event.target.value)}
                 onKeyDown={handleKeyDown}
+                aria-label={t("chat.sendPlaceholder")}
                 placeholder={artifactType === "game" ? t("chat.gamePlaceholder") : t("chat.websitePlaceholder")}
-                rows={1}
+                rows={2}
                 disabled={isLoading}
-                className="
-                  w-full px-4 py-3 pr-12
-                  bg-carbon border border-steel rounded-xl
-                  font-body text-sm text-white placeholder-gray-500
-                  focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
-                  resize-none transition-all duration-200
-                  scrollbar-thin
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                "
+                className="block min-h-20 w-full resize-none bg-transparent px-3 py-3 font-body text-sm leading-relaxed text-white placeholder-gray-500 focus:outline-none scrollbar-thin disabled:opacity-50 disabled:cursor-not-allowed"
               />
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" aria-label={t("chat.attachScreenshot")}
-                disabled={isLoading || preparingImage} onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (!file) return;
-                  setPreparingImage(true);
-                  try { setScreenshot(await prepareScreenshot(file)); }
-                  catch { showToast(t("chat.screenshotInvalid"), "error"); }
-                  finally { setPreparingImage(false); }
-                }} />
-              <button type="button" onClick={() => imageInputRef.current?.click()} disabled={isLoading || preparingImage} className="rounded px-1 py-1 hover:text-white disabled:opacity-40">
-                {preparingImage ? t("chat.preparingScreenshot") : t("chat.attachScreenshot")}
-              </button>
-            </div>
-
-            <div className="flex items-end justify-between gap-2 flex-wrap">
-              {/* Left side: Artifact/action modes + auto-switch (mobile only) */}
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
-                <div className="flex flex-col gap-1">
-                  <div role="group" aria-label={t("chat.artifactModeLabel")} className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => onArtifactTypeChange("website")}
-                      disabled={isLoading}
-                      aria-pressed={artifactType === "website"}
-                      className={`
-                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
-                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
-                        ${artifactType === "website" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
-                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
-                      `}
-                      title={t("chat.websiteModeTooltip")}
-                    >
-                      {t("chat.websiteMode")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onArtifactTypeChange("game")}
-                      disabled={isLoading}
-                      aria-pressed={artifactType === "game"}
-                      className={`
-                        min-h-10 min-w-18 px-2 rounded-md text-[10px] md:text-xs font-mono
-                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
-                        ${artifactType === "game" ? "bg-purple-500/20 text-purple-300 border border-purple-400/30" : "text-gray-400 hover:text-white"}
-                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
-                      `}
-                      title={t("chat.gameModeTooltip")}
-                    >
-                      {t("chat.gameMode")}
-                    </button>
-                  </div>
-
-                  <div role="group" aria-label={t("chat.actionModeLabel")} className="flex items-center bg-carbon border border-steel/50 rounded-lg p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => onModeChange("auto")}
-                      disabled={isLoading}
-                      aria-pressed={mode === "auto"}
-                      className={`
-                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
-                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
-                        ${mode === "auto" ? "bg-white/10 text-white border border-white/15" : "text-gray-400 hover:text-white"}
-                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
-                      `}
-                      title={t("chat.autoModeTooltip")}
-                    >
-                      {t("chat.autoMode")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onModeChange("ask")}
-                      disabled={isLoading}
-                      aria-pressed={mode === "ask"}
-                      className={`
-                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
-                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
-                        ${mode === "ask" ? "bg-electric/20 text-electric border border-electric/30" : "text-gray-400 hover:text-white"}
-                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
-                      `}
-                      title={t("chat.askModeTooltip")}
-                    >
-                      {t("chat.askMode")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onModeChange("edit")}
-                      disabled={isLoading}
-                      aria-pressed={mode === "edit"}
-                      className={`
-                        min-h-10 min-w-16 px-2 rounded-md text-[10px] md:text-xs font-mono
-                        transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.96]
-                        ${mode === "edit" ? "bg-ember/20 text-ember border border-ember/30" : "text-gray-400 hover:text-white"}
-                        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
-                      `}
-                      title={t("chat.editModeTooltip")}
-                    >
-                      {t("chat.editMode")}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Mobile only: Auto-switch checkbox */}
-                {onAutoSwitchChange && (
-                  <label className="md:hidden flex items-center gap-1.5 cursor-pointer group">
-                    <div className="relative flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        checked={autoSwitchEnabled}
-                        onChange={(e) => onAutoSwitchChange(e.target.checked)}
-                        className="
-                          peer w-3.5 h-3.5 appearance-none rounded
-                          border-2 border-steel/50 bg-carbon
-                          checked:border-electric checked:bg-electric/20
-                          hover:border-electric/50
-                          focus:outline-none focus:ring-2 focus:ring-electric/30
-                          transition-all duration-200 cursor-pointer
-                        "
-                      />
-                      <svg
-                        className="
-                          absolute w-2.5 h-2.5 text-electric pointer-events-none
-                          opacity-0 scale-50
-                          peer-checked:opacity-100 peer-checked:scale-100
-                          transition-all duration-200
-                        "
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={3}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <span className="text-[9px] font-mono text-gray-500 uppercase group-hover:text-gray-300 transition-colors">{t("chat.autoSwitch")}</span>
-                  </label>
-                )}
-              </div>
-
-              <div className="flex-1 min-w-36 max-w-48">
-                <label htmlFor="model-preference" className="sr-only">
-                  {t("chat.modelSelectLabel")}
-                </label>
+              <div className="flex items-center gap-1 border-t border-steel/40 p-2">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  aria-label={t("chat.attachScreenshot")}
+                  disabled={isLoading || preparingImage}
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
+                    setPreparingImage(true);
+                    try { setScreenshot(await prepareScreenshot(file)); }
+                    catch { showToast(t("chat.screenshotInvalid"), "error"); }
+                    finally { setPreparingImage(false); }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={isLoading || preparingImage}
+                  aria-label={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
+                  title={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-steel/50 hover:text-white focus-visible:outline-2 focus-visible:outline-electric disabled:opacity-40"
+                >
+                  {preparingImage ? <Spinner size="sm" /> : (
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.48-8.48l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  )}
+                </button>
                 <select
-                  id="model-preference"
+                  aria-label={t("chat.modelSelectLabel")}
                   value={modelPreference}
-                  onChange={(e) => onModelPreferenceChange(e.target.value as ModelPreference)}
+                  onChange={(event) => onModelPreferenceChange(event.target.value as ModelPreference)}
                   disabled={isLoading}
-                  className="
-                    w-full px-2.5 py-1.5
-                    bg-carbon border border-steel/50 rounded-lg
-                    font-mono text-[10px] md:text-xs text-gray-200
-                    focus:outline-none focus:border-electric focus:ring-1 focus:ring-electric
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    transition-all duration-200
-                  "
-                  title={t("chat.modelSelectLabel")}
+                  title={visibleModelOptions.find((option) => option.value === modelPreference)?.label}
+                  className="h-9 min-w-0 flex-1 rounded-lg bg-carbon px-1 font-mono text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
                 >
                   {visibleModelOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
+                <button
+                  type="submit"
+                  disabled={!prompt.trim() || isLoading || preparingImage}
+                  aria-label={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
+                  title={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-electric text-void transition-colors hover:bg-electric-dim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isLoading ? <Spinner size="sm" /> : (
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m-6 6 6-6 6 6" />
+                    </svg>
+                  )}
+                </button>
               </div>
-
-              <Button type="submit" size="md" disabled={!prompt.trim() || isLoading || preparingImage} isLoading={isLoading}>
-                {mode === "edit" ? (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    {t("chat.generateButton")}
-                  </>
-                ) : mode === "ask" ? (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                      />
-                    </svg>
-                    {t("chat.askButton")}
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                    {t("chat.sendButton")}
-                  </>
-                )}
-              </Button>
             </div>
+            {onAutoSwitchChange && (
+              <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-gray-400 md:hidden">
+                <input
+                  type="checkbox"
+                  checked={autoSwitchEnabled}
+                  onChange={(event) => onAutoSwitchChange(event.target.checked)}
+                  className="size-3.5 shrink-0 accent-electric"
+                />
+                {t("chat.autoSwitch")}
+              </label>
+            )}
           </form>
         )}
       </div>

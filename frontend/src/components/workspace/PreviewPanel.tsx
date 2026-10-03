@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { PreviewControl, PreviewRuntimeIssue, PreviewFeedback } from "@/types";
-import { createPreviewFeedback, isCurrentPreviewMessage, readArtifactBrief } from "@/lib/previewFeedback";
+import { createPreviewFeedback, isCurrentPreviewMessage } from "@/lib/previewFeedback";
 
 interface PreviewPanelProps {
   code: string;
@@ -13,7 +13,6 @@ interface PreviewPanelProps {
   isSharing?: boolean;
   isGenerating?: boolean;
   onFixRuntimeIssue?: (issue: PreviewRuntimeIssue, feedback: PreviewFeedback) => void;
-  onReportProblem?: (feedback: PreviewFeedback) => void;
 }
 
 interface PreviewDocument {
@@ -134,7 +133,6 @@ export function PreviewPanel({
   isSharing = false,
   isGenerating = false,
   onFixRuntimeIssue,
-  onReportProblem,
 }: PreviewPanelProps) {
   const [initialPersistence] = useState(() => {
     const enabled = readStateSetting(projectId);
@@ -262,20 +260,19 @@ export function PreviewPanel({
     [requestStateCapture, storeCapturedState],
   );
 
-  const captureFeedback = async (issue?: PreviewRuntimeIssue) => {
+  const captureFeedback = async (issue: PreviewRuntimeIssue) => {
     const document = previewDocumentRef.current;
     if (isGenerating || document.code !== latestCodeRef.current || document.projectId !== latestProjectIdRef.current) return;
-    if (issue && issue.documentId !== document.documentId) return;
+    if (issue.documentId !== document.documentId) return;
     setIsCapturingFeedback(true);
     setFeedbackUnavailable(false);
     try {
       const viewport = { width: iframeRef.current?.clientWidth || 1, height: iframeRef.current?.clientHeight || 1 };
       const captured = await requestStateCapture();
-      const error = issue ? `${issue.kind}: ${issue.message}${issue.source ? ` (${issue.source}:${issue.line || 0}:${issue.column || 0})` : ""}` : undefined;
+      const error = `${issue.kind}: ${issue.message}${issue.source ? ` (${issue.source}:${issue.line || 0}:${issue.column || 0})` : ""}`;
       const feedback = await createPreviewFeedback(document.code, viewport, captured?.supported && !captured.error ? captured.state : undefined, error);
       if (previewDocumentRef.current !== document || latestCodeRef.current !== document.code) return;
-      if (issue) onFixRuntimeIssue?.(issue, feedback);
-      else onReportProblem?.(feedback);
+      onFixRuntimeIssue?.(issue, feedback);
     } catch { setFeedbackUnavailable(true); }
     finally { setIsCapturingFeedback(false); }
   };
@@ -795,7 +792,6 @@ export function PreviewPanel({
   };
 
   const processedCode = hasCode ? injectPreviewRuntime(previewDocument.code) : "";
-  const artifactBrief = readArtifactBrief(previewDocument.code);
 
   const savedAtLabel = savedState
     ? new Intl.DateTimeFormat(language, {
@@ -942,24 +938,6 @@ export function PreviewPanel({
           </div>
         </div>
 
-        {artifactBrief && (
-          <details className="border-b border-steel/50 bg-obsidian px-3 py-2 text-xs text-gray-400">
-            <summary className="cursor-pointer">{t("preview.artifactBrief")}</summary>
-            <p className="mt-2 text-gray-200">{artifactBrief.purpose}</p>
-            <ul className="mt-1 list-disc pl-4">{artifactBrief.preserve.map((rule, index) => <li key={index}>{rule}</li>)}</ul>
-          </details>
-        )}
-
-        {onReportProblem && hasCode && (
-          <div className="flex items-center justify-between gap-2 border-b border-steel/50 bg-obsidian px-3 py-1.5 text-xs text-gray-400">
-            <span>{feedbackUnavailable ? t("preview.feedbackUnavailable") : t("preview.feedbackHint")}</span>
-            <button type="button" onClick={() => void captureFeedback()} disabled={isGenerating || isCapturingFeedback || previewDocument.code !== code}
-              className="shrink-0 rounded px-2 py-1 text-electric hover:bg-electric/10 disabled:opacity-40">
-              {isCapturingFeedback ? t("preview.capturingFeedback") : t("preview.reportProblem")}
-            </button>
-          </div>
-        )}
-
         {runtimeIssue && (
           <div className="flex items-start gap-2 border-b border-amber-500/30 bg-amber-950 px-3 py-2 text-xs text-amber-100" role="alert">
             <div className="min-w-0 flex-1">
@@ -967,6 +945,7 @@ export function PreviewPanel({
               <div className="truncate font-mono text-amber-200/80" title={runtimeIssue.message}>
                 {runtimeIssue.message}
               </div>
+              {feedbackUnavailable && <p className="mt-1">{t("preview.feedbackUnavailable")}</p>}
             </div>
             {onFixRuntimeIssue && (
               <button

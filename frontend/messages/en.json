@@ -77,13 +77,13 @@
     "usageTooltip": "{count} uses remaining",
     "artifactModeLabel": "Artifact type",
     "actionModeLabel": "Action mode",
-    "websiteMode": "WEBSITE",
-    "gameMode": "GAME",
+    "websiteMode": "Website",
+    "gameMode": "Game",
     "websiteModeTooltip": "Design or modify a website or web app",
     "gameModeTooltip": "Design or modify a browser game",
-    "autoMode": "AUTO",
-    "askMode": "CHAT",
-    "editMode": "CODE",
+    "autoMode": "Auto",
+    "askMode": "Chat",
+    "editMode": "Code",
     "autoModeTooltip": "Let the AI decide whether to answer or change the code",
     "askModeTooltip": "Answer without changing the code",
     "editModeTooltip": "Create or modify code",
@@ -148,9 +148,7 @@
     "screenshotAttached": "Screenshot attached",
     "preparingScreenshot": "Preparing image…",
     "screenshotInvalid": "Choose a PNG, JPEG or WebP image under 10 MB.",
-    "removeAttachment": "Remove",
-    "previewAttached": "Preview details attached",
-    "describeProblem": "Describe what went wrong. The current game state and preview size will be included."
+    "removeAttachment": "Remove"
   },
   "editor": {
     "header": "CODE EDITOR",
@@ -382,12 +380,8 @@
     "fixRuntimeIssue": "Fix with AI",
     "dismissRuntimeIssue": "Dismiss preview problem",
     "fixRuntimePrompt": "Fix this preview problem while preserving unrelated behavior: {error}",
-    "reportProblem": "Report a problem",
-    "capturingFeedback": "Capturing…",
-    "feedbackHint": "Something looks wrong?",
     "feedbackUnavailable": "Could not capture details. Try again.",
-    "feedbackStale": "The code has changed. Capture new preview details or remove the attachment.",
-    "artifactBrief": "Artifact brief"
+    "feedbackStale": "The code has changed. Refresh the preview and try again."
   },
   "shareDialog": {
     "title": "Share Your Creation",

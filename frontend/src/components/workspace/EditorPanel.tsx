@@ -19,6 +19,7 @@ interface EditorPanelProps {
   sharedTemplates?: SharedTemplate[];
   onRemoveSharedTemplate?: (id: string) => void;
   onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
+  onEditorDispose?: (editor: editor.IStandaloneCodeEditor) => void;
   isStreaming?: boolean;
   onOpenVersionHistory?: () => void;
   isCollapsed?: boolean;
@@ -35,6 +36,7 @@ export function EditorPanel({
   sharedTemplates = [],
   onRemoveSharedTemplate,
   onEditorReady,
+  onEditorDispose,
   isStreaming = false,
   onOpenVersionHistory,
   isCollapsed = false,
@@ -48,6 +50,10 @@ export function EditorPanel({
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [actionsPosition, setActionsPosition] = useState({ top: 0, left: 0 });
   const { t } = useLanguage();
+
+  useEffect(() => () => {
+    if (editorRef.current) onEditorDispose?.(editorRef.current);
+  }, [onEditorDispose]);
 
   // Update dropdown position when it opens
   useEffect(() => {
@@ -690,7 +696,10 @@ export function EditorPanel({
       <div className={`flex-1 overflow-hidden ${isCollapsed ? "invisible" : ""}`}>
         <Editor
           defaultLanguage="html"
-          value={code}
+          defaultValue={code}
+          // Stream writes own the model until completion; a React render must
+          // not overwrite a chunk that arrived in the same batch as code-start.
+          value={isStreaming ? undefined : code}
           onChange={handleChange}
           onMount={handleEditorMount}
           theme="vs-dark"

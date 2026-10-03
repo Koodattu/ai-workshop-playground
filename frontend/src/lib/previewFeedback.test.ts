@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hashArtifact, snapshotState, isCurrentPreviewMessage, readArtifactBrief } from "./previewFeedback";
+import { hashArtifact, snapshotState, isCurrentPreviewMessage } from "./previewFeedback";
 
 describe("preview feedback", () => {
   it("ignores messages from a replaced document even within the same artifact", () => {
@@ -17,9 +17,5 @@ describe("preview feedback", () => {
     expect(snapshotState(undefined)).toBeUndefined();
     const circular: { self?: unknown } = {}; circular.self = circular;
     expect(snapshotState(circular)).toBeUndefined();
-  });
-  it("reads valid brief data but never evaluates artifact scripts", () => {
-    expect(readArtifactBrief('<script id="workshop-brief" type="application/json">{"purpose":"Game","preserve":["Touch"]}</script>')).toEqual({ purpose: "Game", preserve: ["Touch"] });
-    expect(readArtifactBrief('<script id="workshop-brief">alert(1)</script>')).toBeNull();
   });
 });
