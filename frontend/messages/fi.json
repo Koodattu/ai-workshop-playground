@@ -77,13 +77,13 @@
     "usageTooltip": "{count} käyttöä jäljellä",
     "artifactModeLabel": "Tuotoksen tyyppi",
     "actionModeLabel": "Toimintatila",
-    "websiteMode": "SIVUSTO",
-    "gameMode": "PELI",
+    "websiteMode": "Sivusto",
+    "gameMode": "Peli",
     "websiteModeTooltip": "Suunnittele tai muokkaa sivustoa tai verkkosovellusta",
     "gameModeTooltip": "Suunnittele tai muokkaa selainpeliä",
-    "autoMode": "AUTO",
-    "askMode": "CHAT",
-    "editMode": "KOODI",
+    "autoMode": "Auto",
+    "askMode": "Chat",
+    "editMode": "Koodi",
     "autoModeTooltip": "Anna tekoälyn päättää, vastaako se vai muuttaako se koodia",
     "askModeTooltip": "Vastaa muuttamatta koodia",
     "editModeTooltip": "Luo tai muokkaa koodia",
@@ -148,9 +148,7 @@
     "screenshotAttached": "Kuvakaappaus liitetty",
     "preparingScreenshot": "Valmistellaan kuvaa…",
     "screenshotInvalid": "Valitse alle 10 Mt:n PNG-, JPEG- tai WebP-kuva.",
-    "removeAttachment": "Poista",
-    "previewAttached": "Esikatselun tiedot liitetty",
-    "describeProblem": "Kerro, mikä meni pieleen. Mukaan liitetään pelin nykyinen tila ja esikatselun koko."
+    "removeAttachment": "Poista"
   },
   "editor": {
     "header": "KOODIEDITORI",
@@ -382,12 +380,8 @@
     "fixRuntimeIssue": "Korjaa tekoälyllä",
     "dismissRuntimeIssue": "Sulje esikatselun ongelma",
     "fixRuntimePrompt": "Korjaa tämä esikatselun ongelma ja säilytä muu toiminta ennallaan: {error}",
-    "reportProblem": "Ilmoita ongelmasta",
-    "capturingFeedback": "Tallennetaan…",
-    "feedbackHint": "Näyttääkö jokin väärältä?",
     "feedbackUnavailable": "Tietojen tallennus epäonnistui. Yritä uudelleen.",
-    "feedbackStale": "Koodi on muuttunut. Tallenna esikatselun tiedot uudelleen tai poista liite.",
-    "artifactBrief": "Teoksen kuvaus"
+    "feedbackStale": "Koodi on muuttunut. Päivitä esikatselu ja yritä uudelleen."
   },
   "shareDialog": {
     "title": "Jaa Luomuksesi",
