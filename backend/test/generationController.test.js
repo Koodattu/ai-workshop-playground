@@ -158,6 +158,33 @@ test("auto answers report answering, never writing code", async (t) => {
 });
 
 for (const model of ["gpt56luna", "deepseekv4flash"]) {
+  for (const mode of ["ask", "edit", "auto"]) {
+    test(`${model}/${mode}: reply and artifact language policy reaches primary and repair requests`, async (t) => {
+      const response = mode === "ask" ? JSON.stringify({ message: "An endless runner." })
+        : mode === "auto" ? JSON.stringify({ ...JSON.parse(patch()), action: "edit" }) : patch();
+      const history = [{ role: "user", content: "subway surfers" }, { role: "assistant", content: "Создал игру." }];
+      const run = start(t, model, ["{", response], {
+        mode, prompt: "Make the button blue", messageHistory: history,
+        existingCode: original.replace("Play", "Pelaa"), artifactType: "game",
+      });
+      assert.equal((await run.finished).outcome, "completed");
+      assert.equal(calls.length, 2);
+      for (const { request } of calls) {
+        const instructions = model === "gpt56luna" ? request.instructions : request.messages[0].content;
+        const messages = model === "gpt56luna" ? request.input : request.messages.slice(1);
+        assert.match(instructions, /LANGUAGE POLICY:/);
+        assert.match(instructions, /Default reply language is English/);
+        assert.match(instructions, /explicit requested reply language/);
+        assert.match(instructions, /For a new game or website/);
+        assert.match(instructions, /preserve the artifact's existing UI language/);
+        assert.deepEqual(messages.slice(0, 2), history);
+        assert.match(messages.at(-1).content, /Reply in English when this request's language is unclear/);
+        assert.match(messages.at(-1).content, /USER REQUEST: Make the button blue/);
+        if (model === "gpt56luna") assert.match(request.text.format.schema.properties.message.description, /default to English/);
+      }
+    });
+  }
+
   test(`${model}: native history and image survive the single repair without reaching persistence`, async (t) => {
     const screenshot = "data:image/png;base64,iVBORw0KGgo=";
     const history = [{ role: "user", content: "Keep keyboard controls" }, { role: "assistant", content: "Understood" }];
