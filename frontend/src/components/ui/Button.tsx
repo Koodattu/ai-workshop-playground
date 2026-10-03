@@ -12,7 +12,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ className = 
   const baseStyles = `
       relative inline-flex items-center justify-center font-mono font-medium
       transition-all duration-200 ease-out
-      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-void
+      outline-none focus-visible:ring-1 focus-visible:ring-white/25
       disabled:opacity-50 disabled:cursor-not-allowed
       active:scale-[0.98]
     `;
@@ -21,22 +21,18 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ className = 
     primary: `
         bg-electric text-void
         hover:bg-electric-dim hover:shadow-glow-electric
-        focus:ring-electric
       `,
     secondary: `
         bg-graphite text-white border border-steel
         hover:bg-steel hover:border-electric/50
-        focus:ring-electric
       `,
     ghost: `
         bg-transparent text-gray-400
         hover:text-white hover:bg-graphite
-        focus:ring-electric
       `,
     danger: `
         bg-danger/20 text-danger border border-danger/30
         hover:bg-danger hover:text-white
-        focus:ring-danger
       `,
   };
 

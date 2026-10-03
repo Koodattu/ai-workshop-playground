@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { ModelPicker } from "./ModelPicker";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference, GenerationAttachment } from "@/types";
 import { prepareScreenshot } from "@/lib/previewFeedback";
@@ -102,6 +103,7 @@ export function ChatPanel({
     .map((option) => ({ value: option.id, label: t(option.translationKey) }));
   const enabledModelOptions = orderedModelOptions.filter((option) => enabledModelPreferences.includes(option.value));
   const visibleModelOptions = enabledModelOptions.length > 0 ? enabledModelOptions : orderedModelOptions;
+  const hasConversation = messages.length > 0 || Boolean(streamingMessage) || isLoading;
 
   // Auto-scroll to bottom when new messages arrive or streaming message updates
   useEffect(() => {
@@ -123,13 +125,6 @@ export function ChatPanel({
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     }
   }, [prompt]);
-
-  // Focus textarea when generation finishes
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && remainingUses !== 0) {
-      textareaRef.current?.focus();
-    }
-  }, [isLoading, isAuthenticated, remainingUses]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -243,7 +238,7 @@ export function ChatPanel({
 
       {/* Messages */}
       <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-        {messages.length === 0 ? (
+        {!hasConversation ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-2">
               <svg className="w-10 h-10 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -344,7 +339,7 @@ export function ChatPanel({
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+        {hasConversation && <div ref={messagesEndRef} />}
       </div>
 
       {/* Input Area - Conditional based on authentication and rate limit */}
@@ -410,40 +405,49 @@ export function ChatPanel({
         ) : (
           /* Normal authenticated state - Show input form */
           <form onSubmit={handleSubmit} className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                aria-label={t("chat.artifactModeLabel")}
-                value={artifactType}
-                onChange={(event) => onArtifactTypeChange(event.target.value as ArtifactType)}
-                disabled={isLoading}
-                title={t(artifactType === "game" ? "chat.gameModeTooltip" : "chat.websiteModeTooltip")}
-                className="h-9 min-w-0 rounded-lg border border-steel/50 bg-carbon px-2 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
-              >
-                <option value="website">{t("chat.websiteMode")}</option>
-                <option value="game">{t("chat.gameMode")}</option>
-              </select>
-              <select
-                aria-label={t("chat.actionModeLabel")}
-                value={mode}
-                onChange={(event) => onModeChange(event.target.value as ChatMode)}
-                disabled={isLoading}
-                title={t(mode === "edit" ? "chat.editModeTooltip" : mode === "ask" ? "chat.askModeTooltip" : "chat.autoModeTooltip")}
-                className="h-9 min-w-0 rounded-lg border border-steel/50 bg-carbon px-2 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
-              >
-                <option value="auto">{t("chat.autoMode")}</option>
-                <option value="ask">{t("chat.askMode")}</option>
-                <option value="edit">{t("chat.editMode")}</option>
-              </select>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <div role="group" aria-label={t("chat.artifactModeLabel")} className="flex rounded-lg bg-carbon p-0.5">
+                {(["website", "game"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={artifactType === value}
+                    disabled={isLoading}
+                    onClick={() => onArtifactTypeChange(value)}
+                    title={t(value === "game" ? "chat.gameModeTooltip" : "chat.websiteModeTooltip")}
+                    className={`h-8 rounded-md px-2 font-mono text-[11px] uppercase outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/25 disabled:opacity-50 ${artifactType === value ? "bg-steel/60 text-white" : "text-gray-400 hover:bg-graphite hover:text-white"}`}
+                  >
+                    {t(value === "game" ? "chat.gameMode" : "chat.websiteMode")}
+                  </button>
+                ))}
+              </div>
+              <div className="border-l border-steel/60 pl-2">
+                <div role="group" aria-label={t("chat.actionModeLabel")} className="flex rounded-lg bg-carbon p-0.5">
+                  {(["auto", "ask", "edit"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={mode === value}
+                      disabled={isLoading}
+                      onClick={() => onModeChange(value)}
+                      title={t(`chat.${value}ModeTooltip`)}
+                      className={`h-8 rounded-md px-2 font-mono text-[11px] uppercase outline-none transition-colors focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/25 disabled:opacity-50 ${mode === value ? "bg-steel/60 text-white" : "text-gray-400 hover:bg-graphite hover:text-white"}`}
+                    >
+                      {t(`chat.${value}Mode`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-steel bg-carbon transition-colors focus-within:border-electric/60">
+            <div className="overflow-hidden rounded-xl border border-steel bg-carbon">
               {screenshot && (
                 <div className="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-steel/50 p-2 text-xs text-gray-300">
                   <div className="relative h-12 w-16 shrink-0">
                     <Image src={screenshot} alt={t("chat.screenshotAttached")} fill sizes="64px" unoptimized className="rounded object-contain" />
                   </div>
                   <span className="min-w-0 flex-1 break-words">{t("chat.screenshotAttached")}</span>
-                  <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading} className="shrink-0 rounded p-1 text-electric focus-visible:outline-2 focus-visible:outline-electric">
+                  <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading} className="shrink-0 rounded p-1 text-electric outline-none focus-visible:ring-1 focus-visible:ring-white/25">
                     {t("chat.removeAttachment")}
                   </button>
                 </div>
@@ -483,7 +487,7 @@ export function ChatPanel({
                   disabled={isLoading || preparingImage}
                   aria-label={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
                   title={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-steel/50 hover:text-white focus-visible:outline-2 focus-visible:outline-electric disabled:opacity-40"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 outline-none transition-colors hover:bg-steel/50 hover:text-white focus-visible:ring-1 focus-visible:ring-white/25 disabled:opacity-40"
                 >
                   {preparingImage ? <Spinner size="sm" /> : (
                     <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -491,24 +495,18 @@ export function ChatPanel({
                     </svg>
                   )}
                 </button>
-                <select
-                  aria-label={t("chat.modelSelectLabel")}
+                <ModelPicker
                   value={modelPreference}
-                  onChange={(event) => onModelPreferenceChange(event.target.value as ModelPreference)}
+                  options={visibleModelOptions}
+                  onChange={onModelPreferenceChange}
                   disabled={isLoading}
-                  title={visibleModelOptions.find((option) => option.value === modelPreference)?.label}
-                  className="h-9 min-w-0 flex-1 rounded-lg bg-carbon px-1 font-mono text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
-                >
-                  {visibleModelOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                />
                 <button
                   type="submit"
                   disabled={!prompt.trim() || isLoading || preparingImage}
                   aria-label={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
                   title={t(mode === "edit" ? "chat.generateButton" : mode === "ask" ? "chat.askButton" : "chat.sendButton")}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-electric text-void transition-colors hover:bg-electric-dim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-electric text-void outline-none transition-colors hover:bg-electric-dim focus-visible:ring-1 focus-visible:ring-white/25 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isLoading ? <Spinner size="sm" /> : (
                     <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
