@@ -10,6 +10,7 @@ const { grantGenerationAccess } = require("../middleware/workshopAccessAdapter")
 const validateRequest = require("../middleware/validateRequest");
 const { ERROR_CODES } = require("../constants/errorCodes");
 const { MODEL_PREFERENCE_IDS } = require("../services/modelSettings");
+const { validatePreviewFeedback, validateScreenshot } = require("../services/generationContext");
 
 const router = express.Router();
 const isApiKeyMode = (value, { req }) => req.body.authMode === "api-key";
@@ -91,19 +92,20 @@ router.post(
       .bail()
       .isLength({ max: 10000 })
       .withMessage({ msg: "Prompt must not exceed 10000 characters", errorCode: ERROR_CODES.PROMPT_TOO_LONG }),
-    body("messageHistory").optional().isArray().withMessage({ msg: "Message history must be an array", errorCode: ERROR_CODES.MESSAGE_HISTORY_INVALID }),
+    body("messageHistory").optional().isArray({ max: 10 }).withMessage({ msg: "Message history must contain at most 10 messages", errorCode: ERROR_CODES.MESSAGE_HISTORY_INVALID }),
     body("messageHistory.*.role")
-      .optional()
       .isIn(["user", "assistant"])
       .withMessage({ msg: "Message role must be either 'user' or 'assistant'", errorCode: ERROR_CODES.MESSAGE_ROLE_INVALID }),
     body("messageHistory.*.content")
-      .optional()
       .isString()
       .withMessage({ msg: "Message content must be a string", errorCode: ERROR_CODES.MESSAGE_CONTENT_INVALID })
       .bail()
       .isLength({ max: 10000 })
       .withMessage({ msg: "Message content must not exceed 10000 characters", errorCode: ERROR_CODES.MESSAGE_CONTENT_TOO_LONG }),
     body("existingCode").optional().isString().withMessage({ msg: "Existing code must be a string", errorCode: ERROR_CODES.VALIDATION_FAILED }).isLength({ max: 500000 }),
+    body("artifactName").optional().isString().isLength({ max: 50 }).withMessage({ msg: "Artifact name is invalid", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("previewFeedback").optional().custom((value, { req }) => validatePreviewFeedback(value, req.body.existingCode)).withMessage({ msg: "Preview feedback is invalid or belongs to a different document", errorCode: ERROR_CODES.VALIDATION_FAILED }),
+    body("screenshot").optional().custom(validateScreenshot).withMessage({ msg: "Screenshot must be a small PNG or JPEG image", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("parentVersionId").optional({ nullable: true, checkFalsy: true }).isMongoId().withMessage({ msg: "Parent version ID is invalid", errorCode: ERROR_CODES.INVALID_OBJECT_ID }),
     body("mode").optional().isIn(["auto", "edit", "ask"]).withMessage({ msg: "Mode must be 'auto', 'edit', or 'ask'", errorCode: ERROR_CODES.VALIDATION_FAILED }),
     body("artifactType")

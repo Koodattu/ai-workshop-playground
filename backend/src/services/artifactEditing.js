@@ -52,6 +52,8 @@ function buildRetryFeedback(reason, details) {
       return "Do not use placeholders such as 'rest unchanged'. Include the actual resulting code.";
     case "inline-script-syntax":
       return `An inline script is not valid JavaScript: ${details.syntaxMessage}. Correct the script syntax.`;
+    case "artifact-brief":
+      return 'The workshop-brief script must contain valid JSON: {"purpose":"short description","preserve":["up to six short constraints"]}, under 1200 characters, with type="application/json".';
     default:
       return "Return a safe, complete artifact update that satisfies the output contract.";
   }
@@ -296,6 +298,17 @@ function validateGeneratedArtifact(code) {
   }
 
   const trimmed = code.trim();
+  const briefs = [...code.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)].filter((match) => /\bid\s*=\s*["']workshop-brief["']/i.test(match[1]));
+  if (briefs.length > 1) fail("Duplicate artifact brief", "artifact-brief");
+  for (const [, attributes, text] of briefs) {
+    let brief;
+    try { brief = JSON.parse(text); } catch { fail("Invalid artifact brief", "artifact-brief"); }
+    if (!/\btype\s*=\s*["']application\/json["']/i.test(attributes) || text.length > 1200 || !brief ||
+      typeof brief.purpose !== "string" || !brief.purpose.trim() || brief.purpose.length > 300 ||
+      !Array.isArray(brief.preserve) || brief.preserve.length > 6 || brief.preserve.some((rule) => typeof rule !== "string" || rule.length > 180)) {
+      fail("Invalid artifact brief", "artifact-brief");
+    }
+  }
   if (trimmed.startsWith("```") || trimmed.endsWith("```")) {
     fail("Generated document contains a Markdown wrapper", "markdown-wrapper");
   }

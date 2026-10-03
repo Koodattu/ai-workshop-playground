@@ -97,6 +97,23 @@ export interface GenerateRequest {
   artifactType?: ArtifactType;
   modelPreference?: ModelPreference;
   showThoughts?: boolean;
+  artifactName?: string;
+  previewFeedback?: PreviewFeedback;
+  screenshot?: string;
+}
+
+export interface PreviewFeedback {
+  codeHash: string;
+  versionId?: string | null;
+  capturedAt: string;
+  viewport: { width: number; height: number };
+  error?: string;
+  stateJson?: string;
+}
+
+export interface GenerationAttachment {
+  previewFeedback?: PreviewFeedback;
+  screenshot?: string;
 }
 
 export interface GenerateResponse {
@@ -254,6 +271,7 @@ export interface PreviewControl {
   disableAutoRefresh: () => void;
   enableAutoRefresh: () => void;
   forceRefresh: (newCode?: string, projectId?: string) => void;
+  copyStateTo: (projectId: string) => void;
 }
 
 export interface PreviewRuntimeIssue {
@@ -262,6 +280,7 @@ export interface PreviewRuntimeIssue {
   source?: string;
   line?: number;
   column?: number;
+  documentId?: string;
 }
 
 // A user-owned artifact persisted in the browser Artifact Library.

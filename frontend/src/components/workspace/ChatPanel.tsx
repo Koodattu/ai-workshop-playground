@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect, FormEvent } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference } from "@/types";
+import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference, GenerationAttachment, PreviewFeedback } from "@/types";
+import { prepareScreenshot } from "@/lib/previewFeedback";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
-  onSendMessage: (prompt: string) => Promise<void>;
+  onSendMessage: (prompt: string, attachment?: GenerationAttachment) => Promise<void>;
+  previewFeedback?: PreviewFeedback;
+  onClearFeedback?: () => void;
   isLoading: boolean;
   generationPhase?: GenerationPhase;
   generationStartedAt?: number;
@@ -86,8 +90,13 @@ export function ChatPanel({
   enabledModelPreferences,
   modelOptions,
   onRetryMessage,
+  previewFeedback,
+  onClearFeedback,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
+  const [screenshot, setScreenshot] = useState<string>();
+  const [preparingImage, setPreparingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const progressScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -128,12 +137,13 @@ export function ChatPanel({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (prompt.trim() && !isLoading) {
+    if (prompt.trim() && !isLoading && !preparingImage) {
       const trimmedPrompt = prompt.trim();
       // Clear the prompt immediately
       setPrompt("");
       try {
-        await onSendMessage(trimmedPrompt);
+        await onSendMessage(trimmedPrompt, { previewFeedback, screenshot });
+        setScreenshot(undefined);
       } catch {
         // Restore the prompt on error so user can retry
         setPrompt(trimmedPrompt);
@@ -404,6 +414,24 @@ export function ChatPanel({
         ) : (
           /* Normal authenticated state - Show input form */
           <form onSubmit={handleSubmit} className="space-y-3">
+            {previewFeedback && (
+              <div className="rounded-lg border border-electric/30 bg-electric/10 p-2 text-xs text-gray-300">
+                <div className="flex items-center justify-between gap-2">
+                  <span>{t("chat.previewAttached")}</span>
+                  <button type="button" onClick={onClearFeedback} disabled={isLoading} className="text-electric">{t("chat.removeAttachment")}</button>
+                </div>
+                <p className="mt-1 text-gray-400">{t("chat.describeProblem")}</p>
+              </div>
+            )}
+            {screenshot && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-steel p-2 text-xs text-gray-300">
+                <div className="relative h-12 w-16 shrink-0">
+                  <Image src={screenshot} alt={t("chat.screenshotAttached")} fill sizes="64px" unoptimized className="rounded object-contain" />
+                </div>
+                <span className="min-w-0 flex-1 break-words">{t("chat.screenshotAttached")}</span>
+                <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading} className="shrink-0 text-electric">{t("chat.removeAttachment")}</button>
+              </div>
+            )}
             <div className="relative">
               <textarea
                 ref={textareaRef}
@@ -423,6 +451,22 @@ export function ChatPanel({
                   disabled:opacity-50 disabled:cursor-not-allowed
                 "
               />
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" aria-label={t("chat.attachScreenshot")}
+                disabled={isLoading || preparingImage} onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  setPreparingImage(true);
+                  try { setScreenshot(await prepareScreenshot(file)); }
+                  catch { showToast(t("chat.screenshotInvalid"), "error"); }
+                  finally { setPreparingImage(false); }
+                }} />
+              <button type="button" onClick={() => imageInputRef.current?.click()} disabled={isLoading || preparingImage} className="rounded px-1 py-1 hover:text-white disabled:opacity-40">
+                {preparingImage ? t("chat.preparingScreenshot") : t("chat.attachScreenshot")}
+              </button>
             </div>
 
             <div className="flex items-end justify-between gap-2 flex-wrap">
@@ -575,7 +619,7 @@ export function ChatPanel({
                 </select>
               </div>
 
-              <Button type="submit" size="md" disabled={!prompt.trim() || isLoading} isLoading={isLoading}>
+              <Button type="submit" size="md" disabled={!prompt.trim() || isLoading || preparingImage} isLoading={isLoading}>
                 {mode === "edit" ? (
                   <>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

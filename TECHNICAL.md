@@ -21,6 +21,42 @@ uses the existing database timeouts. `[AI Run]` logs report all generation outco
 and per-attempt usage without recording prompt/code content. Comparison cases and
 the offline report command are in [backend/evals](./backend/evals/README.md).
 
+## Prototype context and preview feedback
+
+The generation prompt version is `prototype-quality-v1`. Conversation history uses
+native user/assistant messages (at most ten); the current HTML is quoted as data,
+followed by the artifact name, optional observations, and the latest user request.
+Existing names are preserved unless the user asks to rename them. New artifacts
+carry a small, validated `workshop-brief` JSON script with their purpose and up to
+six constraints. Legacy artifacts do not need one. The preview displays this brief.
+
+Game requests receive only relevant source recipes: independent seeded random
+streams, small procedural audio effects, and a reusable canvas texture. These are
+examples to copy into the exported HTML, not host globals or provider tools. Small
+unrelated edits receive no recipe catalog. The Star Gatherer Starter demonstrates
+keyboard/pointer controls, predictable restart, mute and the state contract.
+
+“Report a problem” captures the exact document hash, viewport, timestamp, current
+version, and up to 12,000 characters of serializable state. Runtime fixes add the
+error and corrected source location. Changed documents invalidate old feedback;
+iframe messages also carry a document identifier to reject stale messages.
+First edits copy supported progress from the Starter/Shared Artifact into the new
+Saved Artifact. Startup saves cannot replace progress while it is being restored.
+
+Screenshots are optional file attachments. The browser accepts PNG/JPEG/WebP up
+to 10 MiB, resizes to at most 1280 pixels per side, and sends a JPEG of at most
+700,000 data-URL characters. The API accepts bounded inline PNG/JPEG only and has
+a 2 MiB request-body limit. Screenshots and diagnostic snapshots go to the chosen
+provider for that request and its one possible repair; they are not added to
+versions, conversation history or logs. Logs record presence flags only. Failed
+or stopped submissions retain the composer draft and attachments in memory.
+
+DeepSeek's stable option `deepseekv4flash` now targets the official
+`deepseek-flash` API model (V4.1 Flash) and offers low reasoning. Existing workshop
+settings remain in effect. Cost estimates use peak rates; discounted provider
+charges can be lower. No automatic browser execution or paid asset generation is
+part of the production request loop.
+
 ## System shape
 
 The product is a Next.js workspace backed by an Express API and MongoDB. HTTP and SSE are transport adapters; workshop access, generation completion, model selection, and version lineage live behind application boundaries.

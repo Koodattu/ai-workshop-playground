@@ -111,8 +111,8 @@ test("malformed response repairs once, accounts for both calls, and persists onl
   assert.equal(summary.repairReason, "invalid-response");
   assert.equal(summary.attempts.length, 2);
   assert.equal(calls.length, 2);
-  assert.match(calls[1].request.input, /VALIDATION FEEDBACK/);
-  assert.match(calls[1].request.input, /color:red/);
+  assert.match(calls[1].request.input.at(-1).content, /VALIDATION FEEDBACK/);
+  assert.match(calls[1].request.input.at(-1).content, /color:red/);
   assert.equal(saves[0].usageMetadata.promptTokenCount, 40);
   assert.equal(saves[0].generation.patchRetryAttempted, true);
   assert.equal(run.events.at(-1).type, "done");
@@ -156,3 +156,22 @@ test("auto answers report answering, never writing code", async (t) => {
   assert.equal(run.events.at(-1).mode, "ask");
   assert.equal(saves[0].generation.code, "");
 });
+
+for (const model of ["gpt56luna", "deepseekv4flash"]) {
+  test(`${model}: native history and image survive the single repair without reaching persistence`, async (t) => {
+    const screenshot = "data:image/png;base64,iVBORw0KGgo=";
+    const history = [{ role: "user", content: "Keep keyboard controls" }, { role: "assistant", content: "Understood" }];
+    const run = start(t, model, ["{", patch()], { messageHistory: history, screenshot, artifactName: "Original Name" });
+    const summary = await run.finished;
+    assert.equal(summary.outcome, "completed");
+    assert.equal(calls.length, 2);
+    for (const call of calls) {
+      const messages = model === "gpt56luna" ? call.request.input : call.request.messages.slice(1);
+      assert.deepEqual(messages.slice(0, 2), history);
+      const content = messages.at(-1).content;
+      assert.match(content[0].text, /Original Name/);
+      assert.equal(model === "gpt56luna" ? content[1].image_url : content[1].image_url.url, screenshot);
+    }
+    assert.equal(JSON.stringify(saves).includes("base64"), false);
+  });
+}

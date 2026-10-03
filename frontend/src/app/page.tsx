@@ -22,6 +22,8 @@ import { api } from "@/lib/api";
 import { getArtifactSource, isSavedArtifactId, planWorkspaceEdit, resolveArtifactLibraryEntry } from "@/lib/artifactLibrary";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage, parseApiError } from "@/lib/errorTranslation";
+import { hashArtifact } from "@/lib/previewFeedback";
+import type { GenerationAttachment, PreviewFeedback } from "@/types";
 import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, PreviewRuntimeIssue, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, ModelOption, CodeVersion, UserApiKeySettings, VersionListRequest, GenerateRequest, GenerationPhase, StreamCallbacks } from "@/types";
 import enMessages from "@messages/en.json";
 import fiMessages from "@messages/fi.json";
@@ -255,6 +257,7 @@ export default function WorkspacePage() {
   const [generationStartedAt, setGenerationStartedAt] = useState(0);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [progressMessage, setProgressMessage] = useState<string>("");
+  const [pendingFeedback, setPendingFeedback] = useState<{ artifactId: string; feedback: PreviewFeedback } | null>(null);
 
   // Sharing state
   const [isSharing, setIsSharing] = useState(false);
@@ -580,6 +583,7 @@ export default function WorkspacePage() {
         const messages = getMessages(language);
         const templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
         const newTemplate = addTemplate(templateName, newCode, undefined, undefined, artifactType);
+        previewControlRef.current?.copyStateTo(newTemplate.id);
 
         // Switch to the newly created custom template
         setSavedTemplateId(newTemplate.id);
@@ -748,8 +752,13 @@ export default function WorkspacePage() {
   }, [pendingSharedTemplate, showToast, t]);
 
   const handleSendMessage = useCallback(
-    async (prompt: string, modeOverride?: ChatMode) => {
+    async (prompt: string, modeOverride?: ChatMode, attachment?: GenerationAttachment) => {
       if (!visitorId || !isAuthenticated || abortStreamRef.current) return;
+      if (attachment?.previewFeedback && attachment.previewFeedback.codeHash !== await hashArtifact(code)) {
+        showToast(t("preview.feedbackStale"), "error");
+        throw new Error("stale-preview-feedback");
+      }
+      if (abortStreamRef.current) return;
       const requestMode = modeOverride ?? chatMode;
 
       const authPayload =
@@ -797,11 +806,15 @@ export default function WorkspacePage() {
         content: msg.content,
       }));
 
+      const currentArtifact = customTemplates.find((artifact) => artifact.id === currentTemplateId);
       const generationRequest = {
         ...authPayload,
         visitorId,
         prompt,
         existingCode: code,
+        artifactName: (currentArtifact?.projectName || currentArtifact?.name)?.slice(0, 50),
+        previewFeedback: attachment?.previewFeedback,
+        screenshot: attachment?.screenshot,
         parentVersionId: currentVersionId,
         messageHistory,
         mode: requestMode,
@@ -1033,6 +1046,7 @@ export default function WorkspacePage() {
                     templateName = messages.templates.customTemplateName.replace("#{number}", String(templateCounterRef.current));
                   }
                   const newTemplate = addTemplate(templateName, finalCode, projectName, versionMeta, artifactType);
+                  previewControlRef.current?.copyStateTo(newTemplate.id);
                   // Switch to the new custom template and update savedTemplateId to match
                   setSavedTemplateId(newTemplate.id);
                   setCurrentTemplateId(newTemplate.id);
@@ -1096,6 +1110,7 @@ export default function WorkspacePage() {
               }
 
               showToast(t(isEditResponse ? "chat.codeGenerated" : "chat.responseReceived"), "success");
+              setPendingFeedback(null);
             },
             onError: (error, remainingUsesOnError, errorCode, details) => {
               restoreAfterUnsuccessfulRun();
@@ -1127,7 +1142,7 @@ export default function WorkspacePage() {
                 durationMs: Date.now() - startedAt,
                 errorDetails: formattedErrorDetails,
                 errorCode: errorCode,
-                failedPrompt: prompt,
+                failedPrompt: attachment?.previewFeedback || attachment?.screenshot ? undefined : prompt,
               };
               setChatHistory((prev) => [...prev, errorChatMessage]);
 
@@ -1197,12 +1212,16 @@ export default function WorkspacePage() {
           outcome.error.errorCode,
           outcome.error.details,
         );
+        setMobileActivePanel("chat");
+        throw new Error(outcome.error.message);
       } else {
         restoreAfterUnsuccessfulRun();
         setChatHistory((previous) => [...previous, { id: crypto.randomUUID(), role: "assistant", content: t("chat.stopped"), timestamp: new Date(), durationMs: Date.now() - startedAt }]);
         setStreamingMessage("");
         setProgressMessage("");
         setIsStreaming(false);
+        setMobileActivePanel("chat");
+        throw new Error("generation-cancelled");
       }
     },
     [
@@ -1224,6 +1243,7 @@ export default function WorkspacePage() {
       restoreSavedCursorPosition,
       language,
       currentTemplateId,
+      customTemplates,
       updateTemplate,
       addTemplate,
       chatMode,
@@ -1387,15 +1407,22 @@ export default function WorkspacePage() {
   );
 
   const handleFixRuntimeIssue = useCallback(
-    (issue: PreviewRuntimeIssue) => {
+    (issue: PreviewRuntimeIssue, feedback: PreviewFeedback) => {
       if (isStreaming) return;
 
       setChatMode("edit");
       const location = issue.source ? ` (${issue.source}${issue.line ? `:${issue.line}${issue.column ? `:${issue.column}` : ""}` : ""})` : "";
-      void handleSendMessage(t("preview.fixRuntimePrompt", { error: `${issue.message}${location}` }), "edit");
+      void handleSendMessage(t("preview.fixRuntimePrompt", { error: `${issue.message}${location}` }), "edit", { previewFeedback: { ...feedback, versionId: currentVersionId } }).catch(() => {});
     },
-    [handleSendMessage, isStreaming, setChatMode, t],
+    [handleSendMessage, isStreaming, setChatMode, t, currentVersionId],
   );
+
+  const handleReportProblem = (feedback: PreviewFeedback) => {
+    if (isStreaming) return;
+    setPendingFeedback({ artifactId: currentTemplateId, feedback: { ...feedback, versionId: currentVersionId } });
+    setChatMode("edit");
+    setMobileActivePanel("chat");
+  };
 
   const handleSaveApiKeys = useCallback(
     async (nextApiKeys: UserApiKeySettings) => {
@@ -1581,7 +1608,9 @@ export default function WorkspacePage() {
             <Panel defaultSize={300} minSize={200} maxSize={600} className="border-r border-steel/30 panel-animate">
               <ChatPanel
                 messages={chatHistory}
-                onSendMessage={handleSendMessage}
+                onSendMessage={(prompt, attachment) => handleSendMessage(prompt, undefined, attachment)}
+                previewFeedback={pendingFeedback?.artifactId === currentTemplateId ? pendingFeedback.feedback : undefined}
+                onClearFeedback={() => setPendingFeedback(null)}
                 isLoading={isStreaming}
                 generationPhase={generationPhase}
                 generationStartedAt={generationStartedAt}
@@ -1663,6 +1692,7 @@ export default function WorkspacePage() {
                 isSharing={isSharing}
                 isGenerating={isStreaming}
                 onFixRuntimeIssue={handleFixRuntimeIssue}
+                onReportProblem={isAuthenticated ? handleReportProblem : undefined}
               />
             </Panel>
           </Group>
@@ -1672,10 +1702,12 @@ export default function WorkspacePage() {
         <div className="flex-1 flex flex-col md:hidden overflow-hidden">
           {/* Active panel content */}
           <div className="flex-1 overflow-hidden">
-            {mobileActivePanel === "chat" && (
+            <div className={mobileActivePanel === "chat" ? "h-full" : "hidden"}>
               <ChatPanel
                 messages={chatHistory}
-                onSendMessage={handleSendMessage}
+                onSendMessage={(prompt, attachment) => handleSendMessage(prompt, undefined, attachment)}
+                previewFeedback={pendingFeedback?.artifactId === currentTemplateId ? pendingFeedback.feedback : undefined}
+                onClearFeedback={() => setPendingFeedback(null)}
                 isLoading={isStreaming}
                 generationPhase={generationPhase}
                 generationStartedAt={generationStartedAt}
@@ -1702,7 +1734,7 @@ export default function WorkspacePage() {
                 modelOptions={modelCatalog}
                 onRetryMessage={handleSendMessage}
               />
-            )}
+            </div>
             {mobileActivePanel === "editor" && (
               <EditorPanel
                 code={code}
@@ -1738,6 +1770,7 @@ export default function WorkspacePage() {
                 isSharing={isSharing}
                 isGenerating={isStreaming}
                 onFixRuntimeIssue={handleFixRuntimeIssue}
+                onReportProblem={isAuthenticated ? handleReportProblem : undefined}
               />
             )}
           </div>

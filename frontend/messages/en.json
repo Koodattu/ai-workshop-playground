@@ -98,7 +98,7 @@
     "modelGpt54": "GPT-5.4",
     "modelGpt55": "GPT-5.5",
     "modelGpt56Luna": "GPT-6 Luna",
-    "modelDeepSeekV4Flash": "DeepSeek V4 Flash",
+    "modelDeepSeekV4Flash": "DeepSeek V4.1 Flash",
     "askButton": "Ask",
     "stop": "Stop",
     "stopped": "Stopped.",
@@ -143,7 +143,14 @@
       "INTERNAL_SERVER_ERROR": "An unexpected error occurred",
       "API_QUOTA_EXCEEDED": "Service temporarily unavailable. Please try again later.",
       "UNKNOWN_ERROR": "An unknown error occurred"
-    }
+    },
+    "attachScreenshot": "Attach screenshot",
+    "screenshotAttached": "Screenshot attached",
+    "preparingScreenshot": "Preparing image…",
+    "screenshotInvalid": "Choose a PNG, JPEG or WebP image under 10 MB.",
+    "removeAttachment": "Remove",
+    "previewAttached": "Preview details attached",
+    "describeProblem": "Describe what went wrong. The current game state and preview size will be included."
   },
   "editor": {
     "header": "CODE EDITOR",
@@ -250,7 +257,8 @@
     "customTemplateName": "Creation #{number}",
     "deleteCustomTemplate": "Delete",
     "noCustomTemplates": "No saved creations yet",
-    "noSharedTemplates": "No shared templates yet"
+    "noSharedTemplates": "No shared templates yet",
+    "seededCollector": "Star Gatherer"
   },
   "templateContent": {
     "simpleWelcome": {
@@ -322,6 +330,23 @@
       "xWins": "X Wins",
       "oWins": "O Wins",
       "draws": "Draws"
+    },
+    "seededCollector": {
+      "title": "Star Gatherer",
+      "purpose": "A short arcade game with a repeatable star layout.",
+      "constraint1": "Keep the same layout when changing colors or difficulty.",
+      "constraint2": "Support keyboard and touch, mute, restart and saved progress.",
+      "score": "Stars",
+      "time": "Time",
+      "instructions": "Collect stars in 30 seconds. Move with arrow keys or WASD, or drag on the field.",
+      "canvasLabel": "Star collection game. Use arrow keys or touch to move.",
+      "start": "Start",
+      "restart": "Restart",
+      "mute": "Mute",
+      "ready": "Ready when you are. The same seed keeps your layout familiar.",
+      "playing": "Follow the gold stars!",
+      "over": "Round complete. Start again to beat your score.",
+      "language": "en"
     }
   },
   "preview": {
@@ -356,7 +381,13 @@
     "runtimeIssueTitle": "Preview problem detected",
     "fixRuntimeIssue": "Fix with AI",
     "dismissRuntimeIssue": "Dismiss preview problem",
-    "fixRuntimePrompt": "Fix this preview problem while preserving unrelated behavior: {error}"
+    "fixRuntimePrompt": "Fix this preview problem while preserving unrelated behavior: {error}",
+    "reportProblem": "Report a problem",
+    "capturingFeedback": "Capturing…",
+    "feedbackHint": "Something looks wrong?",
+    "feedbackUnavailable": "Could not capture details. Try again.",
+    "feedbackStale": "The code has changed. Capture new preview details or remove the attachment.",
+    "artifactBrief": "Artifact brief"
   },
   "shareDialog": {
     "title": "Share Your Creation",

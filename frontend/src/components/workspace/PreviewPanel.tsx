@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { PreviewControl, PreviewRuntimeIssue } from "@/types";
+import type { PreviewControl, PreviewRuntimeIssue, PreviewFeedback } from "@/types";
+import { createPreviewFeedback, isCurrentPreviewMessage, readArtifactBrief } from "@/lib/previewFeedback";
 
 interface PreviewPanelProps {
   code: string;
@@ -11,12 +12,14 @@ interface PreviewPanelProps {
   onShare?: () => Promise<string | null>;
   isSharing?: boolean;
   isGenerating?: boolean;
-  onFixRuntimeIssue?: (issue: PreviewRuntimeIssue) => void;
+  onFixRuntimeIssue?: (issue: PreviewRuntimeIssue, feedback: PreviewFeedback) => void;
+  onReportProblem?: (feedback: PreviewFeedback) => void;
 }
 
 interface PreviewDocument {
   code: string;
   projectId: string;
+  documentId: string;
 }
 
 interface SavedPreviewState {
@@ -131,6 +134,7 @@ export function PreviewPanel({
   isSharing = false,
   isGenerating = false,
   onFixRuntimeIssue,
+  onReportProblem,
 }: PreviewPanelProps) {
   const [initialPersistence] = useState(() => {
     const enabled = readStateSetting(projectId);
@@ -139,7 +143,9 @@ export function PreviewPanel({
   });
   const [isAutoRefresh, setIsAutoRefresh] = useState(true);
   const [manuallyDisabled, setManuallyDisabled] = useState(false);
-  const [previewDocument, setPreviewDocument] = useState<PreviewDocument>({ code, projectId });
+  const [previewDocument, setPreviewDocument] = useState<PreviewDocument>(() => ({ code, projectId, documentId: crypto.randomUUID() }));
+  const [isCapturingFeedback, setIsCapturingFeedback] = useState(false);
+  const [feedbackUnavailable, setFeedbackUnavailable] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [key, setKey] = useState(0);
   const [shareSuccess, setShareSuccess] = useState(false);
@@ -161,6 +167,7 @@ export function PreviewPanel({
   const latestProjectIdRef = useRef(projectId);
   const previewDocumentRef = useRef(previewDocument);
   const restoredDocumentRef = useRef<PreviewDocument | null>(null);
+  const restoringDocumentRef = useRef<PreviewDocument | null>(null);
   const statePersistenceEnabledRef = useRef(isStatePersistenceEnabled);
 
   if (stateProjectId !== projectId) {
@@ -255,6 +262,24 @@ export function PreviewPanel({
     [requestStateCapture, storeCapturedState],
   );
 
+  const captureFeedback = async (issue?: PreviewRuntimeIssue) => {
+    const document = previewDocumentRef.current;
+    if (isGenerating || document.code !== latestCodeRef.current || document.projectId !== latestProjectIdRef.current) return;
+    if (issue && issue.documentId !== document.documentId) return;
+    setIsCapturingFeedback(true);
+    setFeedbackUnavailable(false);
+    try {
+      const viewport = { width: iframeRef.current?.clientWidth || 1, height: iframeRef.current?.clientHeight || 1 };
+      const captured = await requestStateCapture();
+      const error = issue ? `${issue.kind}: ${issue.message}${issue.source ? ` (${issue.source}:${issue.line || 0}:${issue.column || 0})` : ""}` : undefined;
+      const feedback = await createPreviewFeedback(document.code, viewport, captured?.supported && !captured.error ? captured.state : undefined, error);
+      if (previewDocumentRef.current !== document || latestCodeRef.current !== document.code) return;
+      if (issue) onFixRuntimeIssue?.(issue, feedback);
+      else onReportProblem?.(feedback);
+    } catch { setFeedbackUnavailable(true); }
+    finally { setIsCapturingFeedback(false); }
+  };
+
   const restoreSavedState = useCallback((stateToRestore: unknown) => {
     iframeRef.current?.contentWindow?.postMessage(
       {
@@ -280,6 +305,7 @@ export function PreviewPanel({
 
     const storedState = readSavedState(currentDocument.projectId);
     if (storedState) {
+      restoringDocumentRef.current = currentDocument;
       restoreSavedState(storedState.state);
       if (currentDocument.projectId === latestProjectIdRef.current) {
         setSavedState(storedState);
@@ -304,7 +330,7 @@ export function PreviewPanel({
 
       if (updateSequence !== previewUpdateSequenceRef.current) return;
 
-      const nextDocument = { code: nextCode, projectId: nextProjectId };
+      const nextDocument = { code: nextCode, projectId: nextProjectId, documentId: crypto.randomUUID() };
       previewDocumentRef.current = nextDocument;
       setPreviewDocument(nextDocument);
       setRuntimeIssue(null);
@@ -330,10 +356,22 @@ export function PreviewPanel({
         forceRefresh: (newCode?: string, nextProjectId?: string) => {
           void updatePreview(newCode ?? latestCodeRef.current, nextProjectId ?? latestProjectIdRef.current, true);
         },
+        copyStateTo: (nextProjectId: string) => {
+          const sourceId = previewDocumentRef.current.projectId;
+          const enabled = readStateSetting(sourceId);
+          writeStateSetting(nextProjectId, enabled);
+          if (!enabled) return;
+          // Copy immediately for mobile unmounts, then capture the latest visible state.
+          const stored = readSavedState(sourceId);
+          if (stored) writeSavedState(nextProjectId, stored.state);
+          void requestStateCapture().then((result) => {
+            if (result?.supported && !result.error) writeSavedState(nextProjectId, result.state);
+          });
+        },
       };
       onControlReady(control);
     }
-  }, [onControlReady, updatePreview]);
+  }, [onControlReady, requestStateCapture, updatePreview]);
 
   // Update preview based on auto-refresh setting with debounce
   useEffect(() => {
@@ -372,6 +410,7 @@ export function PreviewPanel({
         state?: unknown;
         error?: boolean;
         projectId?: string;
+        documentId?: string;
         kind?: PreviewRuntimeIssue["kind"];
         message?: string;
         sourceUrl?: string;
@@ -380,6 +419,7 @@ export function PreviewPanel({
       };
 
       if (data?.source !== PREVIEW_MESSAGE_SOURCE || data.protocolVersion !== PREVIEW_PROTOCOL_VERSION) return;
+      if (!isCurrentPreviewMessage(data, previewDocumentRef.current)) return;
 
       if (data.type === "state-capture-response" && data.requestId) {
         const pendingCapture = pendingCapturesRef.current.get(data.requestId);
@@ -402,6 +442,7 @@ export function PreviewPanel({
           source: data.sourceUrl?.slice(0, 500),
           line: data.line,
           column: data.column,
+          documentId: data.documentId,
         });
         return;
       }
@@ -412,6 +453,8 @@ export function PreviewPanel({
 
       if (data.type === "state-save") {
         if (!data.projectId) return;
+        // Startup and importState callbacks must not overwrite progress being restored.
+        if (restoringDocumentRef.current === currentDocument) return;
         const persistenceEnabled =
           (data.projectId === latestProjectIdRef.current && statePersistenceEnabledRef.current) || readStateSetting(data.projectId);
         if (!persistenceEnabled) return;
@@ -426,6 +469,7 @@ export function PreviewPanel({
 
       if (data.type === "state-restore-result") {
         if (data.projectId !== currentDocument.projectId) return;
+        restoringDocumentRef.current = null;
         if (!data.supported) {
           setStateStatus("unsupported");
         } else if (data.error) {
@@ -583,12 +627,15 @@ export function PreviewPanel({
           var HOST_SOURCE = '${HOST_MESSAGE_SOURCE}';
           var PROTOCOL_VERSION = ${PREVIEW_PROTOCOL_VERSION};
           var PROJECT_ID = ${JSON.stringify(previewDocument.projectId)};
+          var DOCUMENT_ID = ${JSON.stringify(previewDocument.documentId)};
+          var INJECTED_LINES = __WORKSHOP_LINE_OFFSET__;
 
           function postToHost(message) {
             window.parent.postMessage(Object.assign({
               source: PREVIEW_SOURCE,
               protocolVersion: PROTOCOL_VERSION,
-              projectId: PROJECT_ID
+              projectId: PROJECT_ID,
+              documentId: DOCUMENT_ID
             }, message), '*');
           }
 
@@ -616,7 +663,7 @@ export function PreviewPanel({
               kind: 'javascript',
               message: String(event.message || 'Unknown JavaScript error').slice(0, 500),
               sourceUrl: String(event.filename || '').slice(0, 500),
-              line: Number(event.lineno) || undefined,
+              line: event.filename === 'about:srcdoc' ? Math.max(1, (Number(event.lineno) || 1) - INJECTED_LINES) : Number(event.lineno) || undefined,
               column: Number(event.colno) || undefined
             });
           }, true);
@@ -736,17 +783,19 @@ export function PreviewPanel({
       </script>
     `;
 
+    const bridge = script.replace("__WORKSHOP_LINE_OFFSET__", String(script.split("\n").length - 1));
     // Install diagnostics before artifact scripts while keeping a fallback for fragments.
     if (/<head\b[^>]*>/i.test(html)) {
-      return html.replace(/<head\b[^>]*>/i, (openingHead) => openingHead + script);
+      return html.replace(/<head\b[^>]*>/i, (openingHead) => openingHead + bridge);
     }
     if (/<body\b[^>]*>/i.test(html)) {
-      return html.replace(/<body\b[^>]*>/i, (openingBody) => openingBody + script);
+      return html.replace(/<body\b[^>]*>/i, (openingBody) => openingBody + bridge);
     }
-    return script + html;
+    return bridge + html;
   };
 
   const processedCode = hasCode ? injectPreviewRuntime(previewDocument.code) : "";
+  const artifactBrief = readArtifactBrief(previewDocument.code);
 
   const savedAtLabel = savedState
     ? new Intl.DateTimeFormat(language, {
@@ -893,6 +942,24 @@ export function PreviewPanel({
           </div>
         </div>
 
+        {artifactBrief && (
+          <details className="border-b border-steel/50 bg-obsidian px-3 py-2 text-xs text-gray-400">
+            <summary className="cursor-pointer">{t("preview.artifactBrief")}</summary>
+            <p className="mt-2 text-gray-200">{artifactBrief.purpose}</p>
+            <ul className="mt-1 list-disc pl-4">{artifactBrief.preserve.map((rule, index) => <li key={index}>{rule}</li>)}</ul>
+          </details>
+        )}
+
+        {onReportProblem && hasCode && (
+          <div className="flex items-center justify-between gap-2 border-b border-steel/50 bg-obsidian px-3 py-1.5 text-xs text-gray-400">
+            <span>{feedbackUnavailable ? t("preview.feedbackUnavailable") : t("preview.feedbackHint")}</span>
+            <button type="button" onClick={() => void captureFeedback()} disabled={isGenerating || isCapturingFeedback || previewDocument.code !== code}
+              className="shrink-0 rounded px-2 py-1 text-electric hover:bg-electric/10 disabled:opacity-40">
+              {isCapturingFeedback ? t("preview.capturingFeedback") : t("preview.reportProblem")}
+            </button>
+          </div>
+        )}
+
         {runtimeIssue && (
           <div className="flex items-start gap-2 border-b border-amber-500/30 bg-amber-950 px-3 py-2 text-xs text-amber-100" role="alert">
             <div className="min-w-0 flex-1">
@@ -904,8 +971,8 @@ export function PreviewPanel({
             {onFixRuntimeIssue && (
               <button
                 type="button"
-                disabled={isGenerating}
-                onClick={() => onFixRuntimeIssue(runtimeIssue)}
+                disabled={isGenerating || isCapturingFeedback || previewDocument.code !== code}
+                onClick={() => void captureFeedback(runtimeIssue)}
                 className="shrink-0 rounded border border-amber-400/40 px-2 py-1 font-semibold text-amber-100 transition-colors hover:bg-amber-400/10 disabled:cursor-wait disabled:opacity-50"
               >
                 {t("preview.fixRuntimeIssue")}

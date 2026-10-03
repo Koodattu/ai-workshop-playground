@@ -1,4 +1,5 @@
 import type { ArtifactType } from "@/types";
+import { seededCollectorCode } from "./seededCollector";
 
 export interface Template {
   id: string;
@@ -8,6 +9,7 @@ export interface Template {
 }
 
 export const TEMPLATES: Template[] = [
+  { id: "seeded-collector", nameKey: "templates.seededCollector", code: seededCollectorCode, artifactType: "game" },
   {
     id: "simple-welcome",
     nameKey: "templates.simpleWelcome",

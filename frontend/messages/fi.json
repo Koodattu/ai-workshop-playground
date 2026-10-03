@@ -98,7 +98,7 @@
     "modelGpt54": "GPT-5.4",
     "modelGpt55": "GPT-5.5",
     "modelGpt56Luna": "GPT-6 Luna",
-    "modelDeepSeekV4Flash": "DeepSeek V4 Flash",
+    "modelDeepSeekV4Flash": "DeepSeek V4.1 Flash",
     "askButton": "Kysy",
     "stop": "Pysäytä",
     "stopped": "Pysäytetty.",
@@ -143,7 +143,14 @@
       "INTERNAL_SERVER_ERROR": "Odottamaton virhe tapahtui",
       "API_QUOTA_EXCEEDED": "Palvelu väliaikaisesti poissa käytöstä. Yritä myöhemmin uudelleen.",
       "UNKNOWN_ERROR": "Tuntematon virhe tapahtui"
-    }
+    },
+    "attachScreenshot": "Liitä kuvakaappaus",
+    "screenshotAttached": "Kuvakaappaus liitetty",
+    "preparingScreenshot": "Valmistellaan kuvaa…",
+    "screenshotInvalid": "Valitse alle 10 Mt:n PNG-, JPEG- tai WebP-kuva.",
+    "removeAttachment": "Poista",
+    "previewAttached": "Esikatselun tiedot liitetty",
+    "describeProblem": "Kerro, mikä meni pieleen. Mukaan liitetään pelin nykyinen tila ja esikatselun koko."
   },
   "editor": {
     "header": "KOODIEDITORI",
@@ -250,7 +257,8 @@
     "customTemplateName": "Luomus #{number}",
     "deleteCustomTemplate": "Poista",
     "noCustomTemplates": "Ei tallennettuja luomuksia vielä",
-    "noSharedTemplates": "Ei jaettuja pohjia vielä"
+    "noSharedTemplates": "Ei jaettuja pohjia vielä",
+    "seededCollector": "Tähtien kerääjä"
   },
   "templateContent": {
     "simpleWelcome": {
@@ -322,6 +330,23 @@
       "xWins": "X Voitot",
       "oWins": "O Voitot",
       "draws": "Tasapelit"
+    },
+    "seededCollector": {
+      "title": "Tähtien kerääjä",
+      "purpose": "Lyhyt arcade-peli, jossa tähtien sijainnit toistuvat samalla siemenellä.",
+      "constraint1": "Säilytä kentän asettelu, kun värejä tai vaikeutta muutetaan.",
+      "constraint2": "Tue näppäimistöä, kosketusta, mykistystä, uudelleenkäynnistystä ja tallennettua edistymistä.",
+      "score": "Tähdet",
+      "time": "Aika",
+      "instructions": "Kerää tähtiä 30 sekunnissa. Liiku nuolilla tai WASD-näppäimillä tai vedä sormella pelikentällä.",
+      "canvasLabel": "Tähtienkeräyspeli. Liiku nuolilla tai kosketuksella.",
+      "start": "Aloita",
+      "restart": "Aloita alusta",
+      "mute": "Mykistä",
+      "ready": "Valmis, kun sinäkin olet. Sama siemen pitää kentän tuttuna.",
+      "playing": "Seuraa kultaisia tähtiä!",
+      "over": "Kierros päättyi. Yritä uudelleen ja riko ennätyksesi.",
+      "language": "fi"
     }
   },
   "preview": {
@@ -356,7 +381,13 @@
     "runtimeIssueTitle": "Esikatselussa havaittiin ongelma",
     "fixRuntimeIssue": "Korjaa tekoälyllä",
     "dismissRuntimeIssue": "Sulje esikatselun ongelma",
-    "fixRuntimePrompt": "Korjaa tämä esikatselun ongelma ja säilytä muu toiminta ennallaan: {error}"
+    "fixRuntimePrompt": "Korjaa tämä esikatselun ongelma ja säilytä muu toiminta ennallaan: {error}",
+    "reportProblem": "Ilmoita ongelmasta",
+    "capturingFeedback": "Tallennetaan…",
+    "feedbackHint": "Näyttääkö jokin väärältä?",
+    "feedbackUnavailable": "Tietojen tallennus epäonnistui. Yritä uudelleen.",
+    "feedbackStale": "Koodi on muuttunut. Tallenna esikatselun tiedot uudelleen tai poista liite.",
+    "artifactBrief": "Teoksen kuvaus"
   },
   "shareDialog": {
     "title": "Jaa Luomuksesi",
