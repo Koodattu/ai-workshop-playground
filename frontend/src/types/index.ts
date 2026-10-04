@@ -98,8 +98,17 @@ export interface GenerateRequest {
   modelPreference?: ModelPreference;
   showThoughts?: boolean;
   artifactName?: string;
+  clientContext?: GenerationClientContext;
   previewFeedback?: PreviewFeedback;
   screenshot?: string;
+}
+
+export interface GenerationClientContext {
+  viewport: { width: number; height: number };
+  previewViewport?: { width: number; height: number };
+  touch: boolean;
+  finePointer: boolean;
+  hover: boolean;
 }
 
 export interface PreviewFeedback {
@@ -268,6 +277,7 @@ export interface StreamCallbacks {
 
 // Preview control interface
 export interface PreviewControl {
+  getViewport: () => GenerationClientContext["previewViewport"];
   disableAutoRefresh: () => void;
   enableAutoRefresh: () => void;
   forceRefresh: (newCode?: string, projectId?: string) => void;

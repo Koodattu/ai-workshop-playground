@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
-const { seededRandom, createArcadeAudio, createPatternCanvas, selectPrototypeRecipes } = require("../src/services/prototypeRecipes");
+const { seededRandom, createArcadeAudio, createPatternCanvas, createMaterialCanvas, selectPrototypeRecipes, formatPrototypeRecipes } = require("../src/services/prototypeRecipes");
 const { codeHash, validatePreviewFeedback, validateScreenshot, buildGenerationPrompt } = require("../src/services/generationContext");
 const { validateGeneratedArtifact } = require("../src/services/artifactEditing");
 
@@ -25,6 +25,35 @@ test("procedural textures are repeatable and do not affect layout RNG", () => {
   assert.equal(context.globalAlpha, 1);
 });
 
+test("material recipes are portable, deterministic, distinct and modest in size", () => {
+  function render(kind, seed, colors) {
+    const draws = [];
+    const context = { globalAlpha: 1, fillStyle: "", beginPath() {},
+      fillRect(...args) { draws.push(["rect", ...args, this.fillStyle, this.globalAlpha]); },
+      arc(...args) { draws.push(["arc", ...args]); },
+      fill() { draws.push(["fill", this.fillStyle, this.globalAlpha]); },
+    };
+    const helpers = selectPrototypeRecipes({ artifactType: "game", mode: "edit", prompt: "Add a material texture" });
+    const recipe = vm.runInNewContext(`${helpers.map((helper) => helper.toString()).join("\n")}\ncreateMaterialCanvas`, {
+      document: { createElement: () => ({ getContext: () => context }) },
+    });
+    const canvas = recipe(kind, seed, colors);
+    assert.equal(canvas.width, 128); assert.equal(canvas.height, 128);
+    assert.equal(context.globalAlpha, 1);
+    assert.ok(draws.length < 12000);
+    return JSON.stringify(draws);
+  }
+  const results = [];
+  for (const kind of ["brick", "wood", "stone"]) {
+    const first = render(kind, 42);
+    assert.equal(render(kind, 42), first);
+    assert.notEqual(render(kind, 43), first);
+    assert.match(render(kind, 42, ["#123456", "#abcdef"]), /#abcdef/);
+    results.push(first);
+  }
+  assert.equal(new Set(results).size, 3);
+});
+
 test("audio stays silent before a gesture and respects mute after unlock", async () => {
   let contexts = 0, starts = 0, disconnects = 0;
   const parameter = { setValueAtTime() {}, exponentialRampToValueAtTime() {} };
@@ -44,7 +73,15 @@ test("audio stays silent before a gesture and respects mute after unlock", async
 test("small edits and questions do not load an irrelevant recipe catalog", () => {
   assert.deepEqual(selectPrototypeRecipes({ artifactType: "game", mode: "ask", prompt: "Explain sound" }), []);
   assert.deepEqual(selectPrototypeRecipes({ artifactType: "game", mode: "edit", prompt: "Blue button", existingCode: "existing" }), []);
+  assert.deepEqual(selectPrototypeRecipes({ artifactType: "game", mode: "edit", prompt: "Pisteet puuttuvat", existingCode: "existing" }), []);
   assert.ok(selectPrototypeRecipes({ artifactType: "game", mode: "edit", prompt: "Lisää ääni" }).includes(createArcadeAudio));
+  for (const prompt of ["Brick walls", "Wooden floor", "Stone texture", "Lisää tiiliseinä"]) {
+    const recipes = selectPrototypeRecipes({ artifactType: "game", mode: "edit", prompt, existingCode: "existing" });
+    assert.deepEqual(recipes, [seededRandom, createMaterialCanvas]);
+  }
+  assert.deepEqual(selectPrototypeRecipes({ artifactType: "game", mode: "edit", prompt: "starfield texture", existingCode: "existing" }), [seededRandom, createPatternCanvas]);
+  assert.equal(selectPrototypeRecipes({ artifactType: "game", mode: "edit", prompt: "Brick", existingCode: createMaterialCanvas.toString() }).includes(createMaterialCanvas), false);
+  assert.equal(formatPrototypeRecipes({ artifactType: "website", mode: "edit", prompt: "Brick" }), "");
 });
 
 test("preview feedback must match the exact document and remain bounded", () => {
@@ -67,6 +104,20 @@ test("prompt keeps current name and diagnostic data separate from current instru
   assert.ok(prompt.endsWith("USER REQUEST: Blue"));
   assert.match(prompt, /Original Game/);
   assert.doesNotMatch(prompt, /should not be included/);
+});
+
+test("client hints stay short, separate browser and preview, and leave the user's target last", () => {
+  const request = "Build a keyboard game for desktop";
+  const prompt = buildGenerationPrompt({ prompt: request, clientContext: {
+    viewport: { width: 390, height: 844 }, previewViewport: { width: 390, height: 650 },
+    touch: true, finePointer: false, hover: false,
+  } });
+  const hint = prompt.split("\n\n").find((part) => part.startsWith("CURRENT CLIENT"));
+  assert.match(hint, /browser=390x844; preview=390x650; touch=yes; fine-pointer=no; hover=no/);
+  assert.match(hint, /Explicit user targets win/);
+  assert.ok(hint.length < 500, "device hints must not grow into another large prompt");
+  assert.ok(prompt.endsWith(`USER REQUEST: ${request}`));
+  assert.doesNotMatch(buildGenerationPrompt({ prompt: request }), /CURRENT CLIENT/);
 });
 
 test("brief JSON is validated without requiring legacy artifacts to have a brief", () => {

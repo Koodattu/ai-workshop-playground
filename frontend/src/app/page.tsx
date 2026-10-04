@@ -24,6 +24,7 @@ import { getArtifactSource, isSavedArtifactId, planWorkspaceEdit, resolveArtifac
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage, parseApiError } from "@/lib/errorTranslation";
 import { hashArtifact } from "@/lib/previewFeedback";
+import { getGenerationClientContext } from "@/lib/generationClientContext";
 import type { GenerationAttachment, PreviewFeedback } from "@/types";
 import type { ApiKeyProvider, ApiKeyUsageEntry, ArtifactType, AuthMode, ChatMessage, PreviewControl, PreviewRuntimeIssue, CustomTemplate, SharedTemplate, ChatMode, ModelPreference, ModelOption, CodeVersion, UserApiKeySettings, VersionListRequest, GenerateRequest, GenerationPhase, StreamCallbacks } from "@/types";
 import enMessages from "@messages/en.json";
@@ -821,6 +822,7 @@ export default function WorkspacePage() {
         prompt,
         existingCode: code,
         artifactName: (currentArtifact?.projectName || currentArtifact?.name)?.slice(0, 50),
+        clientContext: getGenerationClientContext(previewControlRef.current?.getViewport()),
         previewFeedback: attachment?.previewFeedback,
         screenshot: attachment?.screenshot,
         parentVersionId: currentVersionId,

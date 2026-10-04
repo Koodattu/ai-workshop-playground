@@ -797,6 +797,7 @@ const generateCode = asyncHandler(async (req, res) => {
     parentVersionId,
     showThoughts = false,
     artifactName,
+    clientContext,
     previewFeedback,
     screenshot,
   } = req.body;
@@ -918,7 +919,7 @@ const generateCode = asyncHandler(async (req, res) => {
       generationConfig.thinkingConfig = geminiThinkingConfig;
     }
 
-    const userPrompt = buildGenerationPrompt({ prompt, existingCode, artifactName, previewFeedback });
+    const userPrompt = buildGenerationPrompt({ prompt, existingCode, artifactName, previewFeedback, clientContext });
     const history = (messageHistory || []).slice(-10).map(({ role, content }) => ({ role, content }));
 
     // Generate content with streaming
