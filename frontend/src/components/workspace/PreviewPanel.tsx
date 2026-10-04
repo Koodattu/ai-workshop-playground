@@ -342,6 +342,12 @@ export function PreviewPanel({
   useEffect(() => {
     if (onControlReady) {
       const control: PreviewControl = {
+        getViewport: () => {
+          const frame = iframeRef.current;
+          return frame && frame.clientWidth > 0 && frame.clientHeight > 0
+            ? { width: frame.clientWidth, height: frame.clientHeight }
+            : undefined;
+        },
         disableAutoRefresh: () => {
           setIsAutoRefresh(false);
           setManuallyDisabled(true);

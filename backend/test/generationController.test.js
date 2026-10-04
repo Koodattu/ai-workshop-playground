@@ -185,10 +185,11 @@ for (const model of ["gpt56luna", "deepseekv4flash"]) {
     });
   }
 
-  test(`${model}: native history and image survive the single repair without reaching persistence`, async (t) => {
+  test(`${model}: history, image and client hints survive repair without reaching persistence`, async (t) => {
     const screenshot = "data:image/png;base64,iVBORw0KGgo=";
     const history = [{ role: "user", content: "Keep keyboard controls" }, { role: "assistant", content: "Understood" }];
-    const run = start(t, model, ["{", patch()], { messageHistory: history, screenshot, artifactName: "Original Name" });
+    const clientContext = { viewport: { width: 390, height: 844 }, touch: true, finePointer: false, hover: false };
+    const run = start(t, model, ["{", patch()], { messageHistory: history, screenshot, artifactName: "Original Name", clientContext });
     const summary = await run.finished;
     assert.equal(summary.outcome, "completed");
     assert.equal(calls.length, 2);
@@ -197,8 +198,10 @@ for (const model of ["gpt56luna", "deepseekv4flash"]) {
       assert.deepEqual(messages.slice(0, 2), history);
       const content = messages.at(-1).content;
       assert.match(content[0].text, /Original Name/);
+      assert.match(content[0].text, /browser=390x844; touch=yes; fine-pointer=no; hover=no/);
       assert.equal(model === "gpt56luna" ? content[1].image_url : content[1].image_url.url, screenshot);
     }
     assert.equal(JSON.stringify(saves).includes("base64"), false);
+    assert.equal(JSON.stringify(saves).includes("clientContext"), false);
   });
 }
