@@ -134,6 +134,9 @@ export function ChatPanel({
     e.preventDefault();
     if (prompt.trim() && !isLoading && !preparingImage) {
       const trimmedPrompt = prompt.trim();
+      // Keep typing focus for both Enter and the send button. Read-only input
+      // preserves it during generation without reclaiming focus if users move away.
+      textareaRef.current?.focus({ preventScroll: true });
       // Clear the prompt immediately
       setPrompt("");
       try {
@@ -161,6 +164,7 @@ export function ChatPanel({
   const handleRetry = async (failedPrompt: string) => {
     if (isLoading) return;
 
+    textareaRef.current?.focus({ preventScroll: true });
     try {
       await (onRetryMessage || onSendMessage)(failedPrompt);
     } catch {
@@ -463,8 +467,9 @@ export function ChatPanel({
                 aria-label={t("chat.sendPlaceholder")}
                 placeholder={artifactType === "game" ? t("chat.gamePlaceholder") : t("chat.websitePlaceholder")}
                 rows={2}
-                disabled={isLoading}
-                className="block w-full resize-none bg-transparent px-3 py-2.5 font-body text-sm leading-6 text-white placeholder-gray-500 focus:outline-none scrollbar-thin disabled:opacity-50 disabled:cursor-not-allowed"
+                readOnly={isLoading}
+                aria-busy={isLoading}
+                className="block w-full resize-none bg-transparent px-3 py-2.5 font-body text-sm leading-6 text-white placeholder-gray-500 focus:outline-none scrollbar-thin read-only:opacity-50"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -511,6 +516,7 @@ export function ChatPanel({
                   // Cancellation can restore type="submit" before this click's default action.
                   event.preventDefault();
                   onStop?.();
+                  textareaRef.current?.focus({ preventScroll: true });
                 } : undefined}
                 disabled={isLoading ? !onStop || generationPhase === "saving" : !prompt.trim() || preparingImage}
                 aria-label={actionLabel}

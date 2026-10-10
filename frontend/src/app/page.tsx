@@ -280,9 +280,6 @@ export default function WorkspacePage() {
   // Monaco editor ref for direct manipulation
   const monacoEditorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
-  // Focus intent flag for streaming start (handles delayed editor mount/ready)
-  const shouldFocusEditorForStreamingRef = useRef<boolean>(false);
-
   // Cursor position storage for restoration after streaming
   const savedCursorPositionRef = useRef<{ lineNumber: number; column: number } | null>(null);
 
@@ -824,7 +821,6 @@ export default function WorkspacePage() {
       } satisfies GenerateRequest;
 
       const restoreAfterUnsuccessfulRun = () => {
-        shouldFocusEditorForStreamingRef.current = false;
         pendingEditorChunkRef.current = "";
         clearEditorFlushTimer();
 
@@ -868,15 +864,6 @@ export default function WorkspacePage() {
             onCodeStart: () => {
               // In ASK mode, we don't modify code, so skip all editor operations
               if (requestMode === "ask") return;
-
-              // Mark that editor should be focused for streaming follow behavior
-              shouldFocusEditorForStreamingRef.current = true;
-
-              // Try immediate focus if editor is already ready
-              if (monacoEditorRef.current) {
-                monacoEditorRef.current.focus();
-                shouldFocusEditorForStreamingRef.current = false;
-              }
 
               // Disable preview auto-refresh
               previewControlRef.current?.disableAutoRefresh();
@@ -1280,16 +1267,6 @@ export default function WorkspacePage() {
     };
   }, [clearEditorFlushTimer]);
 
-  // Fallback: if streaming starts before editor is ready/mounted, focus once it becomes available
-  useEffect(() => {
-    if (!isStreaming) return;
-    if (!shouldFocusEditorForStreamingRef.current) return;
-    if (!monacoEditorRef.current) return;
-
-    monacoEditorRef.current.focus();
-    shouldFocusEditorForStreamingRef.current = false;
-  }, [isStreaming, mobileActivePanel]);
-
   const handleTemplateChange = useCallback(
     (templateId: string) => {
       if (abortStreamRef.current) return;
@@ -1676,10 +1653,6 @@ export default function WorkspacePage() {
                   if (isStreaming) {
                     syncStreamingBufferToEditor();
                   }
-                  if (isStreaming && shouldFocusEditorForStreamingRef.current) {
-                    editor.focus();
-                    shouldFocusEditorForStreamingRef.current = false;
-                  }
                 }}
               />}
             </Panel>
@@ -1754,10 +1727,6 @@ export default function WorkspacePage() {
                   monacoEditorRef.current = editor;
                   if (isStreaming) {
                     syncStreamingBufferToEditor();
-                  }
-                  if (isStreaming && shouldFocusEditorForStreamingRef.current) {
-                    editor.focus();
-                    shouldFocusEditorForStreamingRef.current = false;
                   }
                 }}
               />
