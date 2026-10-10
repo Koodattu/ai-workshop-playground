@@ -4,6 +4,8 @@ const mongoose = require("mongoose");
 const publicArtifactSchema = new mongoose.Schema({
   rootVersionId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
   shareId: { type: String, required: true },
+  isPublic: { type: Boolean, default: true },
+  hiddenByAdmin: { type: Boolean, default: false },
   projectName: { type: String, default: null },
   artifactType: { type: String, enum: ["website", "game"], default: "website" },
   thumbnail: { type: String, default: null, maxlength: 120000, match: /^data:image\/webp;base64,[A-Za-z0-9+/]+=*$/ },

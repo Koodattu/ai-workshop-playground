@@ -5,6 +5,28 @@ import type { ArtifactGenerationView } from "./artifactGenerationRun";
 afterEach(() => vi.unstubAllGlobals());
 const request = { visitorId: "test-visitor", prompt: "Blue" };
 
+describe("Browse moderation transport", () => {
+  it("authenticates listing and hide/restore requests and returns the server state", async () => {
+    const artifact = { _id: "test-id", shareId: "ABCD", projectName: "Test", artifactType: "website", hiddenByAdmin: true };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ artifacts: [artifact], hasMore: true }))
+      .mockResolvedValueOnce(Response.json(artifact))
+      .mockResolvedValueOnce(Response.json({ ...artifact, hiddenByAdmin: false }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await api.getAdminBrowseArtifacts("test-secret", 2)).toEqual({ artifacts: [artifact], hasMore: true });
+    expect(await api.setBrowseArtifactHidden("test-secret", artifact._id, true)).toEqual(artifact);
+    expect((await api.setBrowseArtifactHidden("test-secret", artifact._id, false)).hiddenByAdmin).toBe(false);
+    expect(fetchMock.mock.calls[0]).toEqual([expect.stringContaining("/api/admin/browse-artifacts?page=2"), expect.objectContaining({ cache: "no-store", headers: expect.objectContaining({ "X-Admin-Secret": "test-secret" }) })]);
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "PUT", body: JSON.stringify({ hiddenByAdmin: true }), headers: { "X-Admin-Secret": "test-secret" } });
+    expect(fetchMock.mock.calls[2][1].body).toBe(JSON.stringify({ hiddenByAdmin: false }));
+  });
+
+  it("reports rejected moderation without pretending the visibility changed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "Unauthorized" }, { status: 401 })));
+    await expect(api.setBrowseArtifactHidden("invalid", "test-id", true)).rejects.toThrow("Unauthorized");
+  });
+});
+
 describe("generation SSE transport", () => {
   it("delivers split status events and one final result, ignoring late data", async () => {
     const events = [

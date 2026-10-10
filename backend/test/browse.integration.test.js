@@ -89,9 +89,44 @@ test("Browse API with MongoDB", { skip: !process.env.BROWSE_TEST_MONGO_URI }, as
     assert.equal((await request(`/api/share/${originalShareId}`)).status, 200);
     const removal = await request(`/api/browse/${first._id}`, { ...access, isPublic: false }, "PUT");
     assert.equal(removal.status, 200);
-    assert.equal(await PublicArtifact.countDocuments({ rootVersionId: first._id }), 0);
+    assert.equal(await PublicArtifact.countDocuments({ rootVersionId: first._id, isPublic: { $ne: false } }), 0);
     assert.equal((await request("/api/admin/browse-settings", { enabled: true }, "PUT", headers)).status, 200);
     assert.equal((await (await request("/api/browse")).json()).artifacts.length, 1);
+  });
+
+  await t.test("admin moderation hides and restores a project without breaking shares or allowing owner bypass", async () => {
+    const headers = { "X-Admin-Secret": process.env.ADMIN_SECRET };
+    const list = () => request("/api/admin/browse-artifacts", null, "GET", headers);
+    assert.equal((await request("/api/admin/browse-artifacts")).status, 401);
+    assert.equal((await request("/api/admin/browse-artifacts?page=-1", null, "GET", headers)).status, 400);
+    const listing = (await (await list()).json()).artifacts[0];
+    const moderate = (hiddenByAdmin, extraHeaders = headers) => request(`/api/admin/browse-artifacts/${listing._id}`, { hiddenByAdmin }, "PUT", extraHeaders);
+    assert.equal((await moderate(true, {})).status, 401);
+    assert.equal((await moderate(true, { "X-Admin-Secret": "incorrect" })).status, 401);
+    assert.equal((await moderate("true")).status, 400);
+    assert.equal((await request("/api/admin/browse-artifacts/not-an-id", { hiddenByAdmin: true }, "PUT", headers)).status, 400);
+    assert.equal((await request(`/api/admin/browse-artifacts/${new mongoose.Types.ObjectId()}`, { hiddenByAdmin: true }, "PUT", headers)).status, 404);
+    assert.equal((await moderate(true)).status, 200);
+    assert.equal((await (await request("/api/browse")).json()).artifacts.length, 0);
+    assert.equal((await request(`/api/browse/${listing.shareId}/preview`)).status, 404);
+    assert.equal((await request(`/api/share/${listing.shareId}`)).status, 200);
+    assert.equal((await (await list()).json()).artifacts[0].hiddenByAdmin, true);
+    assert.equal((await (await publish(other, { hiddenByAdmin: false })).json()).hiddenByAdmin, true);
+    await request(`/api/browse/${other._id}`, { ...access, isPublic: false }, "PUT");
+    assert.equal((await (await publish(other)).json()).hiddenByAdmin, true);
+    assert.equal((await (await request("/api/browse")).json()).artifacts.length, 0);
+    // Moderation remains available while Browse itself is disabled.
+    await request("/api/admin/browse-settings", { enabled: false }, "PUT", headers);
+    assert.equal((await list()).status, 200);
+    assert.equal((await moderate(false)).status, 200);
+    await request("/api/admin/browse-settings", { enabled: true }, "PUT", headers);
+    assert.equal((await (await request("/api/browse")).json()).artifacts.length, 1);
+    // Older listings have neither field and must remain visible and moderatable.
+    await PublicArtifact.collection.updateOne({ _id: new mongoose.Types.ObjectId(listing._id) }, { $unset: { isPublic: "", hiddenByAdmin: "" } });
+    assert.equal((await (await request("/api/browse")).json()).artifacts.length, 1);
+    assert.equal((await moderate(true)).status, 200);
+    assert.equal((await (await request("/api/browse")).json()).artifacts.length, 0);
+    await moderate(false);
   });
 
   await t.test("gallery pagination bounds results and omits private metadata", async () => {

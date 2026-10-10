@@ -18,14 +18,14 @@ router.get("/", [query("page").optional().isInt({ min: 1, max: 100000 }).toInt()
   await publicArtifacts.requireEnabled();
   const page = Number(req.query.page) || 1;
   const limit = 12;
-  const listings = await PublicArtifact.find({}).select("shareId projectName artifactType thumbnail updatedAt -_id")
+  const listings = await PublicArtifact.find({ isPublic: { $ne: false }, hiddenByAdmin: { $ne: true } }).select("shareId projectName artifactType thumbnail updatedAt -_id")
     .sort({ updatedAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit + 1).lean();
   res.set("Cache-Control", "no-store").json({ artifacts: listings.slice(0, limit), hasMore: listings.length > limit });
 }));
 
 router.get("/:shareId/preview", [param("shareId").matches(/^[A-Z]{4}$/), validateRequest], asyncHandler(async (req, res) => {
   await publicArtifacts.requireEnabled();
-  if (!await PublicArtifact.exists({ shareId: req.params.shareId })) throw new AppError("Public artifact not found", 404);
+  if (!await PublicArtifact.exists({ shareId: req.params.shareId, isPublic: { $ne: false }, hiddenByAdmin: { $ne: true } })) throw new AppError("Public artifact not found", 404);
   const share = await SharedCode.findOne({ shareId: req.params.shareId }).select("code").lean();
   if (!share) throw new AppError("Share not found", 404);
   // Gallery previews are inert documents. Scripts run only when a visitor opens the share page.

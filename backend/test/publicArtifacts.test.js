@@ -14,8 +14,12 @@ function fixture() {
     } },
     ListingModel: {
       findOne: ({ rootVersionId }) => ({ lean: async () => listings.get(rootVersionId) }),
-      findOneAndUpdate: async ({ rootVersionId }, { $set }) => listings.set(rootVersionId, $set),
-      deleteOne: async ({ rootVersionId }) => listings.delete(rootVersionId),
+      findOneAndUpdate: async ({ rootVersionId }, { $set }, options = {}) => {
+        if (!listings.has(rootVersionId) && !options.upsert) return null;
+        const listing = { ...listings.get(rootVersionId), ...$set };
+        listings.set(rootVersionId, listing);
+        return listing;
+      },
     },
   });
   return { service, listings, disable: () => { enabled = false; } };
@@ -33,7 +37,18 @@ test("publishing another version replaces one lineage slot, while separate creat
   assert.equal(listings.size, 2);
   await service.unpublish(owner, "first");
   assert.deepEqual(await service.get(owner, "second"), { isPublic: false, shareId: null });
-  assert.equal(listings.size, 1);
+  assert.equal([...listings.values()].filter((listing) => listing.isPublic).length, 1);
+});
+
+test("admin hiding survives replacement and unpublish/republish within a project", async () => {
+  const { service, listings } = fixture();
+  await service.publish(owner, "first", share("AAAA"));
+  listings.get("root").hiddenByAdmin = true;
+  assert.deepEqual(await service.publish(owner, "second", share("BBBB")), { isPublic: true, shareId: "BBBB", hiddenByAdmin: true });
+  assert.deepEqual(await service.unpublish(owner, "first"), { isPublic: false, shareId: null, hiddenByAdmin: true });
+  assert.equal((await service.get(owner, "second")).hiddenByAdmin, true);
+  assert.equal((await service.publish(owner, "second", share("CCCC"))).hiddenByAdmin, true);
+  assert.equal((await service.publish(owner, "separate", share("DDDD"))).hiddenByAdmin, undefined);
 });
 
 test("ownership is checked for reads, publications and removals", async () => {
@@ -65,9 +80,10 @@ test("the database enforces one slot and a concurrent first publication retries 
     ListingModel: { findOneAndUpdate: async (filter, update, options) => {
       writes.push({ filter, update, options });
       if (writes.length === 1) throw Object.assign(new Error("Duplicate"), { code: 11000 });
+      return update.$set;
     } },
   });
-  await service.publish(owner, "root", share("AAAA"));
+  assert.deepEqual(await service.publish(owner, "root", share("AAAA")), { isPublic: true, shareId: "AAAA" });
   assert.equal(writes.length, 2);
   assert.deepEqual(writes[1].filter, { rootVersionId: "root" });
   assert.equal(writes[1].options.upsert, undefined);

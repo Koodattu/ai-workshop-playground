@@ -4,6 +4,14 @@ const { getBrowseSettings } = require("./browseSettings");
 const { AppError } = require("../middleware/errorHandler");
 
 function createPublicArtifacts({ ListingModel = PublicArtifact, lineage = artifactVersionLineage, getSettings = getBrowseSettings } = {}) {
+  function status(listing) {
+    return {
+      isPublic: Boolean(listing && listing.isPublic !== false),
+      shareId: listing && listing.isPublic !== false ? listing.shareId : null,
+      ...(listing?.hiddenByAdmin ? { hiddenByAdmin: true } : {}),
+    };
+  }
+
   async function requireEnabled() {
     if (!(await getSettings()).enabled) throw new AppError("Browse is disabled", 403, "BROWSE_DISABLED");
   }
@@ -16,27 +24,29 @@ function createPublicArtifacts({ ListingModel = PublicArtifact, lineage = artifa
   async function get(grant, versionId) {
     const rootVersionId = await resolveRoot(grant, versionId);
     const listing = await ListingModel.findOne({ rootVersionId }).lean();
-    return { isPublic: Boolean(listing), shareId: listing?.shareId || null };
+    return status(listing);
   }
 
   async function publish(grant, versionId, share, thumbnail) {
     await requireEnabled();
     const rootVersionId = await resolveRoot(grant, versionId);
-    const update = { $set: { shareId: share.shareId, projectName: share.projectName || share.title, artifactType: share.artifactType, thumbnail: thumbnail || null } };
+    const update = { $set: { isPublic: true, shareId: share.shareId, projectName: share.projectName || share.title, artifactType: share.artifactType, thumbnail: thumbnail || null } };
+    let listing;
     try {
-      await ListingModel.findOneAndUpdate({ rootVersionId }, update, { upsert: true, runValidators: true });
+      listing = await ListingModel.findOneAndUpdate({ rootVersionId }, update, { upsert: true, runValidators: true, returnDocument: "after" });
     } catch (error) {
       // Concurrent first publications race on the unique lineage index. Replace the winning slot.
       if (error.code !== 11000) throw error;
-      await ListingModel.findOneAndUpdate({ rootVersionId }, update, { runValidators: true });
+      listing = await ListingModel.findOneAndUpdate({ rootVersionId }, update, { runValidators: true, returnDocument: "after" });
     }
-    return { isPublic: true, shareId: share.shareId };
+    return status(listing);
   }
 
   async function unpublish(grant, versionId) {
     const rootVersionId = await resolveRoot(grant, versionId);
-    await ListingModel.deleteOne({ rootVersionId });
-    return { isPublic: false, shareId: null };
+    // Retain the slot so unpublishing and republishing cannot erase moderation.
+    const listing = await ListingModel.findOneAndUpdate({ rootVersionId }, { $set: { isPublic: false } }, { returnDocument: "after" });
+    return status(listing);
   }
 
   return { get, publish, unpublish, requireEnabled };

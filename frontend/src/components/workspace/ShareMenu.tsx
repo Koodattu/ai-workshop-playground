@@ -37,9 +37,10 @@ export function ShareMenu({ onShare, isSharing, browseEnabled, onLoadPublicStatu
     setBusy(true);
     setNotice("");
     try {
-      setStatus(await onSetPublic(isPublic));
+      const next = await onSetPublic(isPublic);
+      setStatus(next);
       setError(false);
-      setNotice(t(isPublic ? "browse.published" : "browse.unpublished"));
+      setNotice(t(isPublic ? (next.hiddenByAdmin ? "browse.hiddenNotice" : "browse.published") : "browse.unpublished"));
     } catch { setError(true); setNotice(t("browse.updateError")); }
     finally { setBusy(false); }
   }
@@ -71,6 +72,7 @@ export function ShareMenu({ onShare, isSharing, browseEnabled, onLoadPublicStatu
           </span>
         </label>
         <p className="mt-2 text-xs leading-relaxed text-gray-400">{t(onSetPublic ? "browse.publicHint" : "browse.generateFirst")}</p>
+        {status?.hiddenByAdmin && <p className="mt-2 text-xs text-amber-300">{t("browse.hiddenNotice")}</p>}
         {busy && <p role="status" className="mt-2 text-xs text-gray-400">{t("common.loading")}</p>}
         {!browseEnabled && <p className="mt-2 text-xs text-gray-400">{t("browse.disabled")}</p>}
         {status?.isPublic && browseEnabled && <button disabled={busy || isSharing} onClick={() => void publish(true)} className="mt-3 text-sm text-electric hover:underline disabled:opacity-50">{t("browse.updateVersion")}</button>}

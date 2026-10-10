@@ -446,6 +446,15 @@ export const SHARED_TEMPLATE_CONFIG = {
 export interface PublicArtifactStatus {
   isPublic: boolean;
   shareId: string | null;
+  hiddenByAdmin?: boolean;
+}
+
+export interface AdminBrowseArtifact {
+  _id: string;
+  shareId: string;
+  projectName: string | null;
+  artifactType: ArtifactType;
+  hiddenByAdmin?: boolean;
 }
 
 export interface PublicArtifactCard {

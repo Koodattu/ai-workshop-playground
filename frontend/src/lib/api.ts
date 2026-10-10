@@ -24,6 +24,7 @@ import type {
   VersionListRequest,
   PublicArtifactStatus,
   PublicArtifactCard,
+  AdminBrowseArtifact,
 } from "@/types";
 
 class ApiClient {
@@ -537,6 +538,18 @@ class ApiClient {
 
   async getPublicArtifacts(page: number): Promise<{ artifacts: PublicArtifactCard[]; hasMore: boolean }> {
     return (await this.request<{ artifacts: PublicArtifactCard[]; hasMore: boolean }>(`/api/browse?page=${page}`, { cache: "no-store" })).data;
+  }
+
+  async getAdminBrowseArtifacts(adminSecret: string, page: number): Promise<{ artifacts: AdminBrowseArtifact[]; hasMore: boolean }> {
+    return (await this.request<{ artifacts: AdminBrowseArtifact[]; hasMore: boolean }>(`/api/admin/browse-artifacts?page=${page}`, {
+      headers: { "X-Admin-Secret": adminSecret }, cache: "no-store",
+    })).data;
+  }
+
+  async setBrowseArtifactHidden(adminSecret: string, id: string, hiddenByAdmin: boolean): Promise<AdminBrowseArtifact> {
+    return (await this.request<AdminBrowseArtifact>(`/api/admin/browse-artifacts/${encodeURIComponent(id)}`, {
+      method: "PUT", headers: { "X-Admin-Secret": adminSecret }, body: JSON.stringify({ hiddenByAdmin }),
+    })).data;
   }
 
   getPublicPreviewUrl(shareId: string): string {
