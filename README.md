@@ -109,10 +109,12 @@ graph LR
 - **Template Library**: Start with pre-built templates or generate from scratch
 - **Code Editing**: Full Monaco editor with syntax highlighting, auto-formatting, and undo/redo
 - **Bilingual**: Full support for English and Finnish interfaces
+- **Public Gallery**: Switch between Create and Browse. In a generated creation's Share menu, copy a link or enable public visibility. Each creation has one gallery entry; publishing its current version replaces that entry while older share links keep working. Open a gallery card to view, play, or use it as a starting point.
 
 ### For Instructors
 
 - **Admin Dashboard** (`/admin`): Manage workshops from a web interface
+- **Browse Control**: Enable or disable the public gallery in the admin dashboard (enabled by default). Disabling Browse also blocks new publications; existing share links remain available. Publishing requires workshop access and an owned generated version. Existing shares stay unlisted until explicitly published.
 - **Workshop Passwords**: Create time-limited passwords with configurable usage limits
 - **Usage Tracking**: Monitor how many requests each participant has made
 - **Rate Limiting**: Prevent abuse with per-machine limits

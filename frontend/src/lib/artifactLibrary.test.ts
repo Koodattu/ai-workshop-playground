@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { getArtifactSource, planWorkspaceEdit, resolveArtifactLibraryEntry } from "./artifactLibrary";
+import { getArtifactSource, getOwnedArtifactVersionId, planWorkspaceEdit, resolveArtifactLibraryEntry } from "./artifactLibrary";
 
 describe("Artifact Library", () => {
+  it("reconnects only the selected owned creation after authentication", () => {
+    const saved = [{ id: "custom-1", name: "Saved", code: "manual edits", currentVersionId: "older", createdAt: 1, updatedAt: 1 }];
+    const versions = [{ id: "older" }, { id: "latest-unrelated" }];
+    expect(getOwnedArtifactVersionId("custom-1", saved, versions)).toBe("older");
+    expect(getOwnedArtifactVersionId("shared-1", saved, versions)).toBeNull();
+    expect(getOwnedArtifactVersionId("starter", saved, versions)).toBeNull();
+    expect(getOwnedArtifactVersionId("custom-1", saved, [{ id: "other-owner" }])).toBeNull();
+    expect(saved[0].code).toBe("manual edits");
+  });
   it("classifies existing storage identifiers without migrating them eagerly", () => {
     expect(getArtifactSource("landing-page")).toBe("starter");
     expect(getArtifactSource("custom-123")).toBe("saved");

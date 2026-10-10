@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { PasswordManager } from "@/components/admin/PasswordManager";
+import { BrowseSettings } from "@/components/admin/BrowseSettings";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
@@ -186,6 +187,7 @@ export default function AdminPage() {
 
       {/* Main content */}
       <main className="max-w-6xl mx-auto px-6 py-8">
+        <BrowseSettings adminSecret={adminSecret} />
         <PasswordManager adminSecret={adminSecret} />
       </main>
     </div>

@@ -277,6 +277,7 @@ export interface StreamCallbacks {
 
 // Preview control interface
 export interface PreviewControl {
+  captureThumbnail: (code: string) => Promise<string | undefined>;
   getViewport: () => GenerationClientContext["previewViewport"];
   disableAutoRefresh: () => void;
   enableAutoRefresh: () => void;
@@ -442,6 +443,19 @@ export const SHARED_TEMPLATE_CONFIG = {
 } as const;
 
 // Share API response types
+export interface PublicArtifactStatus {
+  isPublic: boolean;
+  shareId: string | null;
+}
+
+export interface PublicArtifactCard {
+  shareId: string;
+  projectName: string | null;
+  artifactType: ArtifactType;
+  updatedAt: string;
+  thumbnail?: string | null;
+}
+
 export interface CreateShareResponse {
   shareId: string;
   createdAt: string;

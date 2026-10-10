@@ -18,8 +18,7 @@ const generateShareId = () => {
  * Creates a new share link for the provided code
  * POST /api/share
  */
-const createShare = asyncHandler(async (req, res) => {
-  const { code, title, projectName, artifactType = "website" } = req.body;
+const createShareSnapshot = async ({ code, title, projectName, artifactType = "website" }) => {
 
   // Generate a unique share ID with collision handling
   let shareId;
@@ -40,7 +39,7 @@ const createShare = asyncHandler(async (req, res) => {
   }
 
   // Create the shared code entry
-  const sharedCode = await SharedCode.create({
+  return SharedCode.create({
     shareId,
     code,
     title: title || null,
@@ -48,6 +47,10 @@ const createShare = asyncHandler(async (req, res) => {
     artifactType,
   });
 
+};
+
+const createShare = asyncHandler(async (req, res) => {
+  const sharedCode = await createShareSnapshot(req.body);
   res.status(201).json({
     message: "Share link created successfully",
     data: {
@@ -87,6 +90,7 @@ const getShare = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  createShareSnapshot,
   createShare,
   getShare,
 };

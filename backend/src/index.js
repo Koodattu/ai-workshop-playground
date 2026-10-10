@@ -79,6 +79,8 @@ const startServer = async () => {
     await mongoose.connect(config.mongoUri, {
       serverSelectionTimeoutMS: 5000,
     });
+    // Publication relies on the unique lineage index even during the first deployment.
+    await require("./models/PublicArtifact").init();
     console.log("✓ MongoDB connected successfully");
 
     // Start Express server

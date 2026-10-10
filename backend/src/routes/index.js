@@ -23,5 +23,6 @@ router.use("/models", require("./models"));
 router.use("/api-keys", require("./apiKeys"));
 router.use("/admin", require("./admin"));
 router.use("/share", require("./share"));
+router.use("/browse", require("./browse"));
 
 module.exports = router;

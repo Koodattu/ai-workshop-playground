@@ -22,6 +22,8 @@ import type {
   ModelSettings,
   ApiKeyProvider,
   VersionListRequest,
+  PublicArtifactStatus,
+  PublicArtifactCard,
 } from "@/types";
 
 class ApiClient {
@@ -523,6 +525,32 @@ class ApiClient {
   }
 
   // Create a share link
+  async getBrowseSettings(): Promise<{ enabled: boolean }> {
+    return (await this.request<{ enabled: boolean }>("/api/browse/settings", { cache: "no-store" })).data;
+  }
+
+  async updateBrowseSettings(adminSecret: string, enabled: boolean): Promise<{ enabled: boolean }> {
+    return (await this.request<{ enabled: boolean }>("/api/admin/browse-settings", {
+      method: "PUT", headers: { "X-Admin-Secret": adminSecret }, body: JSON.stringify({ enabled }),
+    })).data;
+  }
+
+  async getPublicArtifacts(page: number): Promise<{ artifacts: PublicArtifactCard[]; hasMore: boolean }> {
+    return (await this.request<{ artifacts: PublicArtifactCard[]; hasMore: boolean }>(`/api/browse?page=${page}`, { cache: "no-store" })).data;
+  }
+
+  getPublicPreviewUrl(shareId: string): string {
+    return `${this.baseUrl}/api/browse/${encodeURIComponent(shareId)}/preview`;
+  }
+
+  async getPublicArtifactStatus(versionId: string, access: VersionListRequest): Promise<PublicArtifactStatus> {
+    return (await this.request<PublicArtifactStatus>(`/api/browse/${versionId}/status`, { method: "POST", body: JSON.stringify(access) })).data;
+  }
+
+  async setPublicArtifact(versionId: string, access: VersionListRequest, snapshot: { isPublic: boolean; code: string; projectName?: string; artifactType: ArtifactType; thumbnail?: string }): Promise<PublicArtifactStatus> {
+    return (await this.request<PublicArtifactStatus>(`/api/browse/${versionId}`, { method: "PUT", body: JSON.stringify({ ...access, ...snapshot }) })).data;
+  }
+
   async createShareLink(code: string, title?: string, projectName?: string, artifactType: ArtifactType = "website"): Promise<CreateShareResponse> {
     const { data } = await this.request<{ message: string; data: CreateShareResponse }>("/api/share", {
       method: "POST",

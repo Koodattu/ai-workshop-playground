@@ -26,6 +26,13 @@ export function getArtifactSource(id: string): ArtifactSource {
 
 export const isSavedArtifactId = (id: string) => getArtifactSource(id) === "saved";
 
+// Authentication must reconnect the selected artifact, never replace a shared starting point
+// or a saved artifact with whichever version happened to be generated most recently.
+export function getOwnedArtifactVersionId(artifactId: string, savedArtifacts: SavedArtifact[], ownedVersions: { id: string }[]): string | null {
+  const versionId = savedArtifacts.find((artifact) => artifact.id === artifactId)?.currentVersionId;
+  return versionId && ownedVersions.some((version) => version.id === versionId) ? versionId : null;
+}
+
 export function resolveArtifactLibraryEntry(
   id: string,
   { savedArtifacts, sharedArtifacts, getStarter }: ResolveArtifactLibraryEntryOptions,

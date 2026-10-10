@@ -19,8 +19,11 @@ import { useCustomTemplates } from "@/hooks/useCustomTemplates";
 import { useSharedTemplates, type InitialSharedTemplate } from "@/hooks/useSharedTemplates";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
+import { WorkspaceNavigation } from "@/components/ui/WorkspaceNavigation";
+import { ShareMenu } from "@/components/workspace/ShareMenu";
+import { useBrowseSettings } from "@/hooks/useBrowseSettings";
 import { api } from "@/lib/api";
-import { getArtifactSource, isSavedArtifactId, planWorkspaceEdit, resolveArtifactLibraryEntry } from "@/lib/artifactLibrary";
+import { getArtifactSource, getOwnedArtifactVersionId, isSavedArtifactId, planWorkspaceEdit, resolveArtifactLibraryEntry } from "@/lib/artifactLibrary";
 import { DEFAULT_TEMPLATE_ID, getTemplateById, getLocalizedTemplate } from "@/lib/templates";
 import { getErrorMessage, parseApiError } from "@/lib/errorTranslation";
 import { hashArtifact } from "@/lib/previewFeedback";
@@ -143,6 +146,7 @@ const resolveInitialWorkspaceTemplate = (
 
 export default function WorkspacePage() {
   const { language, t } = useLanguage();
+  const browseEnabled = useBrowseSettings();
   const searchParams = useSearchParams();
   const router = useRouter();
   const isSafeStart = searchParams.has("safe") || searchParams.has("debug") || searchParams.has("recover");
@@ -482,28 +486,21 @@ export default function WorkspacePage() {
   );
 
   const fetchVersions = useCallback(
-    async (options?: { loadLatest?: boolean }) => {
+    async () => {
       const request = getVersionListRequest(true);
       if (!request) return;
 
       setIsLoadingVersions(true);
       try {
         const fetchedVersions = await api.getMyCodeVersions(request);
-        if (options?.loadLatest && !isSafeStart && fetchedVersions.length > 0) {
-          const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-          setCode(latest.code);
-          setArtifactType(latest.artifactType || "website");
-          setCurrentVersionId(latest.id);
-          setOriginalCodeSnapshot(latest.code);
-          previewControlRef.current?.forceRefresh(latest.code);
-        }
+        setCurrentVersionId(getOwnedArtifactVersionId(currentTemplateId, customTemplates, fetchedVersions));
       } catch (error) {
         console.warn("Failed to fetch code versions:", error);
       } finally {
         setIsLoadingVersions(false);
       }
     },
-    [getVersionListRequest, isSafeStart, setArtifactType],
+    [getVersionListRequest, currentTemplateId, customTemplates],
   );
 
   const fetchCurrentVersionLineage = useCallback(async () => {
@@ -675,14 +672,7 @@ export default function WorkspacePage() {
               visitorId,
               includeCode: true,
             });
-            if (!isSafeStart && fetchedVersions.length > 0) {
-              const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-              setCode(latest.code);
-              setArtifactType(latest.artifactType || "website");
-              setCurrentVersionId(latest.id);
-              setOriginalCodeSnapshot(latest.code);
-              previewControlRef.current?.forceRefresh(latest.code);
-            }
+            setCurrentVersionId(getOwnedArtifactVersionId(currentTemplateId, customTemplates, fetchedVersions));
           } catch (versionError) {
             console.warn("Failed to load code versions:", versionError);
           }
@@ -718,7 +708,7 @@ export default function WorkspacePage() {
         isAuthenticatingRef.current = false;
       }
     },
-    [isSafeStart, setArtifactType, setAuthMode, setPassword, showToast, t, visitorId],
+    [currentTemplateId, customTemplates, setAuthMode, setPassword, showToast, t, visitorId],
   );
 
   // Auto-validate password on page load (only once)
@@ -737,7 +727,7 @@ export default function WorkspacePage() {
     if (hasLoadedApiKeyVersionsRef.current) return;
 
     hasLoadedApiKeyVersionsRef.current = true;
-    void fetchVersions({ loadLatest: true });
+    void fetchVersions();
   }, [authMode, fetchVersions, hasApiKey, visitorId]);
 
   // Open password modal automatically if ?p= parameter is present in URL
@@ -1460,14 +1450,7 @@ export default function WorkspacePage() {
             apiKeyAccessToken: accessToken,
             includeCode: true,
           });
-          if (!isSafeStart && fetchedVersions.length > 0) {
-            const latest = [...fetchedVersions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-            setCode(latest.code);
-            setArtifactType(latest.artifactType || "website");
-            setCurrentVersionId(latest.id);
-            setOriginalCodeSnapshot(latest.code);
-            previewControlRef.current?.forceRefresh(latest.code);
-          }
+          setCurrentVersionId(getOwnedArtifactVersionId(currentTemplateId, customTemplates, fetchedVersions));
         } catch (versionError) {
           console.warn("Failed to load API key code versions:", versionError);
         }
@@ -1475,7 +1458,7 @@ export default function WorkspacePage() {
 
       showToast(t("apiKeys.saved"), "success");
     },
-    [apiKeySettings.accessToken, isSafeStart, modelCatalog, modelPreference, setApiKeySettings, setArtifactType, setAuthMode, setModelPreference, showToast, t, visitorId],
+    [apiKeySettings.accessToken, currentTemplateId, customTemplates, modelCatalog, modelPreference, setApiKeySettings, setAuthMode, setModelPreference, showToast, t, visitorId],
   );
 
   const handleTestApiKey = useCallback(
@@ -1541,6 +1524,26 @@ export default function WorkspacePage() {
     }
   }, [artifactType, code, showToast, t, getCurrentProjectName]);
 
+  const shareVersionId = isSavedArtifactId(currentTemplateId)
+    ? currentVersionId || customTemplates.find((artifact) => artifact.id === currentTemplateId)?.currentVersionId
+    : null;
+  const canPublish = Boolean(shareVersionId && isAuthenticated && !isStreaming);
+  const shareMenu = (
+    <ShareMenu key={`${currentTemplateId}:${shareVersionId}:${isAuthenticated}:${isStreaming}`} onShare={handleShare} isSharing={isSharing} browseEnabled={browseEnabled}
+      onLoadPublicStatus={canPublish ? async () => {
+        const access = getVersionListRequest(false);
+        if (!access || !shareVersionId) throw new Error("Workshop access required");
+        return api.getPublicArtifactStatus(shareVersionId, access);
+      } : undefined}
+      onSetPublic={canPublish ? async (isPublic) => {
+        const access = getVersionListRequest(false);
+        if (!access || !shareVersionId) throw new Error("Workshop access required");
+        const thumbnail = isPublic ? await previewControlRef.current?.captureThumbnail(code) : undefined;
+        return api.setPublicArtifact(shareVersionId, access, { isPublic, code, projectName: getCurrentProjectName(), artifactType, thumbnail });
+      } : undefined}
+    />
+  );
+
   // Handle opening the password modal
   const handleOpenPasswordModal = useCallback(() => {
     setAuthError(undefined);
@@ -1570,9 +1573,11 @@ export default function WorkspacePage() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <Image src="/web-app-manifest-192x192.png" alt="App icon" width={32} height={32} className="w-8 h-8 object-contain" />
-              <span className="font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
+              <span className="hidden sm:inline font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
             </div>
           </div>
+
+          <WorkspaceNavigation active="create" browseEnabled={browseEnabled} disabled={isStreaming} />
 
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
@@ -1689,8 +1694,7 @@ export default function WorkspacePage() {
                 onControlReady={(control) => {
                   previewControlRef.current = control;
                 }}
-                onShare={handleShare}
-                isSharing={isSharing}
+                shareMenu={shareMenu}
                 isGenerating={isStreaming}
                 onFixRuntimeIssue={handleFixRuntimeIssue}
               />}
@@ -1765,8 +1769,7 @@ export default function WorkspacePage() {
                 onControlReady={(control) => {
                   previewControlRef.current = control;
                 }}
-                onShare={handleShare}
-                isSharing={isSharing}
+                shareMenu={shareMenu}
                 isGenerating={isStreaming}
                 onFixRuntimeIssue={handleFixRuntimeIssue}
               />

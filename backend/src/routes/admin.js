@@ -25,6 +25,8 @@ const {
 } = require("../controllers/adminController");
 const { MODEL_PREFERENCE_IDS, MODEL_DEFAULTS } = require("../services/modelSettings");
 const validateRequest = require("../middleware/validateRequest");
+const { asyncHandler } = require("../middleware/errorHandler");
+const { getBrowseSettings, updateBrowseSettings } = require("../services/browseSettings");
 
 const router = express.Router();
 
@@ -36,6 +38,11 @@ router.post("/verify", verifyAdmin, verifyAdminCredentials);
 
 // All other admin routes require admin authentication
 router.use(verifyAdmin);
+
+router.get("/browse-settings", asyncHandler(async (req, res) => res.json(await getBrowseSettings())));
+router.put("/browse-settings", [body("enabled").isBoolean({ strict: true }), validateRequest], asyncHandler(async (req, res) => {
+  res.json(await updateBrowseSettings(req.body.enabled));
+}));
 
 router.get("/model-settings", getAdminModelSettings);
 router.put(

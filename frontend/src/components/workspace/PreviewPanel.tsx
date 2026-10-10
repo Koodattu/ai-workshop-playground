@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { PreviewControl, PreviewRuntimeIssue, PreviewFeedback } from "@/types";
 import { createPreviewFeedback, isCurrentPreviewMessage } from "@/lib/previewFeedback";
@@ -9,8 +9,7 @@ interface PreviewPanelProps {
   code: string;
   projectId: string;
   onControlReady?: (control: PreviewControl) => void;
-  onShare?: () => Promise<string | null>;
-  isSharing?: boolean;
+  shareMenu?: ReactNode;
   isGenerating?: boolean;
   onFixRuntimeIssue?: (issue: PreviewRuntimeIssue, feedback: PreviewFeedback) => void;
 }
@@ -129,8 +128,7 @@ export function PreviewPanel({
   code,
   projectId,
   onControlReady,
-  onShare,
-  isSharing = false,
+  shareMenu,
   isGenerating = false,
   onFixRuntimeIssue,
 }: PreviewPanelProps) {
@@ -146,7 +144,6 @@ export function PreviewPanel({
   const [feedbackUnavailable, setFeedbackUnavailable] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [key, setKey] = useState(0);
-  const [shareSuccess, setShareSuccess] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isStatePersistenceEnabled, setIsStatePersistenceEnabled] = useState(initialPersistence.enabled);
   const [savedState, setSavedState] = useState<SavedPreviewState | null>(initialPersistence.storedState);
@@ -342,6 +339,25 @@ export function PreviewPanel({
   useEffect(() => {
     if (onControlReady) {
       const control: PreviewControl = {
+        captureThumbnail: (expectedCode) => new Promise((resolve) => {
+          const frame = iframeRef.current?.contentWindow;
+          const document = previewDocumentRef.current;
+          if (!frame || document.code !== expectedCode) { resolve(undefined); return; }
+          const requestId = crypto.randomUUID();
+          const finish = (thumbnail?: string) => {
+            clearTimeout(timeout);
+            window.removeEventListener("message", receive);
+            resolve(thumbnail);
+          };
+          const receive = (event: MessageEvent) => {
+            const data = event.data;
+            if (event.source !== frame || data?.source !== PREVIEW_MESSAGE_SOURCE || data.type !== "thumbnail-response" || data.requestId !== requestId || !isCurrentPreviewMessage(data, document)) return;
+            finish(typeof data.thumbnail === "string" && data.thumbnail.length <= 120000 && /^data:image\/webp;base64,[A-Za-z0-9+/]+=*$/.test(data.thumbnail) ? data.thumbnail : undefined);
+          };
+          const timeout = setTimeout(() => finish(), 750);
+          window.addEventListener("message", receive);
+          frame.postMessage({ source: HOST_MESSAGE_SOURCE, protocolVersion: PREVIEW_PROTOCOL_VERSION, type: "thumbnail-request", requestId }, "*");
+        }),
         getViewport: () => {
           const frame = iframeRef.current;
           return frame && frame.clientWidth > 0 && frame.clientHeight > 0
@@ -604,21 +620,6 @@ export function PreviewPanel({
     setIsFullscreen((prev) => !prev);
   }, []);
 
-  const handleShare = useCallback(async () => {
-    if (!onShare || isSharing) return;
-
-    try {
-      const url = await onShare();
-      if (url) {
-        // Show success feedback
-        setShareSuccess(true);
-        setTimeout(() => setShareSuccess(false), 2000);
-      }
-    } catch (error) {
-      console.error("Failed to share:", error);
-    }
-  }, [onShare, isSharing]);
-
   const hasCode = previewDocument.code.trim().length > 0;
 
   // Inject preview navigation handling and the state bridge owned by the workshop.
@@ -717,6 +718,25 @@ export function PreviewPanel({
           window.addEventListener('message', async function(event) {
             var message = event.data;
             if (event.source !== window.parent || !message || message.source !== HOST_SOURCE || message.protocolVersion !== PROTOCOL_VERSION) return;
+
+            if (message.type === 'thumbnail-request') {
+              var thumbnail;
+              try {
+                var canvases = Array.from(document.querySelectorAll('canvas')).filter(function(canvas) { return canvas.width && canvas.height; });
+                canvases.sort(function(a, b) { return b.width * b.height - a.width * a.height; });
+                if (canvases[0]) {
+                  var original = canvases[0];
+                  var scaled = document.createElement('canvas');
+                  var ratio = Math.min(1, 640 / original.width, 360 / original.height);
+                  scaled.width = Math.max(1, Math.round(original.width * ratio));
+                  scaled.height = Math.max(1, Math.round(original.height * ratio));
+                  scaled.getContext('2d').drawImage(original, 0, 0, scaled.width, scaled.height);
+                  thumbnail = scaled.toDataURL('image/webp', 0.75);
+                }
+              } catch (error) { /* Tainted canvases fall back to the static document preview. */ }
+              postToHost({ type: 'thumbnail-response', requestId: message.requestId, thumbnail: thumbnail });
+              return;
+            }
 
             if (message.type === 'state-capture-request') {
               await captureState('state-capture-response', message.requestId);
@@ -871,54 +891,7 @@ export function PreviewPanel({
               </svg>
             </button>
 
-            {/* Share button */}
-            {onShare && hasCode && (
-              <button
-                onClick={handleShare}
-                disabled={isSharing}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-colors ${
-                  shareSuccess
-                    ? "bg-success/20 text-success border border-success/30"
-                    : isSharing
-                      ? "bg-electric/10 text-electric/50 border border-electric/20 cursor-wait"
-                      : "bg-electric/20 text-electric border border-electric/30 hover:bg-electric/30"
-                }`}
-                title={t("preview.shareTitle")}
-              >
-                {shareSuccess ? (
-                  <>
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {t("preview.shareCopied")}
-                  </>
-                ) : isSharing ? (
-                  <>
-                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                      />
-                    </svg>
-                    {t("preview.shareCreating")}
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                      />
-                    </svg>
-                    {t("preview.share")}
-                  </>
-                )}
-              </button>
-            )}
+            {hasCode && shareMenu}
 
             {/* Fullscreen toggle */}
             <button
