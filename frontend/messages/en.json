@@ -572,7 +572,6 @@
     "create": "Create",
     "browse": "Browse",
     "title": "Made in the playground",
-    "description": "Explore public creations. Open one to play, look around, or use it as a starting point for your own.",
     "copyLink": "Copy link",
     "public": "Public in Browse",
     "publicHint": "Anyone can view and copy this creation. Publishing replaces the previously shared version in Browse. Link-only shares still work.",
@@ -587,14 +586,8 @@
     "backToCreate": "Back to Create",
     "loadError": "Could not load the gallery.",
     "retry": "Try again",
-    "view": "View",
-    "play": "Play",
     "website": "Website",
     "game": "Game",
-    "pagination": "Gallery pages",
-    "previous": "Previous",
-    "next": "Next",
-    "page": "Page {page}",
     "adminTitle": "Enable Browse",
     "adminHint": "Show the public gallery and allow participants to publish creations. Turning this off hides Browse and pauses publishing; existing share links keep working."
   }

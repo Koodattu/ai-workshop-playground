@@ -572,7 +572,6 @@
     "create": "Luo",
     "browse": "Selaa",
     "title": "Luotu leikkikentällä",
-    "description": "Tutustu julkisiin luomuksiin. Avaa luomus, kokeile sitä tai käytä sitä oman työsi pohjana.",
     "copyLink": "Kopioi linkki",
     "public": "Julkinen galleriassa",
     "publicHint": "Kuka tahansa voi katsella ja kopioida tämän luomuksen. Julkaiseminen korvaa galleriassa olevan aiemman version. Jaetut linkit toimivat edelleen.",
@@ -587,14 +586,8 @@
     "backToCreate": "Takaisin luomaan",
     "loadError": "Gallerian lataaminen epäonnistui.",
     "retry": "Yritä uudelleen",
-    "view": "Katso",
-    "play": "Pelaa",
     "website": "Verkkosivu",
     "game": "Peli",
-    "pagination": "Gallerian sivut",
-    "previous": "Edellinen",
-    "next": "Seuraava",
-    "page": "Sivu {page}",
     "adminTitle": "Ota galleria käyttöön",
     "adminHint": "Näytä julkinen galleria ja salli luomusten julkaiseminen. Kun poistat gallerian käytöstä, se piilotetaan eikä uusia luomuksia voi julkaista. Jaetut linkit toimivat edelleen."
   }
