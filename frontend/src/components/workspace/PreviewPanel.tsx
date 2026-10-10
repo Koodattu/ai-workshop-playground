@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef, type ReactNode } from "react"
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { PreviewControl, PreviewRuntimeIssue, PreviewFeedback } from "@/types";
 import { createPreviewFeedback, isCurrentPreviewMessage } from "@/lib/previewFeedback";
+import { capturePreviewScreenshot } from "@/lib/previewScreenshot";
 
 interface PreviewPanelProps {
   code: string;
@@ -339,6 +340,14 @@ export function PreviewPanel({
   useEffect(() => {
     if (onControlReady) {
       const control: PreviewControl = {
+        captureScreenshot: async () => {
+          const frame = iframeRef.current;
+          const currentDocument = previewDocumentRef.current;
+          if (!frame) throw new Error("preview-unavailable");
+          const screenshot = await capturePreviewScreenshot(frame);
+          if (screenshot && (iframeRef.current !== frame || previewDocumentRef.current !== currentDocument)) throw new Error("preview-unavailable");
+          return screenshot;
+        },
         captureThumbnail: (expectedCode) => new Promise((resolve) => {
           const frame = iframeRef.current?.contentWindow;
           const document = previewDocumentRef.current;

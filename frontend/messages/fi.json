@@ -146,6 +146,13 @@
       "UNKNOWN_ERROR": "Tuntematon virhe tapahtui"
     },
     "attachScreenshot": "Liitä kuvakaappaus",
+    "capturePreview": "Ota kuva esikatselusta",
+    "capturingPreview": "Otetaan kuvaa esikatselusta…",
+    "capturePreviewHint": "Ota kuva esikatselusta — valitse tämä välilehti jakamisikkunassa",
+    "capturePreviewUnavailable": "Kuvan ottaminen vaatii näkyvän esikatselun tietokoneella. Voit silti liittää kuvakaappauksen tiedostona.",
+    "capturePreviewUnsupported": "Tämä selain ei tue esikatselun kuvaamista. Käytä tietokoneella Chromea tai Edgeä tai liitä kuvakaappaus tiedostona.",
+    "capturePreviewCurrentTab": "Valitse tämä Leikkikenttä-välilehti. Muita välilehtiä, ikkunoita tai näyttöjä ei voi käyttää esikatselun kuvaamiseen.",
+    "capturePreviewError": "Esikatselun kuvaaminen epäonnistui. Yritä uudelleen tai liitä kuvakaappaus tiedostona.",
     "screenshotAttached": "Kuvakaappaus liitetty",
     "preparingScreenshot": "Valmistellaan kuvaa…",
     "screenshotInvalid": "Valitse alle 10 Mt:n PNG-, JPEG- tai WebP-kuva.",

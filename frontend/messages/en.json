@@ -146,6 +146,13 @@
       "UNKNOWN_ERROR": "An unknown error occurred"
     },
     "attachScreenshot": "Attach screenshot",
+    "capturePreview": "Capture preview",
+    "capturingPreview": "Capturing preview…",
+    "capturePreviewHint": "Capture preview — choose this tab in the sharing dialog",
+    "capturePreviewUnavailable": "Preview capture needs a visible preview on desktop. You can still upload a screenshot.",
+    "capturePreviewUnsupported": "Preview capture is not supported in this browser. Use desktop Chrome or Edge, or upload a screenshot.",
+    "capturePreviewCurrentTab": "Choose this Playground tab to capture the preview. Other tabs, windows, and screens cannot be used.",
+    "capturePreviewError": "Could not capture the preview. Try again or upload a screenshot.",
     "screenshotAttached": "Screenshot attached",
     "preparingScreenshot": "Preparing image…",
     "screenshotInvalid": "Choose a PNG, JPEG or WebP image under 10 MB.",

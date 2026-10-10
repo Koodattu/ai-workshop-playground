@@ -37,6 +37,7 @@ interface ChatPanelProps {
   enabledModelPreferences: ModelPreference[];
   modelOptions: Array<{ id: ModelPreference; order: number; provider: ApiKeyProvider; translationKey: string }>;
   onRetryMessage?: (prompt: string) => Promise<void>;
+  onCapturePreview?: () => Promise<string | null>;
 }
 
 function durationParts(durationMs: number) {
@@ -92,10 +93,12 @@ export function ChatPanel({
   enabledModelPreferences,
   modelOptions,
   onRetryMessage,
+  onCapturePreview,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [screenshot, setScreenshot] = useState<string>();
   const [preparingImage, setPreparingImage] = useState(false);
+  const [capturingPreview, setCapturingPreview] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const progressScrollRef = useRef<HTMLDivElement>(null);
@@ -162,7 +165,7 @@ export function ChatPanel({
   };
 
   const handleRetry = async (failedPrompt: string) => {
-    if (isLoading) return;
+    if (isLoading || preparingImage) return;
 
     textareaRef.current?.focus({ preventScroll: true });
     try {
@@ -288,7 +291,7 @@ export function ChatPanel({
                       {message.failedPrompt && (
                         <button
                           onClick={() => handleRetry(message.failedPrompt!)}
-                          disabled={isLoading}
+                          disabled={isLoading || preparingImage}
                           className="px-2 py-0.5 rounded bg-electric/10 border border-electric/30 text-[10px] font-mono text-electric hover:text-white hover:border-electric/60 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                           title={t("chat.retryFailedTitle")}
                         >
@@ -454,7 +457,7 @@ export function ChatPanel({
                     <Image src={screenshot} alt={t("chat.screenshotAttached")} fill sizes="64px" unoptimized className="rounded object-contain" />
                   </div>
                   <span className="min-w-0 flex-1 break-words">{t("chat.screenshotAttached")}</span>
-                  <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading} className="shrink-0 rounded p-1 text-electric outline-none focus-visible:ring-1 focus-visible:ring-white/25">
+                  <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading || preparingImage} className="shrink-0 rounded p-1 text-electric outline-none focus-visible:ring-1 focus-visible:ring-white/25">
                     {t("chat.removeAttachment")}
                   </button>
                 </div>
@@ -498,11 +501,39 @@ export function ChatPanel({
                 title={t(preparingImage ? "chat.preparingScreenshot" : "chat.attachScreenshot")}
                 className="flex size-10 shrink-0 items-center justify-center rounded-lg text-gray-400 outline-none transition-colors hover:bg-steel/50 hover:text-white focus-visible:ring-1 focus-visible:ring-white/25 disabled:opacity-40"
               >
-                {preparingImage ? <Spinner size="sm" /> : (
+                {preparingImage && !capturingPreview ? <Spinner size="sm" /> : (
                   <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.48-8.48l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                   </svg>
                 )}
+              </button>
+              <button
+                type="button"
+                disabled={isLoading || preparingImage || !onCapturePreview}
+                aria-label={t(capturingPreview ? "chat.capturingPreview" : "chat.capturePreview")}
+                title={t(onCapturePreview ? "chat.capturePreviewHint" : "chat.capturePreviewUnavailable")}
+                onClick={async () => {
+                  if (!onCapturePreview || preparingImage) return;
+                  setPreparingImage(true);
+                  setCapturingPreview(true);
+                  try {
+                    const captured = await onCapturePreview();
+                    if (captured) setScreenshot(captured);
+                  } catch (error) {
+                    const reason = error instanceof Error ? error.message : "";
+                    showToast(t(reason === "capture-unsupported" ? "chat.capturePreviewUnsupported" : reason === "capture-current-tab" ? "chat.capturePreviewCurrentTab" : reason === "preview-unavailable" ? "chat.capturePreviewUnavailable" : "chat.capturePreviewError"), "error");
+                  } finally {
+                    setPreparingImage(false);
+                    setCapturingPreview(false);
+                    textareaRef.current?.focus({ preventScroll: true });
+                  }
+                }}
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg text-gray-400 outline-none transition-colors hover:bg-steel/50 hover:text-white focus-visible:ring-1 focus-visible:ring-white/25 disabled:opacity-40"
+              >
+                {capturingPreview ? <Spinner size="sm" /> : <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 4h6l2 3h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l2-3Z" />
+                  <circle cx="12" cy="13" r="4" strokeWidth={1.75} />
+                </svg>}
               </button>
               <ModelPicker
                 value={modelPreference}

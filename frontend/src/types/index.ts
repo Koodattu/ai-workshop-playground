@@ -277,6 +277,7 @@ export interface StreamCallbacks {
 
 // Preview control interface
 export interface PreviewControl {
+  captureScreenshot: () => Promise<string | null>;
   captureThumbnail: (code: string) => Promise<string | undefined>;
   getViewport: () => GenerationClientContext["previewViewport"];
   disableAutoRefresh: () => void;

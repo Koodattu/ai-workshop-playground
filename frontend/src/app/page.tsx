@@ -1618,6 +1618,7 @@ export default function WorkspacePage() {
                 enabledModelPreferences={availableModelPreferences}
                 modelOptions={modelCatalog}
                 onRetryMessage={handleSendMessage}
+                onCapturePreview={() => previewControlRef.current ? previewControlRef.current.captureScreenshot() : Promise.reject(new Error("preview-unavailable"))}
               />
             </Panel>
 
