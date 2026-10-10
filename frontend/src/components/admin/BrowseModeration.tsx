@@ -1,12 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import type { AdminBrowseArtifact } from "@/types";
+
+function CreationPreview({ artifact, name }: { artifact: AdminBrowseArtifact; name: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [code, setCode] = useState("");
+  useEffect(() => {
+    const container = containerRef.current;
+    if (artifact.thumbnail || !container) return;
+    let active = true;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      // Direct shares remain available when an item is hidden or Browse is off.
+      api.getSharedCode(artifact.shareId).then((share) => { if (active) setCode(share.code); }).catch(() => {});
+    }, { rootMargin: "200px" });
+    observer.observe(container);
+    return () => { active = false; observer.disconnect(); };
+  }, [artifact.shareId, artifact.thumbnail]);
+
+  return <div ref={containerRef} aria-hidden="true" className="absolute inset-0">
+    {artifact.thumbnail ? <Image src={artifact.thumbnail} alt="" fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain" />
+      : code ? <iframe sandbox="" tabIndex={-1} title={name} referrerPolicy="no-referrer"
+        srcDoc={`<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https:; img-src data: https:; font-src data: https:; base-uri 'none'; form-action 'none'">${code}`}
+        className="pointer-events-none h-[400%] w-[400%] origin-top-left scale-25 border-0 bg-white" />
+        : <div className="flex h-full items-center justify-center text-gray-500"><svg className="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.25}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M7 6.5h.01M10 6.5h.01M7 15l3-3 4 5 3-3 4 5" /></svg></div>}
+  </div>;
+}
 
 export function BrowseModeration({ adminSecret }: { adminSecret: string }) {
   const { t } = useLanguage();
@@ -68,14 +94,13 @@ export function BrowseModeration({ adminSecret }: { adminSecret: string }) {
       </div>
         : <>
           {artifacts.length === 0 && <p className="mt-6 rounded-xl border border-dashed border-steel px-6 py-16 text-center text-sm text-gray-400">{t("browse.moderationEmpty")}</p>}
-          <ul className="mt-6 divide-y divide-steel/40 border-y border-steel/40">
+          <ul className="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
             {artifacts.map((artifact) => {
               const name = artifact.projectName || t("share.untitledProject");
-              return <li key={artifact._id} className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-5 sm:grid-cols-[112px_minmax(0,1fr)_auto] sm:gap-x-5">
-                <div aria-hidden="true" className="relative aspect-video overflow-hidden rounded-lg border border-steel/40 bg-carbon">
-                  {artifact.thumbnail ? <Image src={artifact.thumbnail} alt="" fill sizes="112px" unoptimized className="object-contain" /> :
-                    <div className="flex h-full items-center justify-center text-gray-500"><svg className="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.25}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M7 6.5h.01M10 6.5h.01M7 15l3-3 4 5 3-3 4 5" /></svg></div>}
-                </div>
+              return <li key={artifact._id} className="flex min-w-0 flex-col gap-3">
+                <a href={`/share/${artifact.shareId}`} target="_blank" rel="noopener noreferrer" aria-label={t("browse.viewNamed", { name })} className="relative block aspect-video overflow-hidden rounded-xl border border-steel/40 bg-carbon transition-colors hover:border-electric/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric">
+                  <CreationPreview key={artifact.shareId} artifact={artifact} name={name} />
+                </a>
                 <div className="min-w-0">
                   <a href={`/share/${artifact.shareId}`} target="_blank" rel="noopener noreferrer" className="rounded text-base font-medium leading-snug break-words text-white hover:text-electric focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-electric">
                     {name}<span className="sr-only"> — {t("browse.openShare")}</span>
@@ -88,14 +113,14 @@ export function BrowseModeration({ adminSecret }: { adminSecret: string }) {
                   </div>
                   {updateError === artifact._id && <p role="alert" className="mt-2 text-sm text-red-400">{t("browse.moderationUpdateError")}</p>}
                 </div>
-                <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 sm:col-span-1 sm:col-start-3">
+                <div className="mt-auto flex items-center justify-between gap-2 border-t border-steel/30 pt-3">
                   <a href={`/share/${artifact.shareId}`} target="_blank" rel="noopener noreferrer" aria-label={t("browse.viewNamed", { name })}
                     className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm text-gray-300 hover:bg-carbon hover:text-white focus-visible:outline-2 focus-visible:outline-electric">
                     {t("browse.view")}<span aria-hidden="true">↗</span>
                   </a>
                   <Button type="button" variant="secondary" disabled={busyId !== null} isLoading={busyId === artifact._id} onClick={() => void toggle(artifact)}
                     aria-label={t(artifact.hiddenByAdmin ? "browse.restoreNamed" : "browse.hideNamed", { name })}
-                    className={`min-h-10 min-w-24 rounded-lg sm:w-40 ${artifact.hiddenByAdmin ? "border-electric/30! bg-electric/10! text-electric! hover:bg-electric/20!" : "bg-transparent!"}`}>
+                    className={`min-h-10 min-w-24 rounded-lg ${artifact.hiddenByAdmin ? "border-electric/30! bg-electric/10! text-electric! hover:bg-electric/20!" : "bg-transparent!"}`}>
                     {t(artifact.hiddenByAdmin ? "browse.restore" : "browse.hide")}
                   </Button>
                 </div>

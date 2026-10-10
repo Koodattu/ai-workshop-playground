@@ -68,8 +68,8 @@ export default function BrowsePage() {
         : <>
           {status === "ready" && artifacts.length === 0 && <div className="my-12 py-12 text-center"><h2 className="text-lg font-medium">{t("browse.empty")}</h2><p className="mx-auto mt-3 max-w-md text-sm text-gray-400">{t("browse.emptyHint")}</p><Link href="/" className="mt-6 inline-block rounded-lg bg-electric/20 px-5 py-2 text-electric">{t("browse.backToCreate")}</Link></div>}
           <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
-            {artifacts.map((artifact) => <Link key={artifact.shareId} href={`/share/${artifact.shareId}`} className="group min-w-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-electric">
-              <div className="relative aspect-video overflow-hidden rounded-xl bg-carbon" aria-hidden="true">
+            {artifacts.map((artifact) => <Link key={artifact.shareId} href={`/share/${artifact.shareId}`} className="group min-w-0 rounded-xl transition-transform duration-200 motion-safe:hover:-translate-y-1 motion-safe:focus-visible:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-electric">
+              <div className="relative aspect-video overflow-hidden rounded-xl bg-carbon ring-1 ring-transparent transition-[box-shadow] duration-200 group-hover:ring-electric/50 group-hover:shadow-lg group-hover:shadow-electric/10 group-focus-visible:ring-electric/50" aria-hidden="true">
                 {artifact.thumbnail ? <Image src={artifact.thumbnail} alt="" fill unoptimized className="object-contain" /> :
                   <iframe src={api.getPublicPreviewUrl(artifact.shareId)} sandbox="" loading="lazy" tabIndex={-1} title={artifact.projectName || t("share.untitledProject")} referrerPolicy="no-referrer"
                     className="pointer-events-none h-[400%] w-[400%] origin-top-left scale-25 border-0 bg-white" />}

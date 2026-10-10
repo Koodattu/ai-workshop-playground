@@ -10,6 +10,17 @@ async function errors(body) {
   return validationResult(req).array();
 }
 
+test("multiple images are bounded, validated, and cannot be mixed with the legacy image field", async () => {
+  const image = "data:image/png;base64,iVBORw0KGgo=";
+  assert.deepEqual(await errors({ prompt: "Compare these", screenshots: [image, image, image, image] }), []);
+  assert.deepEqual(await errors({ prompt: "No images", screenshots: [] }), []);
+  assert.deepEqual(await errors({ prompt: "Old client", screenshot: image }), []);
+  for (const screenshots of [null, image, [image, "https://example.com/a.png"], Array(5).fill(image), Array(3).fill(image.slice(0, -1) + "A".repeat(400000) + "=")]) {
+    assert.ok((await errors({ prompt: "Compare", screenshots })).some((error) => error.path === "screenshots"));
+  }
+  assert.ok((await errors({ prompt: "Compare", screenshot: image, screenshots: [image] })).some((error) => error.path === "screenshots"));
+});
+
 test("short follow-ups and a previous maximum-length prompt remain valid", async () => {
   assert.deepEqual(await errors({ prompt: "Bigger", messageHistory: [{ role: "user", content: "x".repeat(10000) }] }), []);
 });

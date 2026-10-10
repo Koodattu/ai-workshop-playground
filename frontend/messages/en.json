@@ -145,7 +145,14 @@
       "API_QUOTA_EXCEEDED": "Service temporarily unavailable. Please try again later.",
       "UNKNOWN_ERROR": "An unknown error occurred"
     },
-    "attachScreenshot": "Attach screenshot",
+    "attachScreenshot": "Attach images (up to 4)",
+    "attachedImages": "Attached images ({count})",
+    "previewImage": "Preview image {number}",
+    "removeImage": "Remove image {number}",
+    "imagePreview": "Image preview",
+    "closeImagePreview": "Close image preview",
+    "imageCountLimit": "You can attach up to 4 images per message.",
+    "imageTotalLimit": "These images are too large together. Remove an image or use smaller images.",
     "capturePreview": "Capture preview",
     "capturingPreview": "Capturing preview…",
     "capturePreviewHint": "Capture preview — choose this tab in the sharing dialog",
@@ -153,10 +160,8 @@
     "capturePreviewUnsupported": "Preview capture is not supported in this browser. Use desktop Chrome or Edge, or upload a screenshot.",
     "capturePreviewCurrentTab": "Choose this Playground tab to capture the preview. Other tabs, windows, and screens cannot be used.",
     "capturePreviewError": "Could not capture the preview. Try again or upload a screenshot.",
-    "screenshotAttached": "Screenshot attached",
     "preparingScreenshot": "Preparing image…",
-    "screenshotInvalid": "Choose a PNG, JPEG or WebP image under 10 MB.",
-    "removeAttachment": "Remove"
+    "screenshotInvalid": "Choose a PNG, JPEG or WebP image under 10 MB."
   },
   "editor": {
     "header": "CODE EDITOR",
@@ -410,7 +415,6 @@
     "errorTitle": "Share Link Error",
     "goHome": "Go to Playground",
     "createError": "Failed to create share link. Please try again.",
-    "viewingProject": "Viewing:",
     "useTemplate": "Use This Template",
     "useTemplateShort": "Use",
     "untitledProject": "Untitled Project",

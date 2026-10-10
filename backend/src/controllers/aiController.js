@@ -535,13 +535,13 @@ function logStreamDiagnostic(event, payload) {
   console.info(`[AI Stream Diagnostic] ${event}`, JSON.stringify(payload));
 }
 
-async function createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey, showThoughts = false, signal, messageHistory = [], screenshot }) {
+async function createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey, showThoughts = false, signal, messageHistory = [], screenshots = [] }) {
   const client = apiKey ? new GoogleGenAI({ apiKey }) : genAI;
   const stream = await client.models.generateContentStream({
     model: selectedModel.model,
     contents: [
       ...messageHistory.map(({ role, content }) => ({ role: role === "assistant" ? "model" : "user", parts: [{ text: content }] })),
-      { role: "user", parts: [{ text: userPrompt }, ...(screenshot ? [{ inlineData: { mimeType: screenshot.slice(5, screenshot.indexOf(";")), data: screenshot.split(",")[1] } }] : [])] },
+      { role: "user", parts: [{ text: userPrompt }, ...screenshots.map((image) => ({ inlineData: { mimeType: image.slice(5, image.indexOf(";")), data: image.split(",")[1] } }))] },
     ],
     config: { ...generationConfig, abortSignal: signal },
   });
@@ -596,7 +596,7 @@ async function createGeminiStream({ selectedModel, userPrompt, generationConfig,
   })();
 }
 
-async function createOpenAIStream({ selectedModel, userPrompt, responseMode, systemInstruction, requestId, phase, apiKey, showThoughts = false, signal, messageHistory = [], screenshot }) {
+async function createOpenAIStream({ selectedModel, userPrompt, responseMode, systemInstruction, requestId, phase, apiKey, showThoughts = false, signal, messageHistory = [], screenshots = [] }) {
   const client = apiKey ? new OpenAI({ apiKey }) : openAI;
 
   if (!client) {
@@ -606,8 +606,8 @@ async function createOpenAIStream({ selectedModel, userPrompt, responseMode, sys
   const request = {
     model: selectedModel.model,
     instructions: systemInstruction || getDefaultSystemInstruction(responseMode),
-    input: [...messageHistory, { role: "user", content: screenshot
-      ? [{ type: "input_text", text: userPrompt }, { type: "input_image", image_url: screenshot, detail: "auto" }]
+    input: [...messageHistory, { role: "user", content: screenshots.length
+      ? [{ type: "input_text", text: userPrompt }, ...screenshots.map((image) => ({ type: "input_image", image_url: image, detail: "auto" }))]
       : userPrompt }],
     text: buildOpenAITextFormat(responseMode),
     reasoning: getOpenAIReasoningConfig(selectedModel, showThoughts),
@@ -679,7 +679,7 @@ async function createOpenAIStream({ selectedModel, userPrompt, responseMode, sys
   })();
 }
 
-async function createDeepSeekStream({ selectedModel, userPrompt, responseMode, systemInstruction, requestId, phase, apiKey, showThoughts = false, signal, messageHistory = [], screenshot }) {
+async function createDeepSeekStream({ selectedModel, userPrompt, responseMode, systemInstruction, requestId, phase, apiKey, showThoughts = false, signal, messageHistory = [], screenshots = [] }) {
   const client = apiKey ? new OpenAI({ apiKey, baseURL: "https://api.deepseek.com" }) : deepSeek;
 
   if (!client) {
@@ -694,8 +694,8 @@ async function createDeepSeekStream({ selectedModel, userPrompt, responseMode, s
         content: systemInstruction || getDefaultSystemInstruction(responseMode),
       },
       ...messageHistory,
-      { role: "user", content: screenshot
-        ? [{ type: "text", text: userPrompt }, { type: "image_url", image_url: { url: screenshot } }]
+      { role: "user", content: screenshots.length
+        ? [{ type: "text", text: userPrompt }, ...screenshots.map((image) => ({ type: "image_url", image_url: { url: image } }))]
         : userPrompt },
     ],
     response_format: { type: "json_object" },
@@ -747,7 +747,7 @@ async function createDeepSeekStream({ selectedModel, userPrompt, responseMode, s
   })();
 }
 
-async function createModelTextStream({ selectedModel, generationConfig, userPrompt, responseMode, requestId, phase = "primary", apiKeys, showThoughts = false, signal, messageHistory, screenshot }) {
+async function createModelTextStream({ selectedModel, generationConfig, userPrompt, responseMode, requestId, phase = "primary", apiKeys, showThoughts = false, signal, messageHistory, screenshots }) {
   if (selectedModel.provider === "openai") {
     return createOpenAIStream({
       selectedModel,
@@ -758,7 +758,7 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
       phase,
       apiKey: apiKeys?.openai,
       messageHistory,
-      screenshot,
+      screenshots,
       showThoughts,
       signal,
     });
@@ -774,13 +774,13 @@ async function createModelTextStream({ selectedModel, generationConfig, userProm
       phase,
       apiKey: apiKeys?.deepseek,
       messageHistory,
-      screenshot,
+      screenshots,
       showThoughts,
       signal,
     });
   }
 
-  return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey: apiKeys?.gemini, showThoughts, signal, messageHistory, screenshot });
+  return createGeminiStream({ selectedModel, userPrompt, generationConfig, requestId, phase, apiKey: apiKeys?.gemini, showThoughts, signal, messageHistory, screenshots });
 }
 
 /**
@@ -800,6 +800,7 @@ const generateCode = asyncHandler(async (req, res) => {
     clientContext,
     previewFeedback,
     screenshot,
+    screenshots = screenshot ? [screenshot] : [],
   } = req.body;
   const responseMode = mode === "ask" ? "ask" : mode === "edit" ? "edit" : "auto";
   const isForcedAskMode = responseMode === "ask";
@@ -931,7 +932,7 @@ const generateCode = asyncHandler(async (req, res) => {
       requestId,
       phase: "primary",
       messageHistory: history,
-      screenshot,
+      screenshots,
       apiKeys,
       showThoughts,
       signal,
@@ -1127,7 +1128,7 @@ const generateCode = asyncHandler(async (req, res) => {
         let retryUsage = null;
         try {
           const retryStream = await createModelTextStream({ selectedModel, generationConfig: retryConfig,
-            userPrompt: retryPrompt, responseMode, requestId, phase: "repair", apiKeys, signal, messageHistory: history, screenshot });
+            userPrompt: retryPrompt, responseMode, requestId, phase: "repair", apiKeys, signal, messageHistory: history, screenshots });
           for await (const chunk of retryStream) {
             signal.throwIfAborted();
             if (chunk.usageMetadata) retryUsage = chunk.usageMetadata;
@@ -1288,7 +1289,7 @@ const generateCode = asyncHandler(async (req, res) => {
     codeChunkSseBuffer.cancel();
     if (!usageAttempts.length) usageAttempts.push(latestUsageMetadata);
     usageAttempts.forEach((usage) => telemetry.attempt(usage));
-    telemetry.finish(runOutcome, { editMode: runEditMode, errorReason: runErrorReason, promptVersion: PROMPT_VERSION, hasPreviewFeedback: Boolean(previewFeedback), hasScreenshot: Boolean(screenshot) });
+    telemetry.finish(runOutcome, { editMode: runEditMode, errorReason: runErrorReason, promptVersion: PROMPT_VERSION, hasPreviewFeedback: Boolean(previewFeedback), hasScreenshot: screenshots.length > 0 });
     endSse();
   }
 });

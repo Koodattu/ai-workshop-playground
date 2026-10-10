@@ -811,7 +811,7 @@ export default function WorkspacePage() {
         artifactName: (currentArtifact?.projectName || currentArtifact?.name)?.slice(0, 50),
         clientContext: getGenerationClientContext(previewControlRef.current?.getViewport()),
         previewFeedback: attachment?.previewFeedback,
-        screenshot: attachment?.screenshot,
+        screenshots: attachment?.screenshots,
         parentVersionId: currentVersionId,
         messageHistory,
         mode: requestMode,
@@ -1128,7 +1128,7 @@ export default function WorkspacePage() {
                 durationMs: Date.now() - startedAt,
                 errorDetails: formattedErrorDetails,
                 errorCode: errorCode,
-                failedPrompt: attachment?.previewFeedback || attachment?.screenshot ? undefined : prompt,
+                failedPrompt: attachment?.previewFeedback || attachment?.screenshots?.length ? undefined : prompt,
               };
               setChatHistory((prev) => [...prev, errorChatMessage]);
 

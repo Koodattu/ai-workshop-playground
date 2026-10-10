@@ -1,5 +1,13 @@
 import type { PreviewFeedback } from "@/types";
 
+export const MAX_SCREENSHOTS = 4;
+export function appendScreenshots(current: string[], added: string[]): string[] {
+  const images = [...current, ...added];
+  if (images.length > MAX_SCREENSHOTS) throw new Error("image-count-limit");
+  if (images.reduce((size, image) => size + image.length, 0) > 1200000) throw new Error("image-total-limit");
+  return images;
+}
+
 export async function hashArtifact(code: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, FormEvent } from "react";
-import Image from "next/image";
+import { ImageAttachments } from "./ImageAttachments";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { ModelPicker } from "./ModelPicker";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { ApiKeyProvider, ArtifactType, ChatMessage, ChatMode, GenerationPhase, ModelPreference, GenerationAttachment } from "@/types";
-import { prepareScreenshot } from "@/lib/previewFeedback";
+import { appendScreenshots, MAX_SCREENSHOTS, prepareScreenshot } from "@/lib/previewFeedback";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -96,7 +96,7 @@ export function ChatPanel({
   onCapturePreview,
 }: ChatPanelProps) {
   const [prompt, setPrompt] = useState("");
-  const [screenshot, setScreenshot] = useState<string>();
+  const [screenshots, setScreenshots] = useState<string[]>([]);
   const [preparingImage, setPreparingImage] = useState(false);
   const [capturingPreview, setCapturingPreview] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -143,8 +143,8 @@ export function ChatPanel({
       // Clear the prompt immediately
       setPrompt("");
       try {
-        await onSendMessage(trimmedPrompt, { screenshot });
-        setScreenshot(undefined);
+        await onSendMessage(trimmedPrompt, { screenshots });
+        setScreenshots([]);
       } catch {
         // Restore the prompt on error so user can retry
         setPrompt(trimmedPrompt);
@@ -451,17 +451,7 @@ export function ChatPanel({
             </div>
 
             <div className="overflow-hidden rounded-xl border border-steel bg-carbon">
-              {screenshot && (
-                <div className="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-steel/50 p-2 text-xs text-gray-300">
-                  <div className="relative h-12 w-16 shrink-0">
-                    <Image src={screenshot} alt={t("chat.screenshotAttached")} fill sizes="64px" unoptimized className="rounded object-contain" />
-                  </div>
-                  <span className="min-w-0 flex-1 break-words">{t("chat.screenshotAttached")}</span>
-                  <button type="button" onClick={() => setScreenshot(undefined)} disabled={isLoading || preparingImage} className="shrink-0 rounded p-1 text-electric outline-none focus-visible:ring-1 focus-visible:ring-white/25">
-                    {t("chat.removeAttachment")}
-                  </button>
-                </div>
-              )}
+              {screenshots.length > 0 && <ImageAttachments images={screenshots} disabled={isLoading || preparingImage} onRemove={(index) => { setScreenshots((current) => current.filter((_, i) => i !== index)); textareaRef.current?.focus({ preventScroll: true }); }} />}
               <textarea
                 ref={textareaRef}
                 value={prompt}
@@ -479,18 +469,23 @@ export function ChatPanel({
               <input
                 ref={imageInputRef}
                 type="file"
+                multiple
                 accept="image/png,image/jpeg,image/webp"
                 className="hidden"
                 aria-label={t("chat.attachScreenshot")}
                 disabled={isLoading || preparingImage}
                 onChange={async (event) => {
-                  const file = event.target.files?.[0];
+                  const files = Array.from(event.target.files || []);
                   event.target.value = "";
-                  if (!file) return;
+                  if (!files.length) return;
                   setPreparingImage(true);
-                  try { setScreenshot(await prepareScreenshot(file)); }
-                  catch { showToast(t("chat.screenshotInvalid"), "error"); }
-                  finally { setPreparingImage(false); }
+                  try {
+                    if (screenshots.length + files.length > MAX_SCREENSHOTS) throw new Error("image-count-limit");
+                    setScreenshots(appendScreenshots(screenshots, await Promise.all(files.map(prepareScreenshot))));
+                  } catch (error) {
+                    const reason = error instanceof Error ? error.message : "";
+                    showToast(t(reason === "image-count-limit" ? "chat.imageCountLimit" : reason === "image-total-limit" ? "chat.imageTotalLimit" : "chat.screenshotInvalid"), "error");
+                  } finally { setPreparingImage(false); textareaRef.current?.focus({ preventScroll: true }); }
                 }}
               />
               <button
@@ -514,14 +509,15 @@ export function ChatPanel({
                 title={t(onCapturePreview ? "chat.capturePreviewHint" : "chat.capturePreviewUnavailable")}
                 onClick={async () => {
                   if (!onCapturePreview || preparingImage) return;
+                  if (screenshots.length >= MAX_SCREENSHOTS) { showToast(t("chat.imageCountLimit"), "error"); return; }
                   setPreparingImage(true);
                   setCapturingPreview(true);
                   try {
                     const captured = await onCapturePreview();
-                    if (captured) setScreenshot(captured);
+                    if (captured) setScreenshots(appendScreenshots(screenshots, [captured]));
                   } catch (error) {
                     const reason = error instanceof Error ? error.message : "";
-                    showToast(t(reason === "capture-unsupported" ? "chat.capturePreviewUnsupported" : reason === "capture-current-tab" ? "chat.capturePreviewCurrentTab" : reason === "preview-unavailable" ? "chat.capturePreviewUnavailable" : "chat.capturePreviewError"), "error");
+                    showToast(t(reason === "image-total-limit" ? "chat.imageTotalLimit" : reason === "capture-unsupported" ? "chat.capturePreviewUnsupported" : reason === "capture-current-tab" ? "chat.capturePreviewCurrentTab" : reason === "preview-unavailable" ? "chat.capturePreviewUnavailable" : "chat.capturePreviewError"), "error");
                   } finally {
                     setPreparingImage(false);
                     setCapturingPreview(false);

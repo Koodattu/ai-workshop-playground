@@ -101,6 +101,7 @@ export interface GenerateRequest {
   clientContext?: GenerationClientContext;
   previewFeedback?: PreviewFeedback;
   screenshot?: string;
+  screenshots?: string[];
 }
 
 export interface GenerationClientContext {
@@ -122,7 +123,7 @@ export interface PreviewFeedback {
 
 export interface GenerationAttachment {
   previewFeedback?: PreviewFeedback;
-  screenshot?: string;
+  screenshots?: string[];
 }
 
 export interface GenerateResponse {

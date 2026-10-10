@@ -145,7 +145,14 @@
       "API_QUOTA_EXCEEDED": "Palvelu väliaikaisesti poissa käytöstä. Yritä myöhemmin uudelleen.",
       "UNKNOWN_ERROR": "Tuntematon virhe tapahtui"
     },
-    "attachScreenshot": "Liitä kuvakaappaus",
+    "attachScreenshot": "Liitä kuvia (enintään 4)",
+    "attachedImages": "Liitetyt kuvat ({count})",
+    "previewImage": "Esikatsele kuvaa {number}",
+    "removeImage": "Poista kuva {number}",
+    "imagePreview": "Kuvan esikatselu",
+    "closeImagePreview": "Sulje kuvan esikatselu",
+    "imageCountLimit": "Voit liittää enintään 4 kuvaa yhteen viestiin.",
+    "imageTotalLimit": "Kuvat ovat yhdessä liian suuria. Poista kuva tai käytä pienempiä kuvia.",
     "capturePreview": "Ota kuva esikatselusta",
     "capturingPreview": "Otetaan kuvaa esikatselusta…",
     "capturePreviewHint": "Ota kuva esikatselusta — valitse tämä välilehti jakamisikkunassa",
@@ -153,10 +160,8 @@
     "capturePreviewUnsupported": "Tämä selain ei tue esikatselun kuvaamista. Käytä tietokoneella Chromea tai Edgeä tai liitä kuvakaappaus tiedostona.",
     "capturePreviewCurrentTab": "Valitse tämä Leikkikenttä-välilehti. Muita välilehtiä, ikkunoita tai näyttöjä ei voi käyttää esikatselun kuvaamiseen.",
     "capturePreviewError": "Esikatselun kuvaaminen epäonnistui. Yritä uudelleen tai liitä kuvakaappaus tiedostona.",
-    "screenshotAttached": "Kuvakaappaus liitetty",
     "preparingScreenshot": "Valmistellaan kuvaa…",
-    "screenshotInvalid": "Valitse alle 10 Mt:n PNG-, JPEG- tai WebP-kuva.",
-    "removeAttachment": "Poista"
+    "screenshotInvalid": "Valitse alle 10 Mt:n PNG-, JPEG- tai WebP-kuva."
   },
   "editor": {
     "header": "KOODIEDITORI",
@@ -410,7 +415,6 @@
     "errorTitle": "Jakamislinkin Virhe",
     "goHome": "Siirry Leikkikenttään",
     "createError": "Jakamislinkin luominen epäonnistui. Yritä uudelleen.",
-    "viewingProject": "Katselet:",
     "useTemplate": "Käytä Tätä Pohjaa",
     "useTemplateShort": "Käytä",
     "untitledProject": "Nimetön Projekti",

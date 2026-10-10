@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
@@ -183,24 +184,19 @@ export default function SharePage({ params }: SharePageProps) {
   return (
     <div className="h-screen flex flex-col bg-void overflow-hidden">
       {/* Top bar */}
-      <header className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-steel/30 bg-obsidian shrink-0">
-        {/* Left side: Logo and title */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Image src="/web-app-manifest-192x192.png" alt="App icon" width={32} height={32} className="w-8 h-8 object-contain" />
-            <span className="hidden lg:inline font-display text-lg font-bold font-mono tracking-wider uppercase text-white">{t("workspace.playground")}</span>
-          </div>
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-2 border-b border-steel/30 bg-obsidian shrink-0 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/" aria-label={t("workspace.playground")} className="flex shrink-0 items-center gap-2 rounded focus-visible:outline-2 focus-visible:outline-electric">
+            <Image src="/web-app-manifest-192x192.png" alt="" width={32} height={32} className="size-8 object-contain" />
+            <span className="hidden xl:inline font-mono text-lg font-bold tracking-wider uppercase text-white">{t("workspace.playground")}</span>
+          </Link>
+          <span className="min-w-0 truncate border-l border-steel pl-3 text-sm font-medium text-gray-200" title={getProjectDisplayName()}>{getProjectDisplayName()}</span>
         </div>
-
-        <WorkspaceNavigation active="browse" browseEnabled={browseEnabled} />
-        {/* Center: Project name (hidden on small screens) */}
-        <div className="hidden lg:flex items-center gap-2 text-gray-400">
-          <span className="text-sm">{t("share.viewingProject")}</span>
-          <span className="font-medium text-white truncate max-w-64">{getProjectDisplayName()}</span>
+        <div className="col-span-2 row-start-2 justify-self-center sm:col-span-1 sm:col-start-2 sm:row-start-1">
+          <WorkspaceNavigation active="browse" browseEnabled={browseEnabled} />
         </div>
-
         {/* Right side: Use Template button and Language switcher */}
-        <div className="flex items-center gap-2">
+        <div className="col-start-2 row-start-1 flex items-center justify-self-end gap-2 sm:col-start-3">
           <button
             onClick={handleUseTemplate}
             className="flex items-center gap-2 px-2 sm:px-4 py-1.5 bg-electric/70 hover:bg-electric/90 text-white text-sm font-medium rounded-lg transition-colors"
@@ -219,12 +215,6 @@ export default function SharePage({ params }: SharePageProps) {
           <LanguageSwitcher />
         </div>
       </header>
-
-      {/* Mobile: Project name bar */}
-      <div className="lg:hidden flex items-center justify-center gap-2 px-4 py-2 bg-carbon border-b border-steel/30 text-gray-400">
-        <span className="text-xs">{t("share.viewingProject")}</span>
-        <span className="text-xs font-medium text-white truncate max-w-48">{getProjectDisplayName()}</span>
-      </div>
 
       {/* Preview iframe */}
       <div className="flex-1 overflow-hidden bg-white">

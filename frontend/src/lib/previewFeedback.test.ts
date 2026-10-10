@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { hashArtifact, snapshotState, isCurrentPreviewMessage } from "./previewFeedback";
+import { appendScreenshots, hashArtifact, snapshotState, isCurrentPreviewMessage } from "./previewFeedback";
+
+describe("image attachments", () => {
+  it("appends uploads and captures in order without replacing previous images", () => {
+    const current = ["first"];
+    expect(appendScreenshots(current, ["second", "third"])).toEqual(["first", "second", "third"]);
+    expect(current).toEqual(["first"]);
+    expect(appendScreenshots(current, ["second", "third", "fourth"])).toHaveLength(4);
+  });
+  it("rejects excessive count and total size without changing the existing attachments", () => {
+    const current = ["first"];
+    expect(() => appendScreenshots(current, ["2", "3", "4", "5"])).toThrow("image-count-limit");
+    expect(() => appendScreenshots(current, ["x".repeat(1200000)])).toThrow("image-total-limit");
+    expect(current).toEqual(["first"]);
+  });
+});
 
 describe("preview feedback", () => {
   it("ignores messages from a replaced document even within the same artifact", () => {

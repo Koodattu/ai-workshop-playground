@@ -37,6 +37,11 @@ function validateScreenshot(dataUrl) {
     : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
 }
 
+function validateScreenshots(images) {
+  return Array.isArray(images) && images.length <= 4 && images.every(validateScreenshot)
+    && images.reduce((size, image) => size + image.length, 0) <= 1200000;
+}
+
 function buildGenerationPrompt({ prompt, existingCode = "", artifactName, previewFeedback, clientContext }) {
   const parts = [];
   if (existingCode.trim()) {
@@ -56,4 +61,4 @@ function buildGenerationPrompt({ prompt, existingCode = "", artifactName, previe
   return parts.join("\n\n");
 }
 
-module.exports = { PROMPT_VERSION, codeHash, validateClientContext, validatePreviewFeedback, validateScreenshot, buildGenerationPrompt };
+module.exports = { PROMPT_VERSION, codeHash, validateClientContext, validatePreviewFeedback, validateScreenshot, validateScreenshots, buildGenerationPrompt };

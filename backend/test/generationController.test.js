@@ -61,6 +61,24 @@ const { generateCode } = require("../src/controllers/aiController");
 const original = '<!DOCTYPE html><html><body><button style="color:red">Play</button><script>let score = 0;</script></body></html>';
 const patch = (oldText = "color:red") => JSON.stringify({ message: "Updated", projectName: "Button Demo", editMode: "patch", changeScope: "localized", code: "", edits: [{ oldText, newText: "color:blue" }] });
 
+for (const model of ["balanced", "gpt56luna", "deepseekv4flash"]) {
+  test(`${model}: all image attachments reach the initial and repair calls in order`, async (t) => {
+    const screenshots = ["data:image/png;base64,iVBORw0KGgo=", "data:image/jpeg;base64,/9j/"];
+    const run = start(t, model, ["{", patch()], { screenshots });
+    assert.equal((await run.finished).outcome, "completed");
+    assert.equal(calls.length, 2);
+    for (const { provider, request } of calls) {
+      if (provider === "gemini") {
+        assert.deepEqual(request.contents.at(-1).parts.slice(1).map(({ inlineData }) => `data:${inlineData.mimeType};base64,${inlineData.data}`), screenshots);
+      } else {
+        const content = (provider === "openai" ? request.input : request.messages).at(-1).content;
+        assert.deepEqual(content.slice(1).map((part) => provider === "openai" ? part.image_url : part.image_url.url), screenshots);
+      }
+    }
+    assert.equal(JSON.stringify(saves).includes("base64"), false);
+  });
+}
+
 function start(t, modelPreference, responses, body = {}) {
   plans = [...responses]; calls = []; saves = []; onCall = () => {};
   let finish;
