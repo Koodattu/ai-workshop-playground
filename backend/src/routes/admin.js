@@ -49,14 +49,14 @@ router.get("/browse-artifacts", [query("page").optional().isInt({ min: 1, max: 1
   const page = Number(req.query.page) || 1;
   const limit = 20;
   const artifacts = await PublicArtifact.find({ isPublic: { $ne: false } })
-    .select("shareId projectName artifactType hiddenByAdmin")
+    .select("shareId projectName artifactType hiddenByAdmin thumbnail")
     .sort({ _id: -1 }).skip((page - 1) * limit).limit(limit + 1).lean();
   res.set("Cache-Control", "no-store").json({ artifacts: artifacts.slice(0, limit), hasMore: artifacts.length > limit });
 }));
 
 router.put("/browse-artifacts/:id", [param("id").isMongoId(), body("hiddenByAdmin").isBoolean({ strict: true }), validateRequest], asyncHandler(async (req, res) => {
   const artifact = await PublicArtifact.findByIdAndUpdate(req.params.id, { $set: { hiddenByAdmin: req.body.hiddenByAdmin } }, { returnDocument: "after", runValidators: true, timestamps: false })
-    .select("shareId projectName artifactType hiddenByAdmin").lean();
+    .select("shareId projectName artifactType hiddenByAdmin thumbnail").lean();
   if (!artifact) throw new AppError("Public artifact not found", 404);
   res.set("Cache-Control", "no-store").json(artifact);
 }));

@@ -596,7 +596,7 @@
     "website": "Website",
     "game": "Game",
     "moderationTitle": "Browse creations",
-    "moderationHint": "Hide creations from Browse or restore them. Direct share links keep working. Hidden projects stay hidden when their owners publish another version.",
+    "moderationHint": "Hidden creations stay hidden across new versions. Their share links still work.",
     "moderationEmpty": "No shared creations to review.",
     "moderationStatusHidden": "Hidden by admin",
     "moderationStatusVisible": "Visible in Browse",
@@ -611,8 +611,18 @@
     "next": "Next",
     "page": "Page {page}",
     "openShare": "Open share in a new tab",
+    "view": "View",
+    "viewNamed": "View {name} in a new tab",
+    "refresh": "Refresh",
+    "enabled": "On",
+    "paused": "Off",
+    "saving": "Saving…",
+    "settingsLoadError": "Could not load the Browse setting.",
+    "settingsUpdateError": "Could not save the Browse setting. Please try again.",
+    "moderationUpdateError": "Could not change visibility. Please try again.",
+    "unavailable": "Unavailable",
     "hiddenNotice": "An admin has hidden this project from Browse. Direct share links still work.",
-    "adminTitle": "Enable Browse",
-    "adminHint": "Show the public gallery and allow participants to publish creations. Turning this off hides Browse and pauses publishing; existing share links keep working."
+    "adminTitle": "Public gallery",
+    "adminHint": "Let people browse and publish creations. Turn off to pause Browse; shared links keep working."
   }
 }

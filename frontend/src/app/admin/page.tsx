@@ -5,8 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { PasswordManager } from "@/components/admin/PasswordManager";
-import { BrowseSettings } from "@/components/admin/BrowseSettings";
-import { BrowseModeration } from "@/components/admin/BrowseModeration";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
@@ -154,7 +152,7 @@ export default function AdminPage() {
 
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-steel/30 bg-obsidian/80 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Image src="/web-app-manifest-192x192.png" alt="App icon" width={40} height={40} className="w-10 h-10 object-contain" />
             <div>
@@ -163,7 +161,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:gap-4">
             <LanguageSwitcher />
             <Link href="/" className="text-sm font-mono text-gray-400 hover:text-white transition-colors flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -187,9 +185,7 @@ export default function AdminPage() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        <BrowseSettings adminSecret={adminSecret} />
-        <BrowseModeration adminSecret={adminSecret} />
+      <main className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
         <PasswordManager adminSecret={adminSecret} />
       </main>
     </div>

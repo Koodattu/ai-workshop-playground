@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { BrowseSettings } from "@/components/admin/BrowseSettings";
+import { BrowseModeration } from "@/components/admin/BrowseModeration";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, RequestLogEntry, ShareLinkEntry, CodeVersion, ModelPreference, ModelSettings, ThinkingLevel, ModelOption } from "@/types";
@@ -11,7 +13,7 @@ import type { PasswordEntry, UsageStats, SystemStats, PasswordDetailedStats, Req
 // TYPES
 // ============================================================================
 
-type TabId = "overview" | "passwords" | "usage" | "activity" | "models" | "shares" | "versions";
+type TabId = "overview" | "passwords" | "usage" | "activity" | "models" | "browse" | "shares" | "versions";
 type ActivityPeriod = "24h" | "7d" | "30d";
 
 interface PasswordManagerProps {
@@ -1283,6 +1285,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       { id: "usage" as TabId, label: t("passwordManager.usageTab", { count: usage.length }), icon: <UsersIcon /> },
       { id: "activity" as TabId, label: t("passwordManager.activityTab"), icon: <ActivityIcon /> },
       { id: "models" as TabId, label: "Models", icon: <TokenIcon /> },
+      { id: "browse" as TabId, label: t("browse.browse"), icon: <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
       { id: "shares" as TabId, label: t("passwordManager.sharesTab", { count: shareLinks.length }), icon: <ShareIcon /> },
       { id: "versions" as TabId, label: t("passwordManager.versionsTab", { count: codeVersions.length }), icon: <ActivityIcon /> },
     ],
@@ -1296,7 +1299,7 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
   return (
     <div className="space-y-6 relative">
       {/* Global loading overlay */}
-      {isInitialLoading && (
+      {isInitialLoading && activeTab !== "browse" && (
         <div className="absolute inset-0 z-50 bg-void/80 backdrop-blur-sm flex items-center justify-center rounded-xl">
           <div className="text-center">
             <Spinner size="lg" />
@@ -1306,28 +1309,41 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
       )}
 
       {/* Global error banner */}
-      {loadError && <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger font-mono text-sm animate-fade-in">{loadError}</div>}
+      {loadError && activeTab !== "browse" && <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 text-danger font-mono text-sm animate-fade-in">{loadError}</div>}
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-carbon rounded-xl border border-steel/50 overflow-x-auto">
-        {tabs.map((tab) => (
+      <div role="tablist" aria-label={t("admin.dashboardTitle")} className="flex gap-1 p-1 bg-carbon rounded-xl border border-steel/50 overflow-x-auto">
+        {tabs.map((tab, index) => (
           <button
             key={tab.id}
+            type="button"
+            role="tab"
+            id={`admin-tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls="admin-tab-panel"
+            tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(event) => {
+              const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+              if (next === null) return;
+              event.preventDefault();
+              setActiveTab(tabs[next].id);
+              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+            }}
             className={`
-              flex-1 min-w-30 px-4 py-2.5 rounded-lg font-mono text-sm transition-all
+              flex-1 shrink-0 whitespace-nowrap px-3 py-2.5 rounded-lg font-mono text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-electric focus-visible:ring-inset
               flex items-center justify-center gap-2
               ${activeTab === tab.id ? "bg-electric text-void shadow-glow-electric" : "text-gray-400 hover:text-white hover:bg-graphite"}
             `}
           >
-            <span className="hidden sm:inline">{tab.icon}</span>
+            <span aria-hidden="true" className="hidden sm:inline">{tab.icon}</span>
             <span>{tab.label}</span>
           </button>
         ))}
       </div>
 
       {/* Tab content */}
-      <div className="min-h-100">
+      <div id="admin-tab-panel" role="tabpanel" aria-labelledby={`admin-tab-${activeTab}`} className="min-h-100">
         {activeTab === "overview" && <OverviewTab systemStats={systemStats} t={t} />}
 
         {activeTab === "passwords" && (
@@ -1368,18 +1384,20 @@ export function PasswordManager({ adminSecret }: PasswordManagerProps) {
 
         {activeTab === "models" && <ModelSettingsTab modelSettings={modelSettings} modelOptions={modelOptions} isSaving={isSavingModelSettings} onChange={handleChangeModelSetting} />}
 
+        {activeTab === "browse" && <div className="space-y-8"><BrowseSettings adminSecret={adminSecret} /><BrowseModeration adminSecret={adminSecret} /></div>}
+
         {activeTab === "shares" && <ShareLinksTab shareLinks={shareLinks} t={t} />}
 
         {activeTab === "versions" && <CodeVersionsTab versions={codeVersions} t={t} />}
       </div>
 
       {/* Refresh button */}
-      <div className="flex justify-center pt-4 border-t border-steel/30">
+      {activeTab !== "browse" && <div className="flex justify-center pt-4 border-t border-steel/30">
         <Button onClick={handleRefresh} variant="ghost" size="sm" isLoading={isInitialLoading}>
           <RefreshIcon />
           {t("passwordManager.refreshData")}
         </Button>
-      </div>
+      </div>}
     </div>
   );
 }

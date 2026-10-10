@@ -456,6 +456,7 @@ export interface AdminBrowseArtifact {
   projectName: string | null;
   artifactType: ArtifactType;
   hiddenByAdmin?: boolean;
+  thumbnail?: string | null;
 }
 
 export interface PublicArtifactCard {

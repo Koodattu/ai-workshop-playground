@@ -596,7 +596,7 @@
     "website": "Verkkosivu",
     "game": "Peli",
     "moderationTitle": "Gallerian luomukset",
-    "moderationHint": "Piilota luomuksia galleriasta tai palauta ne näkyviin. Jaetut linkit toimivat edelleen. Piilotettu projekti pysyy piilossa, vaikka sen omistaja julkaisisi uuden version.",
+    "moderationHint": "Piilotetut luomukset pysyvät piilossa myös uusien versioiden jälkeen. Niiden jakolinkit toimivat edelleen.",
     "moderationEmpty": "Ei jaettuja luomuksia tarkistettavaksi.",
     "moderationStatusHidden": "Ylläpitäjän piilottama",
     "moderationStatusVisible": "Näkyy galleriassa",
@@ -611,8 +611,18 @@
     "next": "Seuraava",
     "page": "Sivu {page}",
     "openShare": "Avaa jaettu luomus uudessa välilehdessä",
+    "view": "Avaa",
+    "viewNamed": "Avaa {name} uudessa välilehdessä",
+    "refresh": "Päivitä",
+    "enabled": "Päällä",
+    "paused": "Pois",
+    "saving": "Tallennetaan…",
+    "settingsLoadError": "Gallerian asetuksen lataaminen epäonnistui.",
+    "settingsUpdateError": "Gallerian asetuksen tallentaminen epäonnistui. Yritä uudelleen.",
+    "moderationUpdateError": "Näkyvyyden muuttaminen epäonnistui. Yritä uudelleen.",
+    "unavailable": "Ei saatavilla",
     "hiddenNotice": "Ylläpitäjä on piilottanut tämän projektin galleriasta. Jaetut linkit toimivat edelleen.",
-    "adminTitle": "Ota galleria käyttöön",
-    "adminHint": "Näytä julkinen galleria ja salli luomusten julkaiseminen. Kun poistat gallerian käytöstä, se piilotetaan eikä uusia luomuksia voi julkaista. Jaetut linkit toimivat edelleen."
+    "adminTitle": "Julkinen galleria",
+    "adminHint": "Salli luomusten selaaminen ja julkaiseminen. Voit sulkea gallerian väliaikaisesti; jakolinkit toimivat edelleen."
   }
 }

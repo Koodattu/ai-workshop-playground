@@ -95,18 +95,24 @@ test("Browse API with MongoDB", { skip: !process.env.BROWSE_TEST_MONGO_URI }, as
   });
 
   await t.test("admin moderation hides and restores a project without breaking shares or allowing owner bypass", async () => {
+    const thumbnail = "data:image/webp;base64,dGVzdA==";
+    await PublicArtifact.updateOne({ rootVersionId: other._id }, { $set: { thumbnail } });
     const headers = { "X-Admin-Secret": process.env.ADMIN_SECRET };
     const list = () => request("/api/admin/browse-artifacts", null, "GET", headers);
     assert.equal((await request("/api/admin/browse-artifacts")).status, 401);
     assert.equal((await request("/api/admin/browse-artifacts?page=-1", null, "GET", headers)).status, 400);
     const listing = (await (await list()).json()).artifacts[0];
+    assert.equal(listing.thumbnail, thumbnail);
+    assert.equal(listing.rootVersionId, undefined);
     const moderate = (hiddenByAdmin, extraHeaders = headers) => request(`/api/admin/browse-artifacts/${listing._id}`, { hiddenByAdmin }, "PUT", extraHeaders);
     assert.equal((await moderate(true, {})).status, 401);
     assert.equal((await moderate(true, { "X-Admin-Secret": "incorrect" })).status, 401);
     assert.equal((await moderate("true")).status, 400);
     assert.equal((await request("/api/admin/browse-artifacts/not-an-id", { hiddenByAdmin: true }, "PUT", headers)).status, 400);
     assert.equal((await request(`/api/admin/browse-artifacts/${new mongoose.Types.ObjectId()}`, { hiddenByAdmin: true }, "PUT", headers)).status, 404);
-    assert.equal((await moderate(true)).status, 200);
+    const hidden = await moderate(true);
+    assert.equal(hidden.status, 200);
+    assert.equal((await hidden.json()).thumbnail, thumbnail);
     assert.equal((await (await request("/api/browse")).json()).artifacts.length, 0);
     assert.equal((await request(`/api/browse/${listing.shareId}/preview`)).status, 404);
     assert.equal((await request(`/api/share/${listing.shareId}`)).status, 200);
