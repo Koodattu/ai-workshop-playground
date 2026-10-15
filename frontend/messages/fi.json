@@ -66,7 +66,6 @@
     "codeGenerated": "Koodi luotu!",
     "responseReceived": "Vastaus saatu",
     "shiftEnterHint": "Shift + Enter uudelle riville",
-    "autoSwitch": "Automaattinen paneelien vaihto",
     "usageLeft": "{count} jäljellä",
     "generateButton": "Luo",
     "streaming": "suoratoisto...",

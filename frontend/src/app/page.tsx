@@ -162,7 +162,7 @@ export default function WorkspacePage() {
   // Persist template selection to localStorage with validation
   const [savedTemplateId, setSavedTemplateId] = useLocalStorage<string>("current-template-id", DEFAULT_TEMPLATE_ID);
   const [initialTemplate] = useState(() => resolveInitialWorkspaceTemplate(savedTemplateId, customTemplates, sharedTemplates, language, isSafeStart, pendingSharedTemplate));
-  const [savedArtifactType, persistArtifactType] = useLocalStorage<ArtifactType>("artifact-type", "website");
+  const [savedArtifactType, persistArtifactType] = useLocalStorage<ArtifactType>("artifact-type", "game");
   const [artifactType, setArtifactTypeState] = useState<ArtifactType>(() => (initialTemplate.useSavedArtifactType ? savedArtifactType : initialTemplate.artifactType));
   const setArtifactType = useCallback(
     (nextArtifactType: ArtifactType) => {
@@ -183,7 +183,6 @@ export default function WorkspacePage() {
   const panelGroupElementRef = useRef<HTMLDivElement | null>(null);
   const panelResizeAnimationsRef = useRef<Animation[]>([]);
   const panelResizeAnimationFrameRef = useRef<number | null>(null);
-  const [autoSwitchEnabled, setAutoSwitchEnabled] = useLocalStorage<boolean>("auto-switch-panels", true);
   const [showThoughts, setShowThoughts] = useLocalStorage<boolean>("show-ai-thoughts", false);
   const [contextMessages, setContextMessages] = useState<ChatMessage[]>([]);
   const [password, setPassword] = useLocalStorage<string>("workshop-password", "");
@@ -873,10 +872,8 @@ export default function WorkspacePage() {
               pendingEditorChunkRef.current = "";
               clearEditorFlushTimer();
 
-              // Mobile: Switch to editor panel to watch code stream in (if auto-switch enabled)
-              if (autoSwitchEnabled) {
-                setMobileActivePanel("editor");
-              }
+              // Mobile: Switch to editor panel to watch code stream in
+              setMobileActivePanel("editor");
 
               // Save cursor position before clearing
               if (monacoEditorRef.current) {
@@ -1090,10 +1087,8 @@ export default function WorkspacePage() {
               if (isEditResponse) {
                 previewControlRef.current?.enableAutoRefresh();
                 runDeferredAutoFormat(finalCode);
-                // Mobile: Switch to preview panel to see the final result (if auto-switch enabled)
-                if (autoSwitchEnabled) {
-                  setMobileActivePanel("preview");
-                }
+                // Mobile: Switch to preview panel to see the final result
+                setMobileActivePanel("preview");
               }
 
               showToast(t(isEditResponse ? "chat.codeGenerated" : "chat.responseReceived"), "success");
@@ -1236,7 +1231,6 @@ export default function WorkspacePage() {
       artifactType,
       modelPreference,
       currentVersionId,
-      autoSwitchEnabled,
       showThoughts,
       setApiKeyUsage,
       setSavedTemplateId,
@@ -1605,8 +1599,6 @@ export default function WorkspacePage() {
                 onClearMessages={handleClearMessages}
                 onOpenSettings={handleOpenApiKeySettings}
                 onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
-                autoSwitchEnabled={autoSwitchEnabled}
-                onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}
@@ -1696,8 +1688,6 @@ export default function WorkspacePage() {
                 onClearMessages={handleClearMessages}
                 onOpenSettings={handleOpenApiKeySettings}
                 onOpenUsage={authMode === "api-key" ? () => setIsApiKeyUsageOpen(true) : undefined}
-                autoSwitchEnabled={autoSwitchEnabled}
-                onAutoSwitchChange={setAutoSwitchEnabled}
                 isAuthenticated={isAuthenticated}
                 onUnlockClick={handleOpenPasswordModal}
                 mode={chatMode}

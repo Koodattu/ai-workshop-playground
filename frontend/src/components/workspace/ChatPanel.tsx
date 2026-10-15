@@ -24,8 +24,6 @@ interface ChatPanelProps {
   onClearMessages?: () => void;
   onOpenSettings?: () => void;
   onOpenUsage?: () => void;
-  autoSwitchEnabled?: boolean;
-  onAutoSwitchChange?: (enabled: boolean) => void;
   isAuthenticated: boolean;
   onUnlockClick: () => void;
   mode: ChatMode;
@@ -80,8 +78,6 @@ export function ChatPanel({
   onClearMessages,
   onOpenSettings,
   onOpenUsage,
-  autoSwitchEnabled = true,
-  onAutoSwitchChange,
   isAuthenticated,
   onUnlockClick,
   mode,
@@ -413,8 +409,8 @@ export function ChatPanel({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div role="group" aria-label={t("chat.artifactModeLabel")} className="flex grow rounded-lg bg-carbon p-0.5">
                 {([
-                  { value: "website", selectedClass: "border-electric/40 bg-electric/15 text-electric" },
                   { value: "game", selectedClass: "border-violet-400/40 bg-violet-500/20 text-violet-300" },
+                  { value: "website", selectedClass: "border-electric/40 bg-electric/15 text-electric" },
                 ] as const).map(({ value, selectedClass }) => (
                   <button
                     key={value}
@@ -561,17 +557,6 @@ export function ChatPanel({
                 )}
               </button>
             </div>
-            {onAutoSwitchChange && (
-              <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-gray-400 md:hidden">
-                <input
-                  type="checkbox"
-                  checked={autoSwitchEnabled}
-                  onChange={(event) => onAutoSwitchChange(event.target.checked)}
-                  className="size-3.5 shrink-0 accent-electric"
-                />
-                {t("chat.autoSwitch")}
-              </label>
-            )}
           </form>
         )}
       </div>
