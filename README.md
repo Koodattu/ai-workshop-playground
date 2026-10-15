@@ -126,6 +126,8 @@ As an instructor, you'll want to create workshop passwords for your participants
 
 ### Using the Admin Dashboard
 
+Set `ADMIN_SECRET` in `backend/.env` to your chosen password; there are no length or complexity requirements. An empty or unset value allows the backend to start but disables admin login.
+
 1. Navigate to `http://localhost:3000/admin`
 2. Enter your `ADMIN_SECRET`
 3. Click "Create New Password"

@@ -17,8 +17,8 @@ const config = {
   nodeEnv: process.env.NODE_ENV || "development",
 };
 
-// Validate required configuration
-const requiredEnvVars = ["GEMINI_API_KEY", "ADMIN_SECRET"];
+// Admin secrets have no startup restrictions; an empty or unset secret disables admin access.
+const requiredEnvVars = ["GEMINI_API_KEY"];
 const missingVars = requiredEnvVars.filter((varName) => !process.env[varName]);
 
 if (missingVars.length > 0 && config.nodeEnv === "production") {
