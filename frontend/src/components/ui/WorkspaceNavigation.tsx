@@ -12,7 +12,7 @@ export function WorkspaceNavigation({ active, browseEnabled, disabled = false }:
         <Link key={tab} href={tab === "create" ? "/" : "/browse"} aria-current={active === tab ? "page" : undefined}
           aria-disabled={disabled && tab !== active ? true : undefined} onClick={(event) => { if (disabled) event.preventDefault(); }}
           title={disabled ? t("browse.waitForGeneration") : undefined}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-electric ${active === tab ? "bg-graphite text-white" : "text-gray-400 hover:text-white"}`}>
+          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-electric ${active === tab ? (tab === "create" ? "bg-electric/20 text-electric" : "bg-ember/20 text-ember") : "text-gray-400 hover:text-white"}`}>
           {t(`browse.${tab}`)}
         </Link>
       ))}
