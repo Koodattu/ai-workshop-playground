@@ -9,7 +9,60 @@ export interface Template {
 }
 
 export const TEMPLATES: Template[] = [
-  { id: "seeded-collector", nameKey: "templates.seededCollector", code: seededCollectorCode, artifactType: "game" },
+  {
+    id: "welcome",
+    nameKey: "templates.welcome",
+    code: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Workshop</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+      font-family: system-ui, sans-serif;
+      color: white;
+    }
+
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      background: linear-gradient(90deg, #00d4ff, #ff6b35);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    p {
+      color: #888;
+      font-size: 1.1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>{{templateContent.welcome.title}}</h1>
+    <p>{{templateContent.welcome.description}}</p>
+  </div>
+</body>
+</html>`,
+  },
   {
     id: "simple-welcome",
     nameKey: "templates.simpleWelcome",
@@ -18,7 +71,7 @@ export const TEMPLATES: Template[] = [
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simple Welcome</title>
+  <title>Basic Welcome</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -282,60 +335,6 @@ export const TEMPLATES: Template[] = [
       input.value = '';
     }
   </script>
-</body>
-</html>`,
-  },
-  {
-    id: "welcome",
-    nameKey: "templates.welcome",
-    code: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Workshop</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
-      font-family: system-ui, sans-serif;
-      color: white;
-    }
-
-    .container {
-      text-align: center;
-      padding: 2rem;
-    }
-
-    h1 {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-      background: linear-gradient(90deg, #00d4ff, #ff6b35);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    p {
-      color: #888;
-      font-size: 1.1rem;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>{{templateContent.welcome.title}}</h1>
-    <p>{{templateContent.welcome.description}}</p>
-  </div>
 </body>
 </html>`,
   },
@@ -1216,6 +1215,7 @@ export const TEMPLATES: Template[] = [
 </body>
 </html>`,
   },
+  { id: "seeded-collector", nameKey: "templates.seededCollector", code: seededCollectorCode, artifactType: "game" },
 ];
 
 export const DEFAULT_TEMPLATE_ID = "welcome";

@@ -246,7 +246,7 @@
     "noUsage": "Ei API-avainpyyntöjä vielä."
   },
   "templates": {
-    "welcome": "Laaja Tervetuloa",
+    "welcome": "Tervetuloa",
     "tailwind": "Laaja Tailwind",
     "snake": "Matopeli",
     "tictactoe": "Ristinolla",
@@ -254,11 +254,11 @@
     "custom": "Oma Koodi",
     "simpleTodo": "Tehtävälista",
     "simpleCounter": "Laskuri",
-    "simpleWelcome": "Tervetuloa",
+    "simpleWelcome": "Tervetuloa (perus)",
     "simpleTailwind": "Tailwind",
     "simple-todo": "Tehtävälista",
     "simple-counter": "Laskuri",
-    "simple-welcome": "Tervetuloa",
+    "simple-welcome": "Tervetuloa (perus)",
     "simple-tailwind": "Tailwind",
     "builtInSection": "Pohjat",
     "customSection": "Omat Luomukset",

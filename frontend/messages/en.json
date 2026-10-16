@@ -246,7 +246,7 @@
     "noUsage": "No API-key requests yet."
   },
   "templates": {
-    "welcome": "Advanced Welcome",
+    "welcome": "Welcome",
     "tailwind": "Advanced Tailwind",
     "snake": "Snake Game",
     "tictactoe": "Tic-Tac-Toe",
@@ -254,11 +254,11 @@
     "custom": "Custom Code",
     "simpleTodo": "Todo List",
     "simpleCounter": "Counter",
-    "simpleWelcome": "Welcome",
+    "simpleWelcome": "Basic Welcome",
     "simpleTailwind": "Tailwind",
     "simple-todo": "Todo",
     "simple-counter": "Counter",
-    "simple-welcome": "Welcome",
+    "simple-welcome": "Basic Welcome",
     "simple-tailwind": "Tailwind",
     "builtInSection": "Templates",
     "customSection": "My Creations",
