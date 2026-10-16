@@ -147,6 +147,21 @@ const resolveInitialWorkspaceTemplate = (
 export default function WorkspacePage() {
   const { language, t } = useLanguage();
   const browseEnabled = useBrowseSettings();
+  const workspaceHeaderRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const header = workspaceHeaderRef.current;
+    if (!header) return;
+
+    const updateHeaderHeight = () => {
+      header.parentElement?.style.setProperty("--workspace-header-height", `${header.getBoundingClientRect().height}px`);
+    };
+    updateHeaderHeight();
+    const observer = new ResizeObserver(updateHeaderHeight);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+
   const searchParams = useSearchParams();
   const router = useRouter();
   const isSafeStart = searchParams.has("safe") || searchParams.has("debug") || searchParams.has("recover");
@@ -1540,7 +1555,7 @@ export default function WorkspacePage() {
     <>
       <div className="h-screen flex flex-col bg-void overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-4 py-2 border-b border-steel/30 bg-obsidian">
+        <header ref={workspaceHeaderRef} className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-steel/30 bg-obsidian">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <Image src="/web-app-manifest-192x192.png" alt="App icon" width={32} height={32} className="w-8 h-8 object-contain" />
